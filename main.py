@@ -1,0 +1,2037 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+main.py
+Author: ENS Casey R. Densmore
+
+Purpose: Builds user interface for AXBT data processing and quality-control
+with PyQT5. 
+"""
+# =============================================================================
+#   CALL NECESSARY MODULES HERE
+# =============================================================================
+import sys
+import platform
+import os
+import traceback
+from ctypes import windll
+
+from PyQt5.QtWidgets import (QMainWindow, QAction, QApplication, QMenu, QLineEdit, QLabel, QSpinBox, QCheckBox,
+                             QPushButton, QMessageBox, QActionGroup, QWidget, QFileDialog, QComboBox, QTextEdit,
+                             QTabWidget, QVBoxLayout, QInputDialog, QGridLayout, QSlider, QDoubleSpinBox, 
+                             QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar)
+from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot
+from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient
+from PyQt5.Qt import QThreadPool
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+import matplotlib.pyplot as plt
+
+import time as timemodule
+import datetime as dt
+import numpy as np
+
+#autoQC-specific modules
+import qclib.tropicfileinteraction as tfio
+import qclib.makeAXBTplots as tplot
+import qclib.autoqc as qc
+import qclib.ocean_climatology_interaction as oci
+import qclib.VHFsignalprocessor as vsp
+
+
+
+#   DEFINE CLASS FOR PROGRAM (TO BE CALLED IN MAIN)
+class RunProgram(QMainWindow):
+    
+    
+# =============================================================================
+#   INITIALIZE WINDOW, INTERFACE
+# =============================================================================
+    def __init__(self):
+        super().__init__()
+        
+        try:
+            self.initUI()
+
+            # prepping to include tabs
+            mainWidget = QWidget()
+            self.setCentralWidget(mainWidget)
+            mainLayout = QVBoxLayout()
+            mainWidget.setLayout(mainLayout)
+            self.tabWidget = QTabWidget()
+            mainLayout.addWidget(self.tabWidget)
+            self.myBoxLayout = QVBoxLayout()
+            self.tabWidget.setLayout(self.myBoxLayout)
+            self.show()
+            self.totaltabs = 0
+
+            # creating threadpool
+            self.threadpool = QThreadPool()
+            self.threadpool.setMaxThreadCount(6)
+
+            #loading DLL
+            try:
+                self.wrdll = windll.LoadLibrary("WRG39WSBAPI")
+            except:
+                self.postwarning("WiNRADIO driver NOT FOUND! Please ensure a WiNRADIO Receiver is connected and powered on and then restart the program!")
+                self.wrdll = 0
+
+            self.setdefaults() #Default autoQC preferences
+            self.buildmenu() #Creates interactive menu, options to create tabs and start autoQC
+            self.makenewprocessortab() #Opens first tab
+
+
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to initialize the program.")
+        
+    def initUI(self):               
+        startpix = 10
+        Wsize = app.desktop().screenGeometry()
+        self.setGeometry(startpix,startpix,Wsize.width()-startpix,Wsize.height()-startpix)
+        self.setWindowTitle('AXBT Realtime Editing System')
+        self.setWindowIcon(QIcon('qclib/dropicon.png'))
+        
+        #setting background color
+        p = self.palette()
+        p.setColor(self.backgroundRole(), QColor(255,255,255))
+        self.setPalette(p)
+
+
+        
+# =============================================================================
+#     DECLARE DEFAULT VARIABLES, GLOBAL PARAMETERS
+# =============================================================================
+    def setdefaults(self):
+        #autoQC preferences- make tunable in GUI
+        global maxderiv, reslev, checkforgaps, alltabdata, givedtgwarn, renametabstodtg
+        global useoceanbottom, useclimobottom, resoptions, overlayclimo, comparetoclimo
+        global savefin, savejjvv, saveprof, saveloc, savelog, saveedf
+        global autosave, populatedtg
+        
+        resoptions = ["High", "Low", "Inflection Only"]
+        
+        maxderiv = 1.5 #d2Tdz2 threshold to call a point an inflection point
+        reslev = 1 #profile resolution (1=1m,2=10m,3=inflection points only)
+        checkforgaps = 1 #look for/correct gaps in profile due to false starts from VHF interference
+        useoceanbottom = 1 #use NTOPO1 bathymetry data to ID bottom strikes
+        useclimobottom = 1 #use climatology to ID bottom strikes
+        overlayclimo = 1 #overlay the climatology on the plot
+        comparetoclimo = 1 #check for climatology mismatch and display result on plot
+        
+        givedtgwarn = 1 #warn user if entered dtg is more than 12 hours old or after current system time (in future)
+        renametabstodtg = 1 #auto rename tab to dtg when loading profile editor
+        
+        savefin = 1 #file types to save
+        savejjvv = 1
+        saveprof = 1
+        saveloc = 1
+        savelog = 1
+        saveedf = 1
+        
+        autosave = 0 #automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
+        populatedtg = 1 #auto determine profile date/time as system date/time on clicking "START"
+        
+        alltabdata = {}
+        
+        #setting slash dependent on OS
+        global slash
+        if platform.system() == 'Windows':
+            slash = '\\'
+        else:
+            slash = '/'
+        
+        
+# =============================================================================
+#    BUILD MENU, GENERAL SETTINGS
+# =============================================================================
+    def buildmenu(self):
+        
+        #setting up primary menu bar
+        menubar = self.menuBar()
+        FileMenu = menubar.addMenu('File')
+        Mk21Menu = menubar.addMenu('Signal Processor Preferences')
+        QCMenu = menubar.addMenu('Profile Editor Preferences')
+        
+        #File>New Signal Processor (Mk21) Tab
+        newsigtab = QAction('&New Signal Processor Tab',self)
+        newsigtab.setShortcut('Ctrl+N')
+        newsigtab.triggered.connect(self.makenewprocessortab)
+        FileMenu.addAction(newsigtab)
+        
+        #File>New Profile Editor Tab
+        newptab = QAction('&New Profile Editing Tab',self)
+        newptab.setShortcut('Ctrl+P')
+        newptab.triggered.connect(self.makenewproftab)
+        FileMenu.addAction(newptab)
+        
+        #File>Rename Current Tab
+        renametab = QAction('&Rename Current Tab',self)
+        renametab.setShortcut('Ctrl+R')
+        renametab.triggered.connect(self.renametab)
+        FileMenu.addAction(renametab)
+        
+        #File>Close Current Tab
+        closetab = QAction('&Close Current Tab',self)
+        closetab.setShortcut('Ctrl+X')
+        closetab.triggered.connect(self.closecurrenttab)
+        FileMenu.addAction(closetab)
+        
+        #File>Save Files
+        savedataintab = QAction('&Save Profile',self)
+        savedataintab.setShortcut('Ctrl+S')
+        savedataintab.triggered.connect(self.savedataincurtab)
+        FileMenu.addAction(savedataintab)
+        
+        #File>Export Files (transmit to GTS?)
+        exportdataintab = QAction('&Export Profile',self)
+        exportdataintab.setShortcut('Ctrl+E')
+        exportdataintab.triggered.connect(self.exportdataincurtab)
+        FileMenu.addAction(exportdataintab)
+        
+        #File save times
+        savelogact = QAction('Save LOG',self,checkable=True)
+        savelogact.triggered.connect(self.toggle_savelog)
+        saveedfact = QAction('Save EDF',self,checkable=True)
+        saveedfact.triggered.connect(self.toggle_saveedf)
+        if savelog == 1:
+            savelogact.setChecked(True)
+        if saveedf == 1:
+            saveedfact.setChecked(True)
+        SaveRawMenu = QMenu('Raw Data File Types:',self)
+        SaveRawMenu.addAction(savelogact)
+        SaveRawMenu.addAction(saveedfact)
+        FileMenu.addMenu(SaveRawMenu)
+        
+        #Processed file save times
+        savefinact = QAction('Save 1M (FIN)',self,checkable=True)
+        savefinact.triggered.connect(self.toggle_savefin)
+        savejjvvact = QAction('Save JJVV',self,checkable=True)
+        savejjvvact.triggered.connect(self.toggle_savejjvv)
+        saveprofact = QAction('Save Profile PNG',self,checkable=True)
+        saveprofact.triggered.connect(self.toggle_saveprof)
+        savelocact = QAction('Save Location PNG',self,checkable=True)
+        savelocact.triggered.connect(self.toggle_saveloc)
+        if savefin == 1:
+            savefinact.setChecked(True)
+        if savejjvv == 1:
+            savejjvvact.setChecked(True)
+        if saveprof == 1:
+            saveprofact.setChecked(True)
+        if saveloc == 1:
+            savelocact.setChecked(True)
+        SaveMenu = QMenu('Processed Profile File Types:',self)
+        SaveMenu.addAction(savefinact)
+        SaveMenu.addAction(savejjvvact)
+        SaveMenu.addAction(saveprofact)
+        SaveMenu.addAction(savelocact)
+        FileMenu.addMenu(SaveMenu)
+        
+        #warn if DTG is out of range
+        warningopt = QAction('Provide warning if drop is not within 12 hours',self,checkable=True)
+        warningopt.triggered.connect(self.toggle_warningopt)
+        if givedtgwarn == 1:
+            warningopt.setChecked(True)
+        FileMenu.addAction(warningopt)
+        
+        #offer to rename tab
+        renameopt = QAction('Rename tab to DTG when loading profile editor',self,checkable=True)
+        renameopt.triggered.connect(self.toggle_renameopt)
+        if renametabstodtg == 1:
+            renameopt.setChecked(True)
+        FileMenu.addAction(renameopt)
+        
+        
+        #QCMenu>Climatology (with submenu)
+        overlayclimoact = QAction('Overlay climatology in saved plots',self,checkable=True)
+        overlayclimoact.triggered.connect(self.toggle_overlayclimo)
+        useclimobottomact = QAction('Use climatology to detect bottom strikes',self,checkable=True)
+        useclimobottomact.triggered.connect(self.toggle_useclimobottom)
+        comparetoclimoact = QAction('Check if profile matches climatology',self,checkable=True)
+        comparetoclimoact.triggered.connect(self.toggle_comparetoclimo)
+        if useclimobottom == 1:
+            useclimobottomact.setChecked(True)
+        if overlayclimo == 1:
+            overlayclimoact.setChecked(True)
+        if comparetoclimo == 1:
+            comparetoclimoact.setChecked(True)
+        ClimoMenu = QMenu('Climatology',self)
+        ClimoMenu.addAction(overlayclimoact)
+        ClimoMenu.addAction(useclimobottomact)
+        ClimoMenu.addAction(comparetoclimoact)
+        QCMenu.addMenu(ClimoMenu)
+        
+        #QCMenu>Resolution (with submenu)
+        reslevel = QMenu('Select Resolution', self)
+        resgroup = QActionGroup(reslevel)
+        for curoption in resoptions:
+            action = QAction(curoption, reslevel, checkable=True, checked=curoption==resoptions[0])
+            reslevel.addAction(action)
+            resgroup.addAction(action)
+        resgroup.setExclusive(True)
+        resgroup.triggered.connect(self.toggle_resolution)
+        QCMenu.addMenu(reslevel)
+        
+        #QCMenu>use bathymetry (check option)
+        usebathyact = QAction('Use Bathymetry Data',self,checkable=True)
+        usebathyact.triggered.connect(self.toggle_usebathy)
+        if useoceanbottom == 1:
+            usebathyact.setChecked(True)
+        QCMenu.addAction(usebathyact)
+        
+        #QCMenu>FindGaps
+        findgapact = QAction('Check for False Starts',self,checkable=True)
+        findgapact.triggered.connect(self.toggle_findgaps)
+        if checkforgaps == 1:
+            findgapact.setChecked(True)
+        QCMenu.addAction(findgapact)
+        
+        #save data before loading profile editor
+        autosaveopt = QAction('Autosave raw data files before loading profile editor',self,checkable=True)
+        autosaveopt.triggered.connect(self.toggle_autosaveopt)
+        if autosave == 1:
+            autosaveopt.setChecked(True)
+        Mk21Menu.addAction(autosaveopt)
+        
+        #auto-update with system time for non-audio processing
+        populatedtgopt = QAction('Autopopulate sytem date/time for non-audio processing',self,checkable=True)
+        populatedtgopt.triggered.connect(self.toggle_populatedtgopt)
+        if populatedtg == 1:
+            populatedtgopt.setChecked(True)
+        Mk21Menu.addAction(populatedtgopt)
+        
+        
+        
+        
+        
+# =============================================================================
+#     SIGNAL PROCESSOR TAB AND INPUTS HERE
+# =============================================================================
+    def makenewprocessortab(self):     
+        try:
+            #number of the new tab will be equal to the number of previous tabs (offset by 1 removed b/c of Python indexing)
+            newtabnum = self.tabWidget.count()
+            curtabstr = "Tab "+str(newtabnum) #pointable string for alltabdata dict
+    
+            #self.currenttab = QWidget() #tablayout = QGridLayout() #self.figure = plt.figure() 
+            #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal processor to profile editor
+            alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),
+                      "ProcessorFig":plt.figure(),"ProfFig":plt.figure(),"LocFig":plt.figure(),
+                      "tabtype":"SignalProcessor_incomplete","isprocessing":False}
+
+            self.setnewtabcolor(alltabdata[curtabstr]["tab"])
+            
+            #initializing raw data storage
+            alltabdata[curtabstr]["rawdata"] = {"temperature":np.array([]),
+                      "depth":np.array([]),"frequency":np.array([]),"time":np.array([]),
+                      "istriggered":False,"firstpointtime":0,"starttime":0}
+            
+            alltabdata[curtabstr]["tablayout"].setSpacing(10)
+    
+            self.tabWidget.addTab(alltabdata[curtabstr]["tab"],'New Tab') #self.tabWidget.addTab(self.currenttab,'New Tab')
+            self.tabWidget.setCurrentIndex(newtabnum)
+            self.tabWidget.setTabText(newtabnum,"New Drop #" + str(newtabnum+1))
+            self.totaltabs += 1
+            alltabdata[curtabstr]["tabnum"] = self.totaltabs #assigning unique, unchanging number to current tab
+            
+            alltabdata[curtabstr]["tablayout"].setSpacing(10)
+            
+            #ADDING FIGURE TO GRID LAYOUT
+            alltabdata[curtabstr]["ProcessorCanvas"] = FigureCanvas(alltabdata[curtabstr]["ProcessorFig"]) #self.canvas = FigureCanvas(self.figure)
+            alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["ProcessorCanvas"],0,0,10,1) #tablayout.addWidget(self.canvas)
+    
+            #making profile processing result plots
+            alltabdata[curtabstr]["ProcessorAx"] = alltabdata[curtabstr]["ProcessorFig"].add_axes([0.1, 0.05, 0.85, 0.9])
+    
+            #prep window to plot data
+            alltabdata[curtabstr]["ProcessorAx"].set_xlabel('Temperature ($^\circ$C)')
+            alltabdata[curtabstr]["ProcessorAx"].set_ylabel('Depth (m)')
+            alltabdata[curtabstr]["ProcessorAx"].set_title('Data Received',fontweight="bold")
+            alltabdata[curtabstr]["ProcessorAx"].grid()
+            alltabdata[curtabstr]["ProcessorAx"].set_xlim([-2,32])
+            alltabdata[curtabstr]["ProcessorAx"].set_ylim([5,1000])
+            alltabdata[curtabstr]["ProcessorAx"].invert_yaxis()
+            alltabdata[curtabstr]["ProcessorCanvas"].draw() #refresh plots on window
+            
+            #and add new buttons and other widgets
+            alltabdata[curtabstr]["tabwidgets"] = {}
+                    
+            #Getting necessary data
+            if self.wrdll != 0:
+                winradiooptions = vsp.listwinradios(self.wrdll)
+            else:
+                winradiooptions = []
+
+            #making widgets
+            alltabdata[curtabstr]["tabwidgets"]["datasourcetitle"] = QLabel('Data Source:') #1
+            alltabdata[curtabstr]["tabwidgets"]["datasource"] = QComboBox() #2
+            alltabdata[curtabstr]["tabwidgets"]["datasource"].addItem('Test')
+            alltabdata[curtabstr]["tabwidgets"]["datasource"].addItem('Audio')
+            for wr in winradiooptions:
+                alltabdata[curtabstr]["tabwidgets"]["datasource"].addItem(wr) #ADD COLOR OPTION
+            alltabdata[curtabstr]["tabwidgets"]["datasource"].currentIndexChanged.connect(self.datasourcechange)
+            alltabdata[curtabstr]["datasource"] = alltabdata[curtabstr]["tabwidgets"]["datasource"].currentText()
+            
+            alltabdata[curtabstr]["tabwidgets"]["channeltitle"] = QLabel('VHF Channel:') #3
+            alltabdata[curtabstr]["tabwidgets"]["freqtitle"] = QLabel('VHF Frequency (MHz):') #4
+            
+            alltabdata[curtabstr]["tabwidgets"]["vhfchannel"] = QSpinBox() #5
+            alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setRange(1,99)
+            alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setSingleStep(1)
+            alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setValue(12)
+            alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].valueChanged.connect(self.changefrequencytomatchchannel)
+            
+            alltabdata[curtabstr]["tabwidgets"]["vhffreq"] = QDoubleSpinBox() #6
+            alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setRange(136, 173.5)
+            alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setSingleStep(0.375)
+            alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setDecimals(3)
+            alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setValue(170.5)
+            alltabdata[curtabstr]["tabwidgets"]["vhffreq"].valueChanged.connect(self.changechanneltomatchfrequency)
+            
+            alltabdata[curtabstr]["tabwidgets"]["startprocessing"] = QPushButton('START') #7
+            alltabdata[curtabstr]["tabwidgets"]["startprocessing"].clicked.connect(self.startprocessor)
+            alltabdata[curtabstr]["tabwidgets"]["stopprocessing"] = QPushButton('STOP') #8
+            alltabdata[curtabstr]["tabwidgets"]["stopprocessing"].clicked.connect(self.stopprocessor)
+            alltabdata[curtabstr]["tabwidgets"]["processprofile"] = QPushButton('PROCESS PROFILE') #9
+            alltabdata[curtabstr]["tabwidgets"]["processprofile"].clicked.connect(self.processprofile)
+            
+            alltabdata[curtabstr]["tabwidgets"]["datetitle"] = QLabel('Date: ') #10
+            alltabdata[curtabstr]["tabwidgets"]["dateedit"] = QLineEdit('YYYYMMDD') #11
+            alltabdata[curtabstr]["tabwidgets"]["timetitle"] = QLabel('Time (UTC): ') #12
+            alltabdata[curtabstr]["tabwidgets"]["timeedit"] = QLineEdit('HHMM') #13
+            alltabdata[curtabstr]["tabwidgets"]["lattitle"] = QLabel('Latitude (N>0): ') #14
+            alltabdata[curtabstr]["tabwidgets"]["latedit"] = QLineEdit('XX.XXX') #15
+            alltabdata[curtabstr]["tabwidgets"]["lontitle"] = QLabel('Longitude (E>0): ') #16
+            alltabdata[curtabstr]["tabwidgets"]["lonedit"] = QLineEdit('XX.XXX') #17
+            alltabdata[curtabstr]["tabwidgets"]["idtitle"] = QLabel('Platform ID/Tail#: ') #18
+            alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit('AFNNN') #19
+            
+            #formatting widgets
+            alltabdata[curtabstr]["tabwidgets"]["channeltitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["freqtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["lattitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["lontitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["datetitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["timetitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["idtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            
+            #should be 19 entries 
+            wrows     = [1,2,3,4,3,4,5,5,6,1,1,2,2,3,3,4,4,5,5]
+            wcols     = [2,2,2,2,3,3,2,3,3,4,5,4,5,4,5,4,5,4,5]
+            
+            wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+            wcolext   = [2,2,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1]
+            
+            twid = 155
+            twid2 = 2*twid
+            thgt = 30
+            wfixwidth = [twid2,twid2,twid,twid,twid,twid,twid,twid,twid2,twid,twid,twid,twid,twid,twid,twid,twid,twid,twid]
+            wfixhght  = [thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt]    
+    
+            #adding user inputs
+            for i,r,c,re,ce,ww,hh in zip(alltabdata[curtabstr]["tabwidgets"],wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
+                alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
+                alltabdata[curtabstr]["tabwidgets"][i].setFixedWidth(ww)
+                alltabdata[curtabstr]["tabwidgets"][i].setFixedHeight(hh)
+                    
+            #adding table widget after all other buttons populated
+            alltabdata[curtabstr]["tabwidgets"]["table"] = QTableWidget() #19
+            alltabdata[curtabstr]["tabwidgets"]["table"].setColumnCount(5)
+            alltabdata[curtabstr]["tabwidgets"]["table"].setRowCount(0) 
+            # alltabdata[curtabstr]["tabwidgets"]["table"].setItem(2, 3, QTableWidgetItem(23.45))
+            alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalHeaderLabels(('Time (s)', 'Frequency (Hz)', 'Signal Strength (dBm)', 'Depth (m)','Temperature (C)'))
+            alltabdata[curtabstr]["tabwidgets"]["table"].verticalHeader().setVisible(False)
+            alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) #removes scroll bars
+            header = alltabdata[curtabstr]["tabwidgets"]["table"].horizontalHeader()       
+            header.setSectionResizeMode(0, QHeaderView.Stretch)
+            header.setSectionResizeMode(1, QHeaderView.Stretch)
+            header.setSectionResizeMode(2, QHeaderView.Stretch)
+            header.setSectionResizeMode(3, QHeaderView.Stretch)
+            header.setSectionResizeMode(4, QHeaderView.Stretch)
+            alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"]["table"],8,2,2,4)  
+               
+            #Applying other preferences to grid layout
+            Wsize = app.desktop().screenGeometry()
+            alltabdata[curtabstr]["ProcessorCanvas"].setFixedWidth(int(Wsize.width()*0.4))
+            alltabdata[curtabstr]["tabwidgets"]["table"].setFixedHeight(int(Wsize.height()*0.55))
+            alltabdata[curtabstr]["tablayout"].setColumnStretch(1,1)
+            alltabdata[curtabstr]["tablayout"].setColumnStretch(6,1)
+            alltabdata[curtabstr]["tablayout"].setRowStretch(7,1)
+            alltabdata[curtabstr]["tablayout"].setRowStretch(0,1)
+                                      
+            #making the current layout for the tab
+            alltabdata[curtabstr]["tab"].setLayout(alltabdata[curtabstr]["tablayout"])
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to build new processor tab")
+        
+        
+        
+# =============================================================================
+#         BUTTONS FOR PROCESSOR TAB
+# =============================================================================
+    def datasourcechange(self):
+        try:
+            #only lets you change the data source if it isn't currently processing
+            curtabstr = "Tab " + str(self.whatTab())
+            index = alltabdata[curtabstr]["tabwidgets"]["datasource"].findText(alltabdata[curtabstr]["datasource"], Qt.MatchFixedString)
+            
+            #checks to see if selection is busy
+            woption = alltabdata[curtabstr]["tabwidgets"]["datasource"].currentText()
+            if woption != "Audio" and woption != "Test":
+                for ctab in alltabdata:
+                    if ctab != curtabstr and (alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or
+                                              alltabdata[ctab]["tabtype"] == "SignalProcessor_completed"):
+                        if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == woption:
+                            option = self.postwarning_option("This WINRADIO appears to currently be in use. Continue anyways?")
+                            if option == 'cancel':
+                                if index >= 0:
+                                    alltabdata[curtabstr]["tabwidgets"]["datasource"].setCurrentIndex(index)
+                                    return
+                            else: #stop checking to see if its busy if the user says they don't care
+                                break
+     
+            #only lets you change the WINRADIO if the current tab isn't already processing
+            if not alltabdata[curtabstr]["isprocessing"]:
+                alltabdata[curtabstr]["datasource"] = woption
+            else:
+                if index >= 0:
+                     alltabdata[curtabstr]["tabwidgets"]["datasource"].setCurrentIndex(index)
+                self.postwarning("You cannot change input devices while processing. Please click STOP to discontinue processing before switching devices")
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to change selected WiNRADIO receiver for current tab.")
+        
+    def checkwinradiooptions(self,winradiooptions):
+        isbusy = [0] * len(winradiooptions)
+        for wri in range(len(winradiooptions)):
+            wr = winradiooptions[wri]
+            for ctab in alltabdata:
+                if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
+                    if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == wr:
+                        isbusy[wri] = 1
+        return isbusy
+    
+    #these options use a lookup table for VHF channel vs frequency
+    def changefrequencytomatchchannel(self,newchannel):
+        try:
+            curtabstr = "Tab " + str(self.whatTab())
+            newfrequency,newchannel = vsp.channelandfrequencylookup(newchannel,'findfrequency')
+            alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setValue(newchannel)
+            alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setValue(newfrequency)
+            if alltabdata[curtabstr]["isprocessing"] and alltabdata[curtabstr]["datasource"] != 'Audio' and alltabdata[curtabstr]["datasource"] != 'Test':
+                alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Frequency/channel mismatch!")
+            
+    def changechanneltomatchfrequency(self,newfrequency):
+        try:
+            curtabstr = "Tab " + str(self.whatTab())
+            #special step to skip invalid frequencies!
+            if newfrequency == 161.5 or newfrequency == 161.875:
+                oldchannel = alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].value()
+                oldfrequency,_ = vsp.channelandfrequencylookup(oldchannel,'findfrequency')
+                if oldfrequency >= 161.6:
+                    newfrequency = 161.125
+                else:
+                    newfrequency = 162.25
+            newchannel,newfrequency = vsp.channelandfrequencylookup(newfrequency,'findchannel')
+            alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setValue(newchannel)
+            alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setValue(newfrequency)
+            if alltabdata[curtabstr]["isprocessing"] and alltabdata[curtabstr]["datasource"] != 'Audio' and alltabdata[curtabstr]["datasource"] != 'Test':
+                alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Frequency/channel mismatch!")
+            
+    def startprocessor(self):
+        try:
+            curtabstr = "Tab " + str(self.whatTab())
+            if not alltabdata[curtabstr]["isprocessing"]:
+
+                datasource = alltabdata[curtabstr]["datasource"]
+                #running processor here
+                if datasource == 'Audio':
+                    self.processfromaudio(curtabstr)
+                else:
+                    if self.threadpool.activeThreadCount() + 1 > self.threadpool.maxThreadCount():
+                        self.postwarning("The maximum number of simultaneous processing threads has been exceeded. This processor will automatically begin collecting data when STOP is selected on another tab.")
+
+                    curtabnum = alltabdata[curtabstr]["tabnum"]
+                    alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+                    if alltabdata[curtabstr]["rawdata"]["starttime"] == 0:
+                        starttime = dt.datetime.utcnow()
+                        alltabdata[curtabstr]["rawdata"]["starttime"] = starttime
+                        if populatedtg == 1:#populates date and time if requested
+                            curdatestr = str(starttime.year) + str(starttime.month).zfill(2) + str(starttime.day).zfill(2)
+                            alltabdata[curtabstr]["tabwidgets"]["dateedit"].setText(curdatestr)
+                            curtimestr = str(starttime.hour).zfill(2) + str(starttime.minute).zfill(2)
+                            alltabdata[curtabstr]["tabwidgets"]["timeedit"].setText(curtimestr)
+                    else:
+                        starttime = alltabdata[curtabstr]["rawdata"]["starttime"]
+
+                    if datasource == 'Test':
+                        alltabdata[curtabstr]["processor"] = vsp.ThreadProcessorExample(curtabnum)
+                    else:
+                        if self.wrdll == 0:
+                            self.postwarning("The WiNRADIO driver was not successfully loaded! Please restart the program in order to initiate a processing tab with a connected WiNRADIO")
+                            return
+                        else:
+                           vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
+                           alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
+                                     alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"])
+                           alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
+
+                    alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
+                    alltabdata[curtabstr]["processor"].signals.triggered.connect(self.triggerUI)
+                    alltabdata[curtabstr]["processor"].signals.terminated.connect(self.updateUIfinal)
+                    self.threadpool.start(alltabdata[curtabstr]["processor"])
+                    alltabdata[curtabstr]["isprocessing"] = True
+
+                #the code is still running but data collection has at least been initialized. This allows self.savecurrenttab() to save LOG/EDF files
+                alltabdata[curtabstr]["tabtype"] = "SignalProcessor_completed"
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to start processor!")
+            
+            
+    def stopprocessor(self):
+        try:
+            curtabstr = "Tab " + str(self.whatTab())
+            if alltabdata[curtabstr]["isprocessing"]:
+                curtabstr = "Tab " + str(self.whatTab())
+                datasource = alltabdata[curtabstr]["datasource"]
+
+                if datasource == 'Audio':
+                    option = self.postwarning_option("This will stop reading the audio file. All progress will be lost. Proceed?")
+                    if option == 'okay':
+                        alltabdata[curtabstr]["processor"].abort()
+                        alltabdata[curtabstr]["isprocessing"] = False #processing is done
+                        alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+                else:
+                    alltabdata[curtabstr]["processor"].abort()
+                    alltabdata[curtabstr]["isprocessing"] = False #processing is done
+                    alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+                    
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to stop processor!")
+                
+                
+                
+# =============================================================================
+#        SIGNAL PROCESSOR SLOTS AND OTHER CODE
+# =============================================================================
+
+    def gettabstrfromnum(self,tabnum):
+        for tabname in alltabdata:
+            if alltabdata[tabname]["tabnum"] == tabnum:
+                return tabname
+    
+    @pyqtSlot(int,float)
+    def triggerUI(self,plottabnum,firstpointtime):
+        try:
+            plottabstr = self.gettabstrfromnum(plottabnum)
+            alltabdata[plottabstr]["rawdata"]["firstpointtime"] = firstpointtime
+            alltabdata[plottabstr]["rawdata"]["istriggered"] = True
+        except Exception:
+            self.posterror("Failed to trigger temperature/depth profile in GUI!")
+            traceback.print_exc()
+
+    @pyqtSlot(int,float,float,float,float,float,int)
+    def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,ctime,i):
+        try:
+            plottabstr = self.gettabstrfromnum(plottabnum)
+
+            #writing data to tab dictionary
+            alltabdata[plottabstr]["rawdata"]["time"] = np.append(alltabdata[plottabstr]["rawdata"]["time"],ctime)
+            alltabdata[plottabstr]["rawdata"]["depth"] = np.append(alltabdata[plottabstr]["rawdata"]["depth"],cdepth)
+            alltabdata[plottabstr]["rawdata"]["frequency"] = np.append(alltabdata[plottabstr]["rawdata"]["frequency"],cfreq)
+            alltabdata[plottabstr]["rawdata"]["temperature"] = np.append(alltabdata[plottabstr]["rawdata"]["temperature"],ctemp)
+
+            #plot the most recent point
+            if i%50 == 0: #draw the canvas every fifty points (~5 sec for 10 Hz sampling)
+                try:
+                    del alltabdata[plottabstr]["ProcessorAx"].lines[-1]
+                except:
+                    pass
+                alltabdata[plottabstr]["ProcessorAx"].plot(alltabdata[plottabstr]["rawdata"]["temperature"],alltabdata[plottabstr]["rawdata"]["depth"],color='k')
+                alltabdata[plottabstr]["ProcessorCanvas"].draw()
+
+            if np.isnan(ctemp):
+                ctemp = '*****'
+                cdepth = '*****'
+                curcolor = QColor(179, 179, 255) #light blue
+            else:
+                curcolor = QColor(204, 255, 220) #light green
+
+
+            tabletime = QTableWidgetItem(str(ctime))
+            tabletime.setBackground(curcolor)
+            tabledepth = QTableWidgetItem(str(cdepth))
+            tabledepth.setBackground(curcolor)
+            tablefreq = QTableWidgetItem(str(cfreq))
+            tablefreq.setBackground(curcolor)
+            tabletemp = QTableWidgetItem(str(ctemp))
+            tabletemp.setBackground(curcolor)
+            if csig >= -120:
+                tablesignal = QTableWidgetItem(str(csig))
+            else:
+                tablesignal = QTableWidgetItem('*****')
+            tablesignal.setBackground(curcolor)
+
+            table = alltabdata[plottabstr]["tabwidgets"]["table"]
+            crow = table.rowCount()
+            table.insertRow(crow)
+            table.setItem(crow, 0, tabletime)
+            table.setItem(crow, 1, tablefreq)
+            table.setItem(crow, 2, tablesignal)
+            table.setItem(crow, 3, tabledepth)
+            table.setItem(crow, 4, tabletemp)
+            table.scrollToBottom()
+    #        if crow > 20:
+    #            table.removeRow(0)
+        except Exception:
+            traceback.print_exc()
+        
+    @pyqtSlot(int)
+    def updateUIfinal(self,plottabnum):
+        try:
+            plottabstr = self.gettabstrfromnum(plottabnum)
+            try:
+                del alltabdata[plottabstr]["ProcessorAx"].lines[-1]
+            except:
+                pass
+            alltabdata[plottabstr]["ProcessorAx"].plot(alltabdata[plottabstr]["rawdata"]["temperature"],alltabdata[plottabstr]["rawdata"]["depth"],color='k')
+            alltabdata[plottabstr]["ProcessorCanvas"].draw()
+            alltabdata[plottabstr]["isprocessing"] = False
+            alltabdata[plottabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        except Exception:
+            self.posterror("Failed to complete final UI update!")
+            traceback.print_exc()
+
+    @pyqtSlot(int)
+    def failedWRmessage(self,messagenum):
+        if messagenum == 0:
+            self.posterror("Failed to connect to specified WiNRADIO!")
+        elif messagenum == 1:
+            self.posterror("Failed to power on specified WiNRADIO!")
+        elif messagenum == 2:
+            self.posterror("Failed to initialize demodulator for specified WiNRADIO!")
+        elif messagenum == 3:
+            self.posterror("Failed to set VHF frequency for specified WiNRADIO!")
+        elif messagenum == 4:
+            self.posterror("Unspecified error communicating with the current WiNRADIO device!")
+        elif messagenum == 5:
+            self.postwarning("Failed to adjust volume on the specified WiNRADIO!")
+        elif messagenum == 6:
+            self.posterror("Failed to configure the WiNRADIO audio stream!")
+
+
+
+    def processfromaudio(self,curtabstr):
+        try:
+            #getting filename
+            fname,ok = QFileDialog.getOpenFileName(self, 'Open file',
+                        '',"Source Data Files (*.WAV *.Wav *.wav)")
+            if not ok:
+                alltabdata[curtabstr]["isprocessing"] = False
+                return
+
+            #building progress bar
+            alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"] = QProgressBar()
+            alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"],7,2,1,4)
+            alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"].setValue(0)
+            QApplication.processEvents()
+
+            #connecting signals, starting Audio Processor thread
+            curtabnum = alltabdata[curtabstr]["tabnum"]
+            alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            alltabdata[curtabstr]["processor"] = vsp.AudioProcessor(curtabnum,0.2,fname)
+            alltabdata[curtabstr]["processor"].signals.updateprogress.connect(self.updateaudioprogressbar)
+            alltabdata[curtabstr]["processor"].signals.finished.connect(self.finishaudioprocessing)
+            alltabdata[curtabstr]["processor"].signals.aborted.connect(self.abortaudioprocessing)
+            self.threadpool.start(alltabdata[curtabstr]["processor"])
+            alltabdata[curtabstr]["isprocessing"] = True
+        except Exception:
+            self.posterror("Failed to execute audio processor!")
+            traceback.print_exc()
+
+
+    @pyqtSlot(int,int)
+    def updateaudioprogressbar(self,plottabnum,newprogress):
+        try:
+            plottabstr = self.gettabstrfromnum(plottabnum)
+            alltabdata[plottabstr]["tabwidgets"]["audioprogressbar"].setValue(newprogress)
+        except Exception:
+            traceback.print_exc()
+        
+    @pyqtSlot(int,np.ndarray,np.ndarray,np.ndarray,np.ndarray)
+    def finishaudioprocessing(self,plottabnum,temperature,depth,frequency,time):
+        try:
+            plottabstr = self.gettabstrfromnum(plottabnum)
+            #cleaning up
+            alltabdata[plottabstr]["tabwidgets"]["audioprogressbar"].deleteLater()
+            alltabdata[plottabstr]["isprocessing"] = False #noting that the processing is done
+
+            #save data to tab dict
+            alltabdata[plottabstr]["rawdata"]["time"] = time
+            alltabdata[plottabstr]["rawdata"]["depth"] = depth
+            alltabdata[plottabstr]["rawdata"]["frequency"] = frequency
+            alltabdata[plottabstr]["rawdata"]["temperature"] = temperature
+
+            #scatter data
+            alltabdata[plottabstr]["ProcessorAx"].plot(temperature,depth,color='k')
+            alltabdata[plottabstr]["ProcessorCanvas"].draw()
+
+            #table data every 10 datapoints (~1 second)
+            for i,ctemp,cdep,cfreq,ctime in zip(range(len(temperature)),temperature,depth,frequency,time):
+                if np.isnan(ctemp):
+                    ctemp = '*****'
+                    cdep = '*****'
+                    curcolor = QColor(179, 179, 255) #light blue
+                else:
+                    curcolor = QColor(204, 255, 220) #light green
+                if np.isnan(cfreq):
+                    cfreq = 0.0
+                tabletime = QTableWidgetItem(str(ctime)) #creating table items
+                tabletime.setBackground(curcolor)
+                tabledepth = QTableWidgetItem(str(cdep))
+                tabledepth.setBackground(curcolor)
+                tablefreq = QTableWidgetItem(str(cfreq))
+                tablefreq.setBackground(curcolor)
+                tabletemp = QTableWidgetItem(str(ctemp))
+                tabletemp.setBackground(curcolor)
+                tablesignal = QTableWidgetItem('*****')
+                tablesignal.setBackground(curcolor)
+
+                crow = alltabdata[plottabstr]["tabwidgets"]["table"].rowCount() #appending data to table
+                alltabdata[plottabstr]["tabwidgets"]["table"].insertRow(crow)
+                alltabdata[plottabstr]["tabwidgets"]["table"].setCurrentCell(crow,0)
+                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 0, tabletime)
+                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 1, tablesignal)
+                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 2, tablefreq)
+                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 3, tabledepth)
+                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 4, tabletemp)
+
+        except Exception:
+            self.posterror("Failed to complete audio processing")
+            traceback.print_exc()
+
+    @pyqtSlot(int,int)
+    def abortaudioprocessing(self,plottabnum,displaymessage):
+        try:
+            plottabstr = self.gettabstrfromnum(plottabnum)
+            #cleaning up
+            alltabdata[plottabstr]["tabwidgets"]["audioprogressbar"].deleteLater()
+            alltabdata[plottabstr]["isprocessing"] = False #noting that the processing is done
+
+            if displaymessage == 1:
+                self.posterror("An unspecified error occured while attempting to process the audio file")
+
+        except Exception:
+            self.posterror("An unspecified error occured while processing the audio file, and a second error occured while aborting the audio processor.")
+            traceback.print_exc()
+        
+        
+# =============================================================================
+#         CHECKS/PREPS TAB TO TRANSITION TO PROFILE EDITOR MODE
+# =============================================================================
+    def processprofile(self): 
+        try:
+            #pulling and checking file input data
+            curtabstr = "Tab " + str(self.whatTab())
+            
+            #pulling data from inputs
+            latstr = alltabdata[curtabstr]["tabwidgets"]["latedit"].text()
+            lonstr = alltabdata[curtabstr]["tabwidgets"]["lonedit"].text()
+            identifier = alltabdata[curtabstr]["tabwidgets"]["idedit"].text()
+            profdatestr = alltabdata[curtabstr]["tabwidgets"]["dateedit"].text()
+            timestr = alltabdata[curtabstr]["tabwidgets"]["timeedit"].text()
+                
+            #check and correct inputs
+            try:
+                lat,lon,year,month,day,time,hour,minute = self.parsestringinputs(latstr,lonstr,profdatestr,timestr)
+            except:
+                return
+            
+            #pulling raw t-d profile
+            rawtemperature = alltabdata[curtabstr]["rawdata"]["temperature"]
+            rawdepth = alltabdata[curtabstr]["rawdata"]["depth"]
+            
+            #writing other raw data inputs
+            alltabdata[curtabstr]["rawdata"]["lat"] = lat
+            alltabdata[curtabstr]["rawdata"]["lon"] = lon
+            alltabdata[curtabstr]["rawdata"]["year"] = year
+            alltabdata[curtabstr]["rawdata"]["month"] = month
+            alltabdata[curtabstr]["rawdata"]["day"] = day
+            alltabdata[curtabstr]["rawdata"]["droptime"] = time
+            alltabdata[curtabstr]["rawdata"]["hour"] = hour
+            alltabdata[curtabstr]["rawdata"]["minute"] = minute
+            alltabdata[curtabstr]["rawdata"]["ID"] = identifier
+            
+            #saves profile if necessary
+            if autosave == 1:
+                self.savedataincurtab()
+            else:
+                reply = QMessageBox.question(self, 'Save Raw Data?',
+                "Would you like to save the raw data file? \n Filetype options can be adjusted in File>Raw Data File Types \n All unsaved work will be lost!", 
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel, QMessageBox.Cancel)
+                if reply == QMessageBox.Yes:
+                    if not self.savedataincurtab(): #try to save profile, terminate function if failed
+                        return
+                elif reply == QMessageBox.Cancel:
+                    return
+                
+            
+            #delete Processor profile canvas (since it isn't in the tabwidgets sub-dict)
+            alltabdata[curtabstr]["ProcessorCanvas"].deleteLater()
+            
+            #removing NaNs from T-D profile
+            ind = []
+            for i in range(len(rawtemperature)):
+                ind.append(not np.isnan(rawtemperature[i]) and not np.isnan(rawdepth[i]))
+            rawdepth = rawdepth[ind]
+            rawtemperature = rawtemperature[ind]
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to read profile data")
+            return
+        
+        #generating QC tab
+        self.continuetoqc(curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,time,"ProcessedInHouse",identifier)
+        
+
+
+
+      
+# =============================================================================
+#    TAB TO LOAD EXISTING DATA FILE INTO EDITOR
+# =============================================================================
+    def makenewproftab(self):
+        try:
+            #number of the new tab will be equal to the number of previous tabs (offset by 1 removed b/c of Python indexing)
+            newtabnum = self.tabWidget.count()
+            curtabstr = "Tab "+str(newtabnum) #pointable string for alltabdata dict
+    
+            #self.currenttab = QWidget() #tablayout = QGridLayout() #self.figure = plt.figure() 
+            alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),
+                      "ProfFig":plt.figure(),"LocFig":plt.figure(),
+                      "tabtype":"ProfileEditorInput"}
+            alltabdata[curtabstr]["tablayout"].setSpacing(10)
+            
+            self.setnewtabcolor(alltabdata[curtabstr]["tab"])
+    
+            self.tabWidget.addTab(alltabdata[curtabstr]["tab"],'New Tab') #self.tabWidget.addTab(self.currenttab,'New Tab')
+            self.tabWidget.setCurrentIndex(newtabnum)
+            self.tabWidget.setTabText(newtabnum,"Tab #" + str(newtabnum+1))
+            self.totaltabs += 1
+            alltabdata[curtabstr]["tabnum"] = self.totaltabs #assigning unique, unchanging number to current tab
+            
+            #Create widgets for UI
+            alltabdata[curtabstr]["tabwidgets"] = {}
+            alltabdata[curtabstr]["tabwidgets"]["title"] = QLabel('Enter AXBT Drop Information:')
+            alltabdata[curtabstr]["tabwidgets"]["lattitle"] = QLabel('Latitude (N>0): ')
+            alltabdata[curtabstr]["tabwidgets"]["latedit"] = QLineEdit('XX.XXX')
+            alltabdata[curtabstr]["tabwidgets"]["lontitle"] = QLabel('Longitude (E>0): ')
+            alltabdata[curtabstr]["tabwidgets"]["lonedit"] = QLineEdit('XX.XXX')
+            alltabdata[curtabstr]["tabwidgets"]["datetitle"] = QLabel('Date: ')
+            alltabdata[curtabstr]["tabwidgets"]["dateedit"] = QLineEdit('YYYYMMDD')
+            alltabdata[curtabstr]["tabwidgets"]["timetitle"] = QLabel('Time (UTC): ')
+            alltabdata[curtabstr]["tabwidgets"]["timeedit"] = QLineEdit('HHMM')
+            alltabdata[curtabstr]["tabwidgets"]["idtitle"] = QLabel('Platform ID/Tail#: ')
+            alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit('AFNNN')
+            alltabdata[curtabstr]["tabwidgets"]["logtitle"] = QLabel('Select Source File: ')
+            alltabdata[curtabstr]["tabwidgets"]["logbutton"] = QPushButton('Browse')
+            alltabdata[curtabstr]["tabwidgets"]["logedit"] = QTextEdit('filepath/LOGXXXXX.DTA')
+            alltabdata[curtabstr]["tabwidgets"]["logedit"].setMaximumHeight(100)
+            alltabdata[curtabstr]["tabwidgets"]["logbutton"].clicked.connect(self.selectdatafile)
+            alltabdata[curtabstr]["tabwidgets"]["submitbutton"] = QPushButton('Process Profile')
+            alltabdata[curtabstr]["tabwidgets"]["submitbutton"].clicked.connect(self.checkdatainputs_editorinput)
+            
+            # #Create widgets for UI populated with test example
+            # alltabdata[curtabstr]["tabwidgets"] = {}
+            # alltabdata[curtabstr]["tabwidgets"]["title"] = QLabel('Enter AXBT Drop Information:')
+            # alltabdata[curtabstr]["tabwidgets"]["lattitle"] = QLabel('Latitude (N>0): ')
+            # alltabdata[curtabstr]["tabwidgets"]["latedit"] = QLineEdit('15.383')
+            # alltabdata[curtabstr]["tabwidgets"]["lontitle"] = QLabel('Longitude (E>0): ')
+            # alltabdata[curtabstr]["tabwidgets"]["lonedit"] = QLineEdit('-055.333')
+            # alltabdata[curtabstr]["tabwidgets"]["datetitle"] = QLabel('Date: ')
+            # alltabdata[curtabstr]["tabwidgets"]["dateedit"] = QLineEdit('20150826')
+            # alltabdata[curtabstr]["tabwidgets"]["timetitle"] = QLabel('Time (UTC): ')
+            # alltabdata[curtabstr]["tabwidgets"]["timeedit"] = QLineEdit('1131')
+            # alltabdata[curtabstr]["tabwidgets"]["idtitle"] = QLabel('Platform ID/Tail#: ')
+            # alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit('AF309')
+            # alltabdata[curtabstr]["tabwidgets"]["logtitle"] = QLabel('Select Source File: ')
+            # alltabdata[curtabstr]["tabwidgets"]["logbutton"] = QPushButton('Browse')
+            # alltabdata[curtabstr]["tabwidgets"]["logedit"] = QTextEdit('testdata/201508261140.DTA')
+            # alltabdata[curtabstr]["tabwidgets"]["logedit"].setMaximumHeight(100)
+            # alltabdata[curtabstr]["tabwidgets"]["logbutton"].clicked.connect(self.selectdatafile)
+            # alltabdata[curtabstr]["tabwidgets"]["submitbutton"] = QPushButton('Process Profile')
+            # alltabdata[curtabstr]["tabwidgets"]["submitbutton"].clicked.connect(self.checkdatainputs_editorinput)
+            
+            #formatting widgets
+            alltabdata[curtabstr]["tabwidgets"]["title"].setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["lattitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["lontitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["datetitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["timetitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["idtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["logtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            
+            #should be 15 entries
+            wrows     = [1,2,2,3,3,4,4,5,5,6,6,7,7,8,9]
+            wcols     = [1,1,2,1,2,1,2,1,2,1,2,1,2,1,1]
+            
+            wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+            wcolext   = [2,1,1,1,1,1,1,1,1,1,1,1,1,2,2]
+            twid = 150
+            thgt = 30
+            wfixwidth = [2*twid,twid,twid,twid,twid,twid,twid,twid,twid,twid,twid,twid,twid,2*twid,2*twid]
+            wfixhght  = [15,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt]    
+            
+            #adding user inputs
+            for i,r,c,re,ce,ww,hh in zip(alltabdata[curtabstr]["tabwidgets"],wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
+                alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
+                alltabdata[curtabstr]["tabwidgets"][i].setFixedWidth(ww) 
+            
+            #forces grid info to top/center of window
+            alltabdata[curtabstr]["tablayout"].setRowStretch(10,1)
+            alltabdata[curtabstr]["tablayout"].setColumnStretch(0,1)
+            alltabdata[curtabstr]["tablayout"].setColumnStretch(3,1)
+            alltabdata[curtabstr]["tab"].setLayout(alltabdata[curtabstr]["tablayout"]) #self.currenttab.setLayout(tablayout)
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to build editor input tab!")
+
+
+    def selectdatafile(self):
+        try:
+            fname,ok = QFileDialog.getOpenFileName(self, 'Open file', 
+             '',"Source Data Files (*.DTA *.Dta *.dta *.EDF *.Edf *.edf *.edf)")
+            if ok:
+                curtabstr = "Tab " + str(self.whatTab())
+                alltabdata[curtabstr]["tabwidgets"]["logedit"].setText(fname)
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to select file- please try again or manually enter full path to file in box below.")
+
+    #Pull data, check to make sure it is valid before proceeding
+    def checkdatainputs_editorinput(self):
+        try:
+            curtabstr = "Tab " + str(self.whatTab())
+            
+            #pulling data from inputs
+            latstr = alltabdata[curtabstr]["tabwidgets"]["latedit"].text()
+            lonstr = alltabdata[curtabstr]["tabwidgets"]["lonedit"].text()
+            identifier = alltabdata[curtabstr]["tabwidgets"]["idedit"].text()
+            profdatestr = alltabdata[curtabstr]["tabwidgets"]["dateedit"].text()
+            timestr = alltabdata[curtabstr]["tabwidgets"]["timeedit"].text()
+            logfile = alltabdata[curtabstr]["tabwidgets"]["logedit"].toPlainText()
+            
+            #check that logfile exists
+            if not os.path.isfile(logfile):
+                self.postwarning('Selected Data File Does Not Exist!')
+                return
+    
+            if logfile[-4:].lower() == '.dta': #checks inputs if log file, otherwise doesnt need them
+                
+                #check and correct inputs
+                try:
+                    lat,lon,year,month,day,time,_,_ = self.parsestringinputs(latstr,lonstr,profdatestr,timestr)
+                except:
+                    return
+                
+            else:
+                lon = np.NaN
+                lat = np.NaN
+                month = np.NaN
+                day = np.NaN
+                time= np.NaN
+                try: #year is important if jjvv file
+                    year = int(profdatestr[:4])
+                except:
+                    year = np.NaN
+                    
+            try:
+                #identifying and reading file data
+                if logfile[-4:].lower() == '.dta':
+                    rawtemperature,rawdepth = tfio.readlogfile(logfile)
+                elif logfile[-4:].lower() == '.edf':
+                    rawtemperature,rawdepth,year,month,day,hour,minute,second,lat,lon = tfio.readedffile(logfile)
+                    time = hour*100 + second
+                elif logfile[-4:].lower() == '.fin':
+                    rawtemperature,rawdepth,day,month,year,time,lat,lon,_ = tfio.readfinfile(logfile)
+                elif logfile[-5:].lower() == '.jjvv':
+                    rawtemperature,rawdepth,day,month,year,time,lat,lon,identifier = tfio.readjjvvfile(logfile,round(year,-1))
+                else:
+                    QApplication.restoreOverrideCursor()
+                    self.postwarning('Invalid Data File Format (must be .dta,.edf,.fin, or .jjvv)!')
+                    return
+            except Exception:
+                traceback.print_exc()
+                QApplication.restoreOverrideCursor()
+                self.posterror('Failed to read selected data file!')
+                return
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to read profile input data")
+            QApplication.restoreOverrideCursor()
+            return
+        
+        #only gets here if all inputs are good- this function switches the tab to profile editor view
+        self.continuetoqc(curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,time,logfile,identifier)
+        
+        
+        
+        
+        
+# =============================================================================
+#         PROFILE EDITOR TAB
+# =============================================================================
+    def continuetoqc(self,curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,time,logfile,identifier):
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            
+            dtg = str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4)
+            
+            #getting climatology
+            climotemps,climodepths,climotempfill,climodepthfill = oci.getclimatologyprofile(lat,lon,month)
+            
+            #running autoqc code
+            sfc_correction = 0
+            maxdepth = 100000
+            temperature,depth = qc.autoqc(rawtemperature,rawdepth,sfc_correction,maxdepth,maxderiv,reslev,checkforgaps)
+            
+            #comparing to climatology
+            matchclimo,climobottomcutoff = oci.comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climodepthfill)
+            
+            #pull ocean depth from ETOPO1 Grid-Registered Ice Sheet based global relief dataset 
+            #Data source: NOAA-NGDC: https://www.ngdc.noaa.gov/mgg/global/global.html
+            oceandepth,exportlat,exportlon,exportrelief = oci.getoceandepth(lat,lon,6)
+            
+            #limit profile depth by climatology cutoff, ocean depth cutoff
+            maxdepth = np.max(depth)+50
+            isbottomstrike = 0
+            if useoceanbottom == 1 and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
+                maxdepth = oceandepth
+                isbottomstrike = 1
+            if useclimobottom == 1 and np.isnan(climobottomcutoff) == 0 and climobottomcutoff <= maxdepth:
+                isbottomstrike = 1
+                maxdepth = climobottomcutoff
+            isbelowmaxdepth = np.less_equal(depth,maxdepth)
+            temperature = temperature[isbelowmaxdepth]
+            depth = depth[isbelowmaxdepth]
+            
+            #writing values to alltabs structure
+            alltabdata[curtabstr]["profdata"] = {"temp_raw":rawtemperature,"depth_raw":rawdepth,
+                      "temp_qc":temperature,"depth_qc":depth,"temp_plot":temperature,"depth_plot":depth,
+                      "lat":lat,"lon":lon,"year":year,"month":month,"day":day,"time":time,"DTG":dtg,
+                      "climotemp":climotemps,"climodepth":climodepths,"climotempfill":climotempfill,
+                      "climodepthfill":climodepthfill,"matchclimo":matchclimo,"datasourcefile":logfile,
+                      "ID":identifier,"oceandepth":oceandepth}
+            
+            alltabdata[curtabstr]["maxderiv"] = maxderiv
+            
+            #deleting old buttons and inputs
+            for i in alltabdata[curtabstr]["tabwidgets"]:
+                try:
+                    alltabdata[curtabstr]["tabwidgets"][i].deleteLater()
+                except:
+                    alltabdata[curtabstr]["tabwidgets"][i] = 1 #bs variable- overwrites spacer item
+                                
+            if renametabstodtg == 1:
+                curtab = int(self.whatTab())
+                self.tabWidget.setTabText(curtab,dtg)  
+                
+            #now delete widget entries
+            del alltabdata[curtabstr]["tabwidgets"]
+            QObjectCleanupHandler().add(alltabdata[curtabstr]["tablayout"])
+            
+            alltabdata[curtabstr]["tablayout2"] = QGridLayout()
+            alltabdata[curtabstr]["tab"].setLayout(alltabdata[curtabstr]["tablayout2"]) 
+            alltabdata[curtabstr]["tablayout2"].setSpacing(10)
+            
+            #ADDING FIGURES TO GRID LAYOUT (row column rowext colext)
+            alltabdata[curtabstr]["ProfCanvas"] = FigureCanvas(alltabdata[curtabstr]["ProfFig"]) #self.canvas = FigureCanvas(self.figure)
+            alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["ProfCanvas"],0,0,12,1) #tablayout.addWidget(self.canvas)
+            alltabdata[curtabstr]["LocCanvas"] = FigureCanvas(alltabdata[curtabstr]["LocFig"]) #self.canvas = FigureCanvas(self.figure)
+            alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["LocCanvas"],11,2,1,5) #tablayout.addWidget(self.canvas)
+            
+            #making profile processing result plots
+            alltabdata[curtabstr]["ProfAx"] = alltabdata[curtabstr]["ProfFig"].add_axes([0.1, 0.05, 0.85, 0.9])
+            alltabdata[curtabstr]["LocAx"] = alltabdata[curtabstr]["LocFig"].add_axes([0.1, 0.08, 0.85, 0.85])
+            
+            #adding toolbar
+            alltabdata[curtabstr]["ProfToolbar"] = NavigationToolbar(alltabdata[curtabstr]["ProfCanvas"], self)
+            alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["ProfToolbar"],1,2,1,2)
+            alltabdata[curtabstr]["ProfToolbar"].setFixedWidth(300)
+            
+            #plot data
+            alltabdata[curtabstr]["climohandle"] = tplot.makeprofileplot(alltabdata[curtabstr]["ProfAx"],rawtemperature,rawdepth,temperature,depth,climotempfill,climodepthfill,dtg,matchclimo)
+            tplot.makelocationplot(alltabdata[curtabstr]["LocFig"],alltabdata[curtabstr]["LocAx"],lat,lon,dtg,exportlon,exportlat,exportrelief,6)
+            
+            #refresh plots on window
+            alltabdata[curtabstr]["ProfCanvas"].draw()
+            alltabdata[curtabstr]["LocCanvas"].draw()
+            
+            #Create widgets for UI populated with test example
+            alltabdata[curtabstr]["tabwidgets"] = {}
+            
+            #first column: profile editor functions:
+            alltabdata[curtabstr]["tabwidgets"]["toggleclimooverlay"] = QPushButton('Overlay Climatology') #1
+            alltabdata[curtabstr]["tabwidgets"]["toggleclimooverlay"].setCheckable(True)
+            alltabdata[curtabstr]["tabwidgets"]["toggleclimooverlay"].setChecked(True)
+            alltabdata[curtabstr]["tabwidgets"]["toggleclimooverlay"].clicked.connect(self.toggleclimooverlay) 
+            
+            alltabdata[curtabstr]["tabwidgets"]["addpoint"] = QPushButton('Add Point') #2
+            alltabdata[curtabstr]["tabwidgets"]["addpoint"].clicked.connect(self.addpoint)
+            
+            alltabdata[curtabstr]["tabwidgets"]["removepoint"] = QPushButton('Remove Point') #3
+            alltabdata[curtabstr]["tabwidgets"]["removepoint"].clicked.connect(self.removepoint)        
+            
+            alltabdata[curtabstr]["tabwidgets"]["sfccorrectiontitle"] = QLabel('Isothermal Layer (m):') #4
+            alltabdata[curtabstr]["tabwidgets"]["sfccorrection"] = QSpinBox() #5
+            alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setRange(0, int(np.max(rawdepth)))
+            alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setSingleStep(1)
+            alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setValue(0)
+            alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].valueChanged.connect(self.applychanges)
+            
+            alltabdata[curtabstr]["tabwidgets"]["maxdepthtitle"] = QLabel('Maximum Depth (m):') #6
+            alltabdata[curtabstr]["tabwidgets"]["maxdepth"] = QSpinBox() #7
+            alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setRange(0, int(np.round(np.max(rawdepth+200),-2)))
+            alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setSingleStep(1)
+            alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setValue(np.max(rawdepth))
+            alltabdata[curtabstr]["tabwidgets"]["maxdepth"].valueChanged.connect(self.applychanges)
+            
+            alltabdata[curtabstr]["tabwidgets"]["depthdelaytitle"] = QLabel('Depth Delay (m):') #8
+            alltabdata[curtabstr]["tabwidgets"]["depthdelay"] = QSpinBox() #9
+            alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setRange(0, int(np.round(np.max(rawdepth+200),-2)))
+            alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setSingleStep(1)
+            alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setValue(0)
+            alltabdata[curtabstr]["tabwidgets"]["depthdelay"].valueChanged.connect(self.applychanges)
+            
+            alltabdata[curtabstr]["tabwidgets"]["mdslidetitle"] = QLabel('Inflection Point Threshold (C/m<sup>2</sup>): ' + str(alltabdata[curtabstr]["maxderiv"])) #10
+            alltabdata[curtabstr]["tabwidgets"]["mdslide"] = QSlider(Qt.Horizontal) #11
+            alltabdata[curtabstr]["tabwidgets"]["mdslide"].setValue(int(alltabdata[curtabstr]["maxderiv"]*100))
+            alltabdata[curtabstr]["tabwidgets"]["mdslide"].setMinimum(0)
+            alltabdata[curtabstr]["tabwidgets"]["mdslide"].setMaximum(400)
+            alltabdata[curtabstr]["tabwidgets"]["mdslide"].valueChanged[int].connect(self.changeMDvalue)
+            
+            alltabdata[curtabstr]["tabwidgets"]["rerunqc"] = QPushButton('Re-QC Profile (Reset)') #12
+            alltabdata[curtabstr]["tabwidgets"]["rerunqc"].clicked.connect(self.rerunqc)    
+            
+            
+            #Second column: profile information
+            if lon >= 0: #prepping coordinate string
+                ewhem = ' \xB0E'
+            else:
+                ewhem = ' \xB0W'
+            if lat >= 0:
+                nshem = ' \xB0N'
+            else:
+                nshem = ' \xB0S'
+            proftxt = ('Profile Data: ' + '\n'  # profile data 
+                       + str(abs(lon)) + ewhem + ', ' + str(abs(lat)) + nshem + '\n' 
+                       + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
+                       + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
+                       + 'QC SFC Correction: ' + str(sfc_correction) + ' m' + '\n'
+                       + 'QC Depth Delay: ' + str(0) + ' m' + '\n'
+                       + '# Datapoints: ' + str(len(temperature)) )
+            alltabdata[curtabstr]["tabwidgets"]["proftxt"] = QLabel(proftxt)#13
+            
+            
+            
+            alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"] = QCheckBox('Bottom Strike?') #14
+            if isbottomstrike == 1:
+                alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].setChecked(True)
+            else:
+                alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].setChecked(False)
+            
+            alltabdata[curtabstr]["tabwidgets"]["rcodetitle"] = QLabel('Profile Flag:') #15
+            alltabdata[curtabstr]["tabwidgets"]["rcode"] = QComboBox() #16
+            alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Good Profile")
+            alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("No Signal")
+            alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Spotty/Intermittent")
+            alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Hung Probe/Early Start")
+            alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Isothermal")
+            alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Late Start")
+            alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Slow Falling")
+            alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Bottom Strike")
+            alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Climatology Mismatch")
+            alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Action Required/Reprocess")
+            if matchclimo == 0: #setting value of combobox
+                alltabdata[curtabstr]["tabwidgets"]["rcode"].setCurrentIndex(8)
+            elif isbottomstrike == 1:
+                alltabdata[curtabstr]["tabwidgets"]["rcode"].setCurrentIndex(7)
+            else:
+                alltabdata[curtabstr]["tabwidgets"]["rcode"].setCurrentIndex(0)
+                
+            #formatting widgets
+            alltabdata[curtabstr]["tabwidgets"]["proftxt"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["rcodetitle"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["depthdelaytitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["sfccorrectiontitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            alltabdata[curtabstr]["tabwidgets"]["maxdepthtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            
+            
+            #should be 16 entries 
+            wrows     = [2,3,3,4,4,5,5,6,6,7,8,9,1,5,6,6]
+            wcols     = [2,2,3,2,3,2,3,2,3,2,2,2,5,5,5,6]
+            
+            wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,4,1,1,1]
+            wcolext   = [2,1,1,1,1,1,1,1,1,2,2,2,2,2,1,1]
+            
+            twid = 155
+            twid2 = 2*twid
+            thgt = 30
+            thgt2 = 4*thgt
+            wfixwidth = [twid2,twid,twid,twid,twid,twid,twid,twid,twid,twid2,twid2,twid2,twid2,twid,twid,twid]
+            wfixhght  = [thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt2,thgt,thgt,thgt]    
+            
+            #adding user inputs
+            for i,r,c,re,ce,ww,hh in zip(alltabdata[curtabstr]["tabwidgets"],wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
+                alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
+                alltabdata[curtabstr]["tabwidgets"][i].setFixedWidth(ww)
+                alltabdata[curtabstr]["tabwidgets"][i].setFixedHeight(hh)
+                    
+            #Applying other preferences to grid layout
+            Wsize = app.desktop().screenGeometry()
+            alltabdata[curtabstr]["tablayout2"].setColumnMinimumWidth(0,int(0.4*Wsize.width())) #Space between left and first entry 
+            alltabdata[curtabstr]["tablayout2"].setColumnStretch(1,2)
+            alltabdata[curtabstr]["tablayout2"].setColumnStretch(4,1)
+            alltabdata[curtabstr]["tablayout2"].setColumnStretch(7,1)
+            alltabdata[curtabstr]["tablayout2"].setColumnStretch(8,3)
+            alltabdata[curtabstr]["tablayout2"].setRowStretch(0,1)
+            alltabdata[curtabstr]["tablayout2"].setRowStretch(10,1)
+            
+            alltabdata[curtabstr]["tabtype"] = "ProfileEditor"
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to build profile editor tab!")
+        finally:
+            QApplication.restoreOverrideCursor()
+        
+        
+        
+# =============================================================================
+#         PROFILE EDITING FUNCTION CALLS
+# =============================================================================
+        
+    def changeMDvalue(self,value):
+        curtabstr = "Tab " + str(self.whatTab())
+        alltabdata[curtabstr]["maxderiv"] = float(value)/100
+        alltabdata[curtabstr]["tabwidgets"]["mdslidetitle"].setText('Inflection Point Threshold (C/m<sup>2</sup>): ' + str(alltabdata[curtabstr]["maxderiv"]))
+        
+    def addpoint(self):
+        try:
+            QApplication.setOverrideCursor(Qt.CrossCursor)
+            curtabstr = "Tab " + str(self.whatTab())
+            alltabdata[curtabstr]["pt_type"] = 1
+            alltabdata[curtabstr]["pt"] = alltabdata[curtabstr]["ProfCanvas"].mpl_connect('button_release_event', self.on_release)
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to add point")
+            
+    def removepoint(self):
+        try:
+            QApplication.setOverrideCursor(Qt.CrossCursor)
+            curtabstr = "Tab " + str(self.whatTab())
+            alltabdata[curtabstr]["pt_type"] = 2
+            alltabdata[curtabstr]["pt"] = alltabdata[curtabstr]["ProfCanvas"].mpl_connect('button_release_event', self.on_release)
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to remove point")
+            
+            
+    def on_release(self,event):
+        try:
+            curtabstr = "Tab " + str(self.whatTab())
+            
+            xx = event.xdata #selected x and y points
+            yy = event.ydata
+            
+            #retrieve and update values
+            tempplot = alltabdata[curtabstr]["profdata"]["temp_qc"]
+            depthplot = alltabdata[curtabstr]["profdata"]["depth_qc"]
+            
+            #depends on adding (from raw) or removing a point
+            if alltabdata[curtabstr]["pt_type"] == 1:
+                rawt = alltabdata[curtabstr]["profdata"]["temp_raw"]
+                rawd = alltabdata[curtabstr]["profdata"]["depth_raw"]
+                pt = np.argmin(abs(rawt-xx)**2 + abs(rawd-yy)**2)
+                addtemp = rawt[pt]
+                adddepth = rawd[pt]
+                if not adddepth in depthplot:
+                    try: #if np array
+                        ind = np.where(adddepth > depthplot)
+                        ind = ind[0][-1]+1 #index to add
+                        depthplot = np.insert(depthplot,ind,adddepth)
+                        tempplot = np.insert(tempplot,ind,addtemp)
+                    except: #if list
+                        i = 0
+                        for i in range(len(depthplot)):
+                            if depthplot[i] > adddepth:
+                                break
+                        depthplot.insert(i,adddepth)
+                        tempplot.insert(i,addtemp)
+                        
+                    
+            elif alltabdata[curtabstr]["pt_type"] == 2:
+                pt = np.argmin(abs(tempplot-xx)**2 + abs(depthplot-yy)**2)
+                try: #if its an array
+                    tempplot = np.delete(tempplot,pt)
+                    depthplot = np.delete(depthplot,pt)
+                except: #if its a list
+                    tempplot.pop(pt)
+                    depthplot.pop(pt)
+                    
+            #replace values in profile
+            alltabdata[curtabstr]["profdata"]["depth_qc"] = depthplot
+            alltabdata[curtabstr]["profdata"]["temp_qc"] = tempplot
+            
+            #new depth correction settings
+            sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
+            maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
+            depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
+
+            if depthdelay > 0:  # shifitng entire profile up if necessary
+                depthplot = depthplot - depthdelay
+                ind = depthplot >= 0
+                depthplot = depthplot[ind]
+                tempplot = tempplot[ind]
+
+            if sfcdepth > 0: #replacing surface temperatures
+                sfctemp = np.interp(sfcdepth,depthplot,tempplot)
+                ind = depthplot <= sfcdepth
+                tempplot[ind] = sfctemp
+                
+            if maxdepth < np.max(depthplot):
+                ind = depthplot <= maxdepth
+                tempplot = tempplot[ind]
+                depthplot = depthplot[ind]
+                
+            #replacing t/d profile values
+            alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
+            alltabdata[curtabstr]["profdata"]["depth_plot"] = depthplot
+            
+            #redo plot, disconnect add event
+            del alltabdata[curtabstr]["ProfAx"].lines[-1]
+            alltabdata[curtabstr]["ProfAx"].plot(tempplot,depthplot,'r',linewidth=2,label='QC')
+            alltabdata[curtabstr]["ProfCanvas"].mpl_disconnect(alltabdata[curtabstr]["pt"])
+            alltabdata[curtabstr]["ProfCanvas"].draw()
+            
+            #delete current indices
+            del alltabdata[curtabstr]["pt"], alltabdata[curtabstr]["pt_type"]
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to select profile point!")
+        finally:
+            #restore cursor type
+            QApplication.restoreOverrideCursor()
+        
+    def applychanges(self):
+        curtabstr = "Tab " + str(self.whatTab())
+        #current t/d profile
+        tempplot = alltabdata[curtabstr]["profdata"]["temp_qc"]
+        depthplot = alltabdata[curtabstr]["profdata"]["depth_qc"]
+        
+        #new depth correction settings
+        sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
+        maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
+        depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
+        
+        if depthdelay > 0: #shifitng entire profile up if necessary
+            depthplot = depthplot - depthdelay
+            ind = depthplot >= 0
+            depthplot = depthplot[ind]
+            tempplot = tempplot[ind]
+        
+        if sfcdepth > 0: #replacing surface temperatures
+            sfctemp = np.interp(sfcdepth,depthplot,tempplot)
+            ind = depthplot <= sfcdepth
+            tempplot[ind] = sfctemp
+            
+        if maxdepth < np.max(depthplot): #truncating base of profile
+            ind = depthplot <= maxdepth
+            tempplot = tempplot[ind]
+            depthplot = depthplot[ind]
+            
+        #replacing t/d profile values
+        alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
+        alltabdata[curtabstr]["profdata"]["depth_plot"] = depthplot
+        
+        #re-plotting
+        del alltabdata[curtabstr]["ProfAx"].lines[-1]
+        alltabdata[curtabstr]["ProfAx"].plot(tempplot,depthplot,'r',linewidth=2,label='QC')
+        alltabdata[curtabstr]["ProfCanvas"].draw()
+        
+        #Replace drop info
+        lon = alltabdata[curtabstr]["profdata"]["lon"]
+        lat = alltabdata[curtabstr]["profdata"]["lat"]
+        oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
+        if lon >= 0: #prepping coordinate string
+            ewhem = ' \xB0E'
+        else:
+            ewhem = ' \xB0W'
+        if lat >= 0:
+            nshem = ' \xB0N'
+        else:
+            nshem = ' \xB0S'
+        proftxt = ('Profile Data: ' + '\n'  # profile data 
+                   + str(abs(lon)) + ewhem + ', ' + str(abs(lat)) + nshem + '\n' 
+                   + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
+                   + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
+                   + 'QC SFC Correction: ' + str(sfcdepth) + ' m' + '\n'
+                   + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
+                   + '# Datapoints: ' + str(len(tempplot)) )
+        alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
+        
+        
+    def rerunqc(self):
+        try:
+            curtabstr = "Tab " + str(self.whatTab())
+            
+            #getting necessary data for QC from dictionary
+            rawtemperature = alltabdata[curtabstr]["profdata"]["temp_raw"]
+            rawdepth = alltabdata[curtabstr]["profdata"]["depth_raw"]
+            climotemps = alltabdata[curtabstr]["profdata"]["climotemp"]
+            climodepths = alltabdata[curtabstr]["profdata"]["climodepth"]
+            climotempfill = alltabdata[curtabstr]["profdata"]["climotempfill"]
+            climodepthfill = alltabdata[curtabstr]["profdata"]["climodepthfill"]
+            oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
+            
+            #resetting depth correction data
+            sfc_correction = 0
+            maxdepth = 10000
+            
+            try:
+                #running QC, comparing to climo
+                temperature,depth = qc.autoqc(rawtemperature,rawdepth,sfc_correction,maxdepth,alltabdata[curtabstr]["maxderiv"],reslev,checkforgaps)
+                matchclimo,climobottomcutoff = oci.comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climodepthfill)
+            except Exception:
+                temperature = depth = matchclimo = climobottomcutoff = 0
+                traceback.print_exc()
+                self.posterror("Error raised in automatic profile QC")
+                
+            #limit profile depth by climatology cutoff, ocean depth cutoff
+            maxdepth = np.max(depth)+50
+            isbottomstrike = 0
+            if useoceanbottom == 1 and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
+                maxdepth = oceandepth
+                isbottomstrike = 1
+            if useclimobottom == 1 and np.isnan(climobottomcutoff) == 0 and climobottomcutoff <= maxdepth:
+                isbottomstrike = 1
+                maxdepth = climobottomcutoff
+            isbelowmaxdepth = np.less_equal(depth,maxdepth)
+            temperature = temperature[isbelowmaxdepth]
+            depth = depth[isbelowmaxdepth]
+            
+            #writing values to alltabs structure: QC and prof temps, and matchclimo
+            alltabdata[curtabstr]["profdata"]["depth_qc"] = depth
+            alltabdata[curtabstr]["profdata"]["depth_plot"] = depth
+            alltabdata[curtabstr]["profdata"]["temp_qc"] = temperature
+            alltabdata[curtabstr]["profdata"]["temp_plot"] = temperature
+            alltabdata[curtabstr]["profdata"]["matchclimo"] = matchclimo
+            
+            #resetting depth correction QSpinBoxes
+            alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setValue(np.max(rawdepth))
+            alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setValue(0)
+            
+            #adjusting bottom strike checkbox as necessary
+            if isbottomstrike == 1:
+                alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].setChecked(True)
+            else:
+                alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].setChecked(False)
+            
+            #re-plotting
+            del alltabdata[curtabstr]["ProfAx"].lines[-1]
+            alltabdata[curtabstr]["ProfAx"].plot(temperature,depth,'r',linewidth=2,label='QC')
+            alltabdata[curtabstr]["ProfCanvas"].draw()
+    
+            #relabeling profile info
+            lon = alltabdata[curtabstr]["profdata"]["lon"]
+            lat = alltabdata[curtabstr]["profdata"]["lat"]
+            #prepping coordinate string
+            if lon >= 0:
+                ewhem = ' \xB0E'
+            else:
+                ewhem = ' \xB0W'
+            if lat >= 0:
+                nshem = ' \xB0N'
+            else:
+                nshem = ' \xB0S'
+            proftxt = ('Profile Data: ' + '\n' 
+                       + str(abs(lon)) + ewhem + ', ' + str(abs(lat)) + nshem + '\n' 
+                       + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
+                       + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
+                       + 'QC SFC Correction: ' + str(sfc_correction) + ' m' + '\n'
+                       + '# Datapoints: ' + str(len(temperature)) )
+            alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to Re-QC the profile")
+
+    def toggleclimooverlay(self,pressed):
+        try:
+            curtabstr = "Tab " + str(self.whatTab())
+            if pressed:
+                alltabdata[curtabstr]["climohandle"].set_visible(True)     
+            else:
+                alltabdata[curtabstr]["climohandle"].set_visible(False)
+            alltabdata[curtabstr]["ProfCanvas"].draw()
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to toggle climatology overlay")
+        
+        
+        
+        
+# =============================================================================
+#     TAB MANIPULATION OPTIONS, OTHER GENERAL FUNCTIONS
+# =============================================================================
+    def whatTab(self):
+        currentIndex = self.tabWidget.currentIndex()
+        return currentIndex
+    
+    def renametab(self):
+        try:
+            curtab = int(self.whatTab())
+            name, ok = QInputDialog.getText(self, 'Rename Current Tab', 'Enter new tab name:',QLineEdit.Normal,str(self.tabWidget.tabText(curtab)))
+            if ok:
+                self.tabWidget.setTabText(curtab,name)
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to rename the current tab")
+    
+    def setnewtabcolor(self,tab):
+        p = QPalette()
+        gradient = QLinearGradient(0, 0, 0, 400)
+        gradient.setColorAt(0.0, QColor(255,255,255))
+        gradient.setColorAt(1.0, QColor(248, 248, 255))
+        p.setBrush(QPalette.Window, QBrush(gradient))
+        tab.setAutoFillBackground(True)
+        tab.setPalette(p)
+            
+    def closecurrenttab(self):
+        try:
+            reply = QMessageBox.question(self, 'Message',
+                "Are you sure to close the current tab?", QMessageBox.Yes | 
+                QMessageBox.No, QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                curtab = int(self.whatTab())
+                curtabstr = "Tab " + str(curtab)
+                
+                #check to make sure there isn't a corresponding processor thread, close if there is
+                if alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_incomplete' or alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_completed':
+                    if alltabdata[curtabstr]["isprocessing"]:
+                        reply = QMessageBox.question(self, 'Message',
+                            "Closing this tab will terminate the current profile and discard the data. Continue?", QMessageBox.Yes | 
+                            QMessageBox.No, QMessageBox.No)
+                        if reply == QMessageBox.No:
+                            return
+                        else:
+                            if alltabdata[curtabstr]["datasource"] == 'Audio':
+                                print("Terminating Audio Processor")
+                            else:
+                                alltabdata[curtabstr]["processor"].abort()
+                
+                self.tabWidget.removeTab(curtab)
+                
+                #removing current tab data from the alltabdata dict, renaming all higher# tabs
+                alltabdata.pop("Tab "+str(curtab))
+                for i in alltabdata:
+                    if int(i[-1]) > curtab:
+                        ctab = int(i[-1])
+                        alltabdata["Tab "+str(ctab-1)] = alltabdata.pop("Tab "+str(ctab))
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to close the current tab")
+                        
+    def savedataincurtab(self):
+        try:
+            #getting directory to save files from QFileDialog
+            outdir = str(QFileDialog.getExistingDirectory(self, "Select Directory to Save File(s)"))
+            if outdir == '':
+                QApplication.restoreOverrideCursor()
+                return False
+        except:
+            self.posterror("Error raised in directory selection")
+            return
+
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            
+            #pulling all relevant data
+            curtabstr = "Tab " + str(self.whatTab())
+            
+            if alltabdata[curtabstr]["tabtype"] == "ProfileEditor":
+                try:
+                    rawtemperature = alltabdata[curtabstr]["profdata"]["temp_raw"]
+                    rawdepth = alltabdata[curtabstr]["profdata"]["depth_raw"]
+                    climotempfill = alltabdata[curtabstr]["profdata"]["climotempfill"]
+                    climodepthfill = alltabdata[curtabstr]["profdata"]["climodepthfill"]
+                    temperature = alltabdata[curtabstr]["profdata"]["temp_plot"]
+                    depth = alltabdata[curtabstr]["profdata"]["depth_plot"]
+                    day = alltabdata[curtabstr]["profdata"]["day"]
+                    month = alltabdata[curtabstr]["profdata"]["month"]
+                    year = alltabdata[curtabstr]["profdata"]["year"]
+                    time = alltabdata[curtabstr]["profdata"]["time"]
+                    lat = alltabdata[curtabstr]["profdata"]["lat"]
+                    lon = alltabdata[curtabstr]["profdata"]["lon"]
+                    identifier = alltabdata[curtabstr]["profdata"]["ID"]
+                    num = 99 #placeholder- dont have drop number here currently!!
+                    
+                    dtg = str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4)
+                    curtab = int(self.whatTab())
+                    filename = self.tabWidget.tabText(curtab)
+                    
+                    if comparetoclimo == 1:
+                        matchclimo = alltabdata[curtabstr]["profdata"]["matchclimo"]
+                    else:
+                        matchclimo = 1
+
+                except:
+                    self.posterror("Failed to retrieve profile information")
+                    return
+
+                if savefin == 1:
+                    try:
+                        depth1m = np.arange(0,np.floor(depth[-1]))
+                        temperature1m = np.interp(depth1m,depth,temperature)
+                        tfio.writefinfile(outdir + slash + filename + '.fin',temperature1m,depth1m,day,month,year,time,lat,lon,num)
+                    except Exception:
+                        traceback.print_exc()
+                        self.posterror("Failed to save FIN file")
+                if savejjvv == 1:
+                    try:
+                        tfio.writejjvvfile(outdir + slash + filename + '.jjvv',temperature,depth,day,month,year,time,lat,lon,identifier)
+                    except Exception:
+                        traceback.print_exc()
+                        self.posterror("Failed to save JJVV file")
+                if saveprof == 1:
+                    try:
+                        fig1 = plt.figure()
+                        fig1.clear()
+                        ax1 = fig1.add_axes([0.1,0.1,0.85,0.85])
+                        climohandle = tplot.makeprofileplot(ax1,rawtemperature,rawdepth,temperature,depth,climotempfill,climodepthfill,dtg,matchclimo)
+                        if overlayclimo == 0:
+                            climohandle.set_visible(False)
+                        fig1.savefig(outdir + slash + filename + '_prof.png',format='png')
+                    except Exception:
+                        traceback.print_exc()
+                        self.posterror("Failed to save profile image")
+                    finally:
+                        plt.close('fig1')
+
+                if saveloc == 1:
+                    try:
+                        fig2 = plt.figure()
+                        fig2.clear()
+                        ax2 = fig2.add_axes([0.1,0.1,0.85,0.85])
+                        _,exportlat,exportlon,exportrelief = oci.getoceandepth(lat,lon,6)
+                        tplot.makelocationplot(fig2,ax2,lat,lon,dtg,exportlon,exportlat,exportrelief,6)
+                        fig2.savefig(outdir + slash + filename + '_loc.png',format='png')
+                    except Exception:
+                        traceback.print_exc()
+                        self.posterror("Failed to save location image")
+                    finally:
+                        plt.close('fig2')
+
+                    
+            elif alltabdata[curtabstr]["tabtype"] == "SignalProcessor_completed":
+                
+                try:
+                    #pulling prof data
+                    rawtemperature = alltabdata[curtabstr]["rawdata"]["temperature"]
+                    rawdepth = alltabdata[curtabstr]["rawdata"]["depth"]
+                    frequency = alltabdata[curtabstr]["rawdata"]["frequency"]
+                    timefromstart = alltabdata[curtabstr]["rawdata"]["time"]
+                    
+                    lat = alltabdata[curtabstr]["rawdata"]["lat"]
+                    lon = alltabdata[curtabstr]["rawdata"]["lon"]
+                    year = alltabdata[curtabstr]["rawdata"]["year"]
+                    month = alltabdata[curtabstr]["rawdata"]["month"]
+                    day = alltabdata[curtabstr]["rawdata"]["day"]
+                    time = alltabdata[curtabstr]["rawdata"]["droptime"]
+                    hour = alltabdata[curtabstr]["rawdata"]["hour"]
+                    minute = alltabdata[curtabstr]["rawdata"]["minute"]
+                    
+                    initdatestr = str(year) + '/' + str(month).zfill(2) + '/' + str(day).zfill(2)
+                    inittimestr = str(hour).zfill(2) + ':' + str(minute).zfill(2) + ':'
+                    
+                    filename = str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4)
+                except Exception:
+                    traceback.print_exc()
+                    self.posterror("Failed to pull raw profile data")
+                    return
+                
+                if savelog == 1:
+                    try:
+                        tfio.writelogfile(outdir + slash + filename + '.DTA',initdatestr,inittimestr,timefromstart,rawdepth,frequency,rawtemperature)
+                    except Exception:
+                        traceback.print_exc()
+                        self.posterror("Failed to save LOG file")
+                if saveedf == 1:
+                    try:
+                        tfio.writeedffile(outdir + slash + filename + '.edf',rawtemperature,rawdepth,year,month,day,hour,minute,0,lat,lon)
+                    except Exception:
+                        traceback.print_exc()
+                        self.posterror("Failed to save EDF file")
+            else:
+                self.postwarning('You must process the profile before attempting to save data!')
+                
+        except Exception:
+            traceback.print_exc() #if something else in the file save code broke
+            self.posterror("Filed to save profiles")
+            QApplication.restoreOverrideCursor()
+            return False
+        finally:
+            QApplication.restoreOverrideCursor()
+            return True
+        
+    def exportdataincurtab(self):
+        print("You sent data in the current tab (to GTS?)!")
+        
+    def postwarning(self,warningtext):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText(warningtext)
+        msg.setWindowTitle("Warning")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+        
+    def posterror(self,errortext):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Critical)
+        msg.setText(errortext)
+        msg.setWindowTitle("Error")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+    
+    def postwarning_option(self,warningtext):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText(warningtext)
+        msg.setWindowTitle("Warning")
+        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        outval = msg.exec_()
+        option = 'unknown'
+        if outval == 1024:
+            option = 'okay'
+        elif outval == 4194304:
+            option = 'cancel'
+        return option
+    
+    #add warning message on exit
+    def closeEvent(self, event):
+        reply = QMessageBox.question(self, 'Message',
+            "Are you sure to close the application? \n All unsaved work will be lost!", QMessageBox.Yes | 
+            QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore() 
+    
+    
+# =============================================================================
+#    PARSE STRING INPUTS/CHECK VALIDITY WHEN TRANSITIONING TO PROFILE EDITOR
+# =============================================================================
+    def parsestringinputs(self,latstr,lonstr,profdatestr,timestr):
+        try:
+            #parsing and checking data
+            try:
+                latstr = latstr.split(',')
+                latsign = np.sign(float(latstr[0]))
+                if len(latstr) == 3:
+                    lat = float(latstr[0]) + latsign*float(latstr[1])/60 + latsign*float(latstr[2])/3600
+                elif len(latstr) == 2:
+                    lat = float(latstr[0]) + latsign*float(latstr[1])/60
+                else:
+                    lat = float(latstr[0])
+            except:
+                self.postwarning('Invalid Latitude Entered!')
+                return
+                
+            try:
+                lonstr = lonstr.split(',')
+                lonsign = np.sign(float(lonstr[0]))
+                if len(lonstr) == 3:
+                    lon = float(lonstr[0]) + lonsign*float(lonstr[1])/60 + lonsign*float(lonstr[2])/3600
+                elif len(lonstr) == 2:
+                    lon = float(lonstr[0]) + lonsign*float(lonstr[1])/60
+                else:
+                    lon = float(lonstr[0])
+            except:
+                self.postwarning('Invalid Longitude Entered!')
+                return
+            
+            if lon < -180 or lon > 180:
+                self.postwarning('Longitude must be between -180 and 180')
+            elif lat < -90 or lat > 90:
+                self.postwarning('Latitude must be between -90 and 90')
+            
+            if len(timestr) != 4:
+                self.postwarning('Invalid Time Format!')
+                return
+            elif len(profdatestr) != 8:
+                self.postwarning('Invalid Date Format!')
+                return
+            
+            try:
+                year = int(profdatestr[:4])
+                month = int(profdatestr[4:6])
+                day = int(profdatestr[6:])
+            except:
+                self.postwarning('Invalid Date Entered!')
+                return
+            try:
+                time = int(timestr)
+                hour = int(timestr[:2])
+                minute = int(timestr[2:4])
+            except:
+                self.postwarning('Invalid Time Entered!')
+                return
+            
+            curtime = timemodule.gmtime()
+            deltat = dt.datetime(curtime[0],curtime[1],curtime[2],curtime[3],curtime[4],curtime[5]) - dt.datetime(year,month,day,hour,minute,0)
+            option = ''
+            if givedtgwarn == 1:
+                if deltat.days < 0:
+                    option = self.postwarning_option("Drop time appears to be after the current time. Continue anyways?")
+                elif deltat.days > 1 or (deltat.days == 0 and deltat.seconds > 12*3600):
+                    option = self.postwarning_option("Drop time appears to be more than 12 hours ago. Continue anyways?")
+                if option == 'cancel':
+                    return
+                
+            return lat,lon,year,month,day,time,hour,minute
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Unspecified error in reading profile information!")
+            return
+    
+    
+    
+# =============================================================================
+#    GLOBAL PREFERENCE ADJUSTMENT
+# =============================================================================   
+            
+    def toggle_overlayclimo(self, state):
+        global overlayclimo
+        if state:
+            overlayclimo = 1
+        else:
+            overlayclimo = 0
+    def toggle_savejjvv(self, state):
+        global savejjvv
+        if state:
+            savejjvv = 1
+        else:
+            savejjvv = 0
+    def toggle_savefin(self, state):
+        global savefin
+        if state:
+            savefin = 1
+        else:
+            savefin = 0
+    def toggle_saveprof(self, state):
+        global saveprof
+        if state:
+            saveprof = 1
+        else:
+            saveprof = 0
+    def toggle_saveloc(self, state):
+        global saveloc
+        if state:
+            saveloc = 1
+        else:
+            saveloc = 0
+    def toggle_savelog(self, state):
+        global savelog
+        if state:
+            savelog = 1
+        else:
+            savelog = 0
+    def toggle_saveedf(self, state):
+        global saveedf
+        if state:
+            saveedf = 1
+        else:
+            saveedf = 0
+            
+    def toggle_autosaveopt(self, state):
+        global autosave
+        if state:
+            autosave = 1
+        else:
+            autosave = 0
+    def toggle_populatedtgopt(self, state):
+        global populatedtg
+        if state:
+            populatedtg = 1
+        else:
+            populatedtg = 0
+            
+            
+    def toggle_warningopt(self, state):
+        global givedtgwarn
+        if state:
+            givedtgwarn = 1
+        else:
+            givedtgwarn = 0
+    def toggle_renameopt(self, state):
+        global renametabstodtg
+        if state:
+            renametabstodtg = 1
+        else:
+            renametabstodtg = 0
+    def toggle_useclimobottom(self, state):
+        global useclimobottom
+        if state:
+            useclimobottom = 1
+        else:
+            useclimobottom = 0
+    def toggle_usebathy(self, state):
+        global useoceanbottom
+        if state:
+            useoceanbottom = 1
+        else:
+            useoceanbottom = 0
+    def toggle_findgaps(self, state):
+        global checkforgaps
+        if state:
+            checkforgaps = 1
+        else:
+            checkforgaps = 0
+    def toggle_comparetoclimo(self, state):
+        global comparetoclimo
+        if state:
+            comparetoclimo = 1
+        else:
+            comparetoclimo = 0
+    def toggle_resolution(self, action):
+        option = action.text()
+        global reslev
+        if option == resoptions[0]:
+            reslev = 1
+        elif option == resoptions[1]:
+            reslev = 2
+        elif option == resoptions[2]:
+            reslev = 3
+        else:
+            print("ERROR!! BAD RESOLUTION TYPE SPECIFIED")
+            
+
+    
+# =============================================================================
+# EXECUTE PROGRAM
+# =============================================================================
+if __name__ == '__main__':  
+    app = QApplication(sys.argv)
+    ex = RunProgram()
+    sys.exit(app.exec_())
+    
+    
