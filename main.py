@@ -19,7 +19,7 @@ from ctypes import windll
 from PyQt5.QtWidgets import (QMainWindow, QAction, QApplication, QMenu, QLineEdit, QLabel, QSpinBox, QCheckBox,
                              QPushButton, QMessageBox, QActionGroup, QWidget, QFileDialog, QComboBox, QTextEdit,
                              QTabWidget, QVBoxLayout, QInputDialog, QGridLayout, QSlider, QDoubleSpinBox, 
-                             QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar)
+                             QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QDesktopWidget, QStyle, QStyleOptionTitleBar)
 from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot
 from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient
 from PyQt5.Qt import QThreadPool
@@ -72,10 +72,13 @@ class RunProgram(QMainWindow):
 
             #loading DLL
             try:
-                self.wrdll = windll.LoadLibrary("WRG39WSBAPI")
+                # self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI.dll")
+                # self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI.dll")
+                self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI_64.dll")
             except:
                 self.postwarning("WiNRADIO driver NOT FOUND! Please ensure a WiNRADIO Receiver is connected and powered on and then restart the program!")
                 self.wrdll = 0
+                traceback.print_exc()
 
             self.setdefaults() #Default autoQC preferences
             self.buildmenu() #Creates interactive menu, options to create tabs and start autoQC
@@ -86,14 +89,23 @@ class RunProgram(QMainWindow):
             traceback.print_exc()
             self.posterror("Failed to initialize the program.")
         
-    def initUI(self):               
-        startpix = 10
-        Wsize = app.desktop().screenGeometry()
-        self.setGeometry(startpix,startpix,Wsize.width()-startpix,Wsize.height()-startpix)
+    def initUI(self):
+
+        # startpix = 10
+        # Wsize = app.desktop().screenGeometry()
+        # cursize = QDesktopWidget().availableGeometry(self).size()
+        # self.setGeometry(0,0,cursize.width()-startpix,cursize.height()-3*startpix)
+        # self.setFrameGeometry(startpix, startpix, Wsize.width() - startpix, Wsize.height() - startpix)
+        # self.setWindowState(Qt.WindowMaximized)
+
+        titleBarHeight = self.style().pixelMetric(QStyle.PM_TitleBarHeight, QStyleOptionTitleBar(), self)
+        geometry = app.desktop().availableGeometry()
+        geometry.setHeight(geometry.height() - titleBarHeight)
+        self.setGeometry(geometry)
+
+        # setting title/icon, background color
         self.setWindowTitle('AXBT Realtime Editing System')
         self.setWindowIcon(QIcon('qclib/dropicon.png'))
-        
-        #setting background color
         p = self.palette()
         p.setColor(self.backgroundRole(), QColor(255,255,255))
         self.setPalette(p)
@@ -520,6 +532,15 @@ class RunProgram(QMainWindow):
             newfrequency,newchannel = vsp.channelandfrequencylookup(newchannel,'findfrequency')
             alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setValue(newchannel)
             alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setValue(newfrequency)
+
+            curdatasource = alltabdata[curtabstr]["datasource"]
+            #checks to make sure all other tabs with same receiver are set to the same channel/freq
+            for ctab in alltabdata:
+                if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
+                    if alltabdata[ctab]["isprocessing"] and alltabdata[curtabstr]["datasource"] == curdatasource:
+                        alltabdata[ctab]["tabwidgets"]["vhfchannel"].setValue(newchannel)
+                        alltabdata[ctab]["tabwidgets"]["vhffreq"].setValue(newfrequency)
+
             if alltabdata[curtabstr]["isprocessing"] and alltabdata[curtabstr]["datasource"] != 'Audio' and alltabdata[curtabstr]["datasource"] != 'Test':
                 alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
         except Exception:
@@ -540,6 +561,15 @@ class RunProgram(QMainWindow):
             newchannel,newfrequency = vsp.channelandfrequencylookup(newfrequency,'findchannel')
             alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setValue(newchannel)
             alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setValue(newfrequency)
+
+            curdatasource = alltabdata[curtabstr]["datasource"]
+            # checks to make sure all other tabs with same receiver are set to the same channel/freq
+            for ctab in alltabdata:
+                if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
+                    if alltabdata[ctab]["isprocessing"] and alltabdata[curtabstr]["datasource"] == curdatasource:
+                        alltabdata[ctab]["tabwidgets"]["vhfchannel"].setValue(newchannel)
+                        alltabdata[ctab]["tabwidgets"]["vhffreq"].setValue(newfrequency)
+
             if alltabdata[curtabstr]["isprocessing"] and alltabdata[curtabstr]["datasource"] != 'Audio' and alltabdata[curtabstr]["datasource"] != 'Test':
                 alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
         except Exception:
@@ -1436,13 +1466,17 @@ class RunProgram(QMainWindow):
     def applychanges(self):
         curtabstr = "Tab " + str(self.whatTab())
         #current t/d profile
-        tempplot = alltabdata[curtabstr]["profdata"]["temp_qc"]
-        depthplot = alltabdata[curtabstr]["profdata"]["depth_qc"]
+        tempplot = alltabdata[curtabstr]["profdata"]["temp_qc"].copy()
+        depthplot = alltabdata[curtabstr]["profdata"]["depth_qc"].copy()
         
         #new depth correction settings
         sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
         maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
         depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
+
+        print(sfcdepth)
+        print(tempplot[0])
+
         
         if depthdelay > 0: #shifitng entire profile up if necessary
             depthplot = depthplot - depthdelay
@@ -1459,6 +1493,9 @@ class RunProgram(QMainWindow):
             ind = depthplot <= maxdepth
             tempplot = tempplot[ind]
             depthplot = depthplot[ind]
+
+        print(sfcdepth)
+        print(tempplot[0])
             
         #replacing t/d profile values
         alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
@@ -1539,6 +1576,7 @@ class RunProgram(QMainWindow):
             
             #resetting depth correction QSpinBoxes
             alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setValue(np.max(rawdepth))
+            alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setValue(0)
             alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setValue(0)
             
             #adjusting bottom strike checkbox as necessary
