@@ -1,0 +1,5 @@
+# Ignore all QC data in folder
+qcdata
+
+# Ignore test data files folder
+testdata
