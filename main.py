@@ -343,8 +343,8 @@ class RunProgram(QMainWindow):
     
             self.tabWidget.addTab(alltabdata[curtabstr]["tab"],'New Tab') #self.tabWidget.addTab(self.currenttab,'New Tab')
             self.tabWidget.setCurrentIndex(newtabnum)
-            self.tabWidget.setTabText(newtabnum,"New Drop #" + str(newtabnum+1))
             self.totaltabs += 1
+            self.tabWidget.setTabText(newtabnum, "New Drop #" + str(self.totaltabs))
             alltabdata[curtabstr]["tabnum"] = self.totaltabs #assigning unique, unchanging number to current tab
             
             alltabdata[curtabstr]["tablayout"].setSpacing(10)
@@ -537,7 +537,7 @@ class RunProgram(QMainWindow):
             #checks to make sure all other tabs with same receiver are set to the same channel/freq
             for ctab in alltabdata:
                 if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
-                    if alltabdata[ctab]["isprocessing"] and alltabdata[curtabstr]["datasource"] == curdatasource:
+                    if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == curdatasource:
                         alltabdata[ctab]["tabwidgets"]["vhfchannel"].setValue(newchannel)
                         alltabdata[ctab]["tabwidgets"]["vhffreq"].setValue(newfrequency)
 
@@ -566,7 +566,7 @@ class RunProgram(QMainWindow):
             # checks to make sure all other tabs with same receiver are set to the same channel/freq
             for ctab in alltabdata:
                 if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
-                    if alltabdata[ctab]["isprocessing"] and alltabdata[curtabstr]["datasource"] == curdatasource:
+                    if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == curdatasource:
                         alltabdata[ctab]["tabwidgets"]["vhfchannel"].setValue(newchannel)
                         alltabdata[ctab]["tabwidgets"]["vhffreq"].setValue(newfrequency)
 
@@ -645,6 +645,14 @@ class RunProgram(QMainWindow):
                     alltabdata[curtabstr]["processor"].abort()
                     alltabdata[curtabstr]["isprocessing"] = False #processing is done
                     alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+
+                    # checks to make sure all other tabs with same receiver are stopped (because the radio device is stopped)
+                    for ctab in alltabdata:
+                        if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
+                            if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == datasource:
+                                alltabdata[ctab]["processor"].abort()
+                                alltabdata[ctab]["isprocessing"] = False  # processing is done
+                                alltabdata[ctab]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
                     
         except Exception:
             traceback.print_exc()
@@ -842,8 +850,8 @@ class RunProgram(QMainWindow):
                 alltabdata[plottabstr]["tabwidgets"]["table"].insertRow(crow)
                 alltabdata[plottabstr]["tabwidgets"]["table"].setCurrentCell(crow,0)
                 alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 0, tabletime)
-                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 1, tablesignal)
-                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 2, tablefreq)
+                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 1, tablefreq)
+                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 2, tablesignal)
                 alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 3, tabledepth)
                 alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 4, tabletemp)
 
@@ -979,7 +987,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["logedit"] = QTextEdit('filepath/LOGXXXXX.DTA')
             alltabdata[curtabstr]["tabwidgets"]["logedit"].setMaximumHeight(100)
             alltabdata[curtabstr]["tabwidgets"]["logbutton"].clicked.connect(self.selectdatafile)
-            alltabdata[curtabstr]["tabwidgets"]["submitbutton"] = QPushButton('Process Profile')
+            alltabdata[curtabstr]["tabwidgets"]["submitbutton"] = QPushButton('PROCESS PROFILE')
             alltabdata[curtabstr]["tabwidgets"]["submitbutton"].clicked.connect(self.checkdatainputs_editorinput)
             
             # #Create widgets for UI populated with test example
@@ -1000,7 +1008,7 @@ class RunProgram(QMainWindow):
             # alltabdata[curtabstr]["tabwidgets"]["logedit"] = QTextEdit('testdata/201508261140.DTA')
             # alltabdata[curtabstr]["tabwidgets"]["logedit"].setMaximumHeight(100)
             # alltabdata[curtabstr]["tabwidgets"]["logbutton"].clicked.connect(self.selectdatafile)
-            # alltabdata[curtabstr]["tabwidgets"]["submitbutton"] = QPushButton('Process Profile')
+            # alltabdata[curtabstr]["tabwidgets"]["submitbutton"] = QPushButton('PROCESS PROFILE')
             # alltabdata[curtabstr]["tabwidgets"]["submitbutton"].clicked.connect(self.checkdatainputs_editorinput)
             
             #formatting widgets
@@ -1672,10 +1680,7 @@ class RunProgram(QMainWindow):
                         if reply == QMessageBox.No:
                             return
                         else:
-                            if alltabdata[curtabstr]["datasource"] == 'Audio':
-                                print("Terminating Audio Processor")
-                            else:
-                                alltabdata[curtabstr]["processor"].abort()
+                            alltabdata[curtabstr]["processor"].abort()
                 
                 self.tabWidget.removeTab(curtab)
                 

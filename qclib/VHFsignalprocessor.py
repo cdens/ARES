@@ -133,18 +133,21 @@ class ThreadProcessor(QRunnable):
 
         self.hradio = self.wrdll.Open(self.serialnum_2WR)
         if self.hradio == 0:
+            self.keepgoing = False
             self.signals.failed.emit(0)
             return
 
         try:
             #power on- kill if failed
             if wrdll.SetPower(self.hradio, True) == 0:
+                self.keepgoing = False
                 self.signals.failed.emit(1)
                 self.wrdll.CloseRadioDevice(self.hradio)
                 return
 
             #initialize demodulator- kill if failed
             if wrdll.InitializeDemodulator(self.hradio) == 0:
+                self.keepgoing = False
                 self.signals.failed.emit(2)
                 self.wrdll.CloseRadioDevice(self.hradio)
                 return
@@ -152,6 +155,7 @@ class ThreadProcessor(QRunnable):
             #change frequency- kill if failed
             self.vhffreq_2WR = c_ulong(int(vhffreq * 1E6))
             if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
+                self.keepgoing = False
                 self.signals.failed.emit(3)
                 self.wrdll.CloseRadioDevice(self.hradio)
                 return
@@ -161,6 +165,7 @@ class ThreadProcessor(QRunnable):
                 self.signals.failed.emit(5)
 
         except Exception:
+            self.keepgoing = False
             self.signals.failed.emit(4)
             self.wrdll.SetupStreams(self.hradio, None, None, None, None)
             self.wrdll.CloseRadioDevice(self.hradio) #closes the radio if initialization fails
@@ -169,10 +174,9 @@ class ThreadProcessor(QRunnable):
     @pyqtSlot()
     def run(self):
         curtabnum = self.curtabnum
-        starttime = self.starttime
-        firstpointtime = self.firstpointtime
 
         # initializes audio callback function
+        # if self.wrdll.SetupStreams(self.hradio, None, None, None, None) == 0:
         if self.wrdll.SetupStreams(self.hradio, None, None, self.updateaudiobuffer, c_int(self.curtabnum)) == 0:
             self.signals.failed.emit(6)
             self.wrdll.CloseRadioDevice(self.hradio)
@@ -200,7 +204,7 @@ class ThreadProcessor(QRunnable):
                 curtime = dt.datetime.utcnow() #current time
                 
                 #finds time from profile start in seconds
-                deltat = curtime - starttime
+                deltat = curtime - self.starttime
                 ctime = deltat.total_seconds()
                 
                 #if statement to trigger reciever after first frequency arrives
@@ -232,6 +236,7 @@ class ThreadProcessor(QRunnable):
                 timemodule.sleep(0.1) #pauses before getting next point
                 
         except Exception:
+            self.keepgoing = False
             self.wrdll.SetupStreams(self.hradio, None, None, None, None)
             self.wrdll.CloseRadioDevice(self.hradio)
             self.signals.failed.emit(4)
@@ -244,6 +249,7 @@ class ThreadProcessor(QRunnable):
         curtabnum = self.curtabnum
         self.keepgoing = False #kills while loop
         self.wrdll.SetupStreams(self.hradio, None, None, None, None)
+        self.wrdll.CloseRadioDevice(self.hradio)
         self.signals.terminated.emit(curtabnum) #emits signal that processor has been terminated
         
     @pyqtSlot(float)
@@ -393,7 +399,7 @@ class AudioProcessor(QRunnable): #processes data from audio file
             
             #running fast fourier transform to get maximum frequency
             for ctrtime in np.arange(0,maxtime,res):
-                ind = np.all([np.greater_equal(alltime,ctrtime-0.3),np.less_equal(alltime,ctrtime + 0.3)],axis=0)
+                ind = np.all([np.greater_equal(alltime,ctrtime-0.15),np.less_equal(alltime,ctrtime + 0.15)],axis=0)
                 curx = x[ind]
     
                 #conducting fft, converting to real space
@@ -444,12 +450,19 @@ class AudioProcessor(QRunnable): #processes data from audio file
                 percent.append(1-np.sum(isnan)/len(curtemp))
             firstdepth = depth[np.where(np.asarray(percent) >= 0.7)[0][0]]
             ind = depth >= firstdepth
-            
-            depth = depth[ind]-firstdepth
-            temperature = temperature[ind]
-            frequency = frequency[ind]
-            time = time[ind]
-            
+            depth = depth - firstdepth
+
+            for i in range(len(ind)):
+                if not ind[i]:
+                    depth[i] = np.NaN
+                    temperature[i] = np.NaN
+                    frequency[i] = 0
+
+            temperature = np.round(temperature, 2)
+            depth = np.round(depth, 1)
+            frequency = np.round(frequency, 2)
+            time = np.round(time, 1)
+
             self.signals.finished.emit(self.curtabnum,temperature,depth,frequency,time)
         except Exception:
             traceback.print_exc() #if there is an error, terminates processing
