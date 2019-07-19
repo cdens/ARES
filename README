@@ -1,5 +1,17 @@
-README file for AXBT Realtime Editing System (ARES)
+Program: AXBT Realtime Editing System (ARES)
 Authors: Casey Densmore (cdensmore101@gmail.com) and Matt Kuhn
+
+-------------------------------------    Overview     ------------------------------------
+This program is designed to enable processing and editing of ocean AXBT-generated temperature
+vs. depth profiles in a single program. Multiple profiles can be received (limited by the 
+number of receivers connected) and edited simultaneously in different tabs. The profile
+editor runs and automated quality control algorithm to correct profile deficiencies without
+any operator input. However, unusual discrepancies may be missed by this algorithm and thus
+require operator review to remove. In addition to receiving VHF data, this program is capable
+of reading raw audio files or raw ASCII AXBT data files. The autoQC algorithm and user input
+in the profile editor are both guided by ocean climatology and bathymetry data (datasets
+listed below). 
+
 
 --------------------------    Signal Processor Capabilities     --------------------------
 The WiNRADIO signal processor tab can be opened either from the file menu
@@ -16,8 +28,8 @@ this can be adjusted in the File menu) before loading the profile editor tab.
 
 
 ---------------------------    Profile Editor Capabilities     ---------------------------
-The profile editor tab populates with an automatically quality-controlled version of the
-raw data (black) plotted in red. The autoQC algorithm which generates this profile
+The profile editor tab populates with an automatically quality-controlled profile (red line) 
+extracted from the raw data (black line). The autoQC algorithm which generates this profile
 completes the following modifications to the raw data:
 	> Despiking (points > 1 stdev from the mean in a 10m sliding window are removed)
 	> 5m running smooth filter
@@ -27,7 +39,7 @@ completes the following modifications to the raw data:
 	> Point selection (resolution may be configured in settings)
 
 Profile editing tools:
-	> Isothermal layer depth: create a surface isothermal layer (reccomended > 10m
+	> Isothermal layer depth: create a surface isothermal layer (reccomended < 10m)
 		to remove any surface spikes transmitted prior to AXBT acclimation to
 		ambient ocean temperatures
 	> Depth delay: vertical shift in profile to account for any uncorrected VHF
@@ -41,11 +53,11 @@ Profile editing tools:
 	> Inflection Point Threshold: This slider adjusts the magnitude of the d2T/dz2 value
 		necessary for a point to be labelled as an inflection point and automatically
 		recorded in the final profile. This option, along with the resolution setting 
-		under "Profile Editor Preferences" require the user to select "Rerun QC" in 
+		under "Profile Editor Preferences", requires the user to select "Rerun QC" in 
 		order to take effect
 	
 Profile viewing tools:
-	> Overlay climatology: View or hide the shaded blue climatological ocean temperature
+	> Overlay climatology: View or hide the shaded blue climatological ocean temperatures
 		based on AXBT drop location and month. This profile should not be taken as the
 		absolute truth, but rather a guide that may highlight potential discrepancies if
 		the measured and climatological profiles deviate significantly.
@@ -63,7 +75,20 @@ Profile flagging tools:
 		to quickly highlight any potential profile errors or discrepancies. Currently 
 		the selection of this box is not saved to any output files, but that will be 
 		changed in a future release.
+		
 
+-------------------------------    Required Datasets     ---------------------------------
+This program requires several datasets, saved in $ARES_PATH$/qcdata/$datasetsubfolder$/
+Required datasets are:
+	> Levitus Monthly Ocean Temperature Climatology (netCDF4 1 degree horizontal resolution):
+		Provides global ocean climotological temperature depth profiles for the editor to 
+		incorporate into the autoQC algorithm and display for the user to make addional edits
+	> NOAA-NGDC ETOPO1 Global Relief Dataset (netCDF4, 1 arcminute resolution)
+		Aids automatic and user-based bottom strike identification, populates map in profile
+		editor tab to provide user with information regarding surrounding bathymetric features
+	> World Hydrological Organization Global Seas (Shape File and supporting files)
+		Provides high resolution demarkation lines for major seas and global ocean features to
+		identify the region in which the AXBT was launched
 
 
 ---------------------------    Radio Receiver Interaction     ----------------------------
@@ -74,12 +99,10 @@ software dependencies associated with the WiNRADIOs. If a WiNRADIO is disconnect
 or powered off during transmission, the program *should* terminate the data stream 
 and close the current radio connection, so after reconnecting that radio the user
 *should* be able to click "START" to resume processing. However, sudden disconnection
-without first selecting "STOP" may result in subsequent communication errors when
-attempting to continue processing the data. If this is the case, power off the 
-WiNRADIO, close the tab (save any data first if desired), power on the device, and 
-attemp to restart a connection with the WiNRADIO in a different tab. If this fails, 
-reconnecting to that receiver may require restarting the program and potentially 
-the computer.
+without first selecting "STOP" may result a hard crash of the operating system. In this case,
+restarting the computer is sufficient to resolve any issues. For this reason, take care to
+ensure that the power supply and USB connections between the receiver and the computer are
+secured before starting a processing instance.
 
 
 --------------------------------    Platform Support     ---------------------------------
@@ -93,9 +116,7 @@ option such as SDR.
 ------------------------------    Python Requirements     --------------------------------
 This program was developed in Python 3.x, with the GUI built using PyQt5.
 Python dependencies are as follows:
-Python core modules:
-	sys			os			platform		traceback
-	ctypes		datetime	time
+Python core modules: sys, os, platform, traceback, ctypes, datetime, time
 
 Modules which must first be installed before running ARES:
 	numpy		matplotlib			scipy
