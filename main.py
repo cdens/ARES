@@ -774,7 +774,7 @@ class RunProgram(QMainWindow):
         try:
             #getting filename
             fname,ok = QFileDialog.getOpenFileName(self, 'Open file',
-                        '',"Source Data Files (*.WAV *.Wav *.wav)")
+                        '',"Source Data Files (*.WAV *.Wav *.wav *PCM *Pcm *pcm *MP3 *Mp3 *mp3)")
             if not ok:
                 alltabdata[curtabstr]["isprocessing"] = False
                 return
@@ -869,6 +869,8 @@ class RunProgram(QMainWindow):
 
             if displaymessage == 1:
                 self.posterror("An unspecified error occured while attempting to process the audio file")
+            elif displaymessage == 2:
+                self.posterror("Selected file type is unsupported!")
 
         except Exception:
             self.posterror("An unspecified error occured while processing the audio file, and a second error occured while aborting the audio processor.")

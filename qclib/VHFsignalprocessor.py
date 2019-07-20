@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-from scipy.io import wavfile #for audio
+from scipy.io import wavfile #for wav
+from pydub import AudioSegment #for mp3
 
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject
 from PyQt5.Qt import QRunnable
@@ -15,6 +16,7 @@ import datetime as dt
 import traceback
 
 from sys import getsizeof
+from os import remove
 from ctypes import (Structure, pointer, c_int, c_ulong, c_ulonglong, c_char,
                     c_char_p, c_void_p, POINTER, c_int16, cast, WINFUNCTYPE, CFUNCTYPE)
 
@@ -378,18 +380,28 @@ class AudioProcessor(QRunnable): #processes data from audio file
     def run(self):
         try:
             res = self.res
+
+
             
             #reading file, getting raw times/sound amplitude
             if self.filename[-4:].lower() == '.wav':
                 f_s, snd = wavfile.read(self.filename)
                 x = snd[:,0]
-                alltime = np.arange(0,len(x),1)/f_s
+            elif self.filename[-4:].lower() == '.pcm':
+                f_s, snd = wavfile.read(self.filename)
+                x = snd[:,0]
             elif self.filename[-4:].lower() == '.mp3':
-                return
+                sound = AudioSegment.from_mp3(self.filename)
+                sound.export("tempaudio.wav", format="wav")
+                f_s, snd = wavfile.read('tempaudio.wav')
+                x = snd[:, 0]
+                remove('tempaudio.wav')
             else:
+                self.signals.aborted.emit(self.curtabnum, 2)
                 return
-            
-            #initializing values
+
+            # initializing values
+            alltime = np.arange(0, len(x), 1) / f_s
             time = np.array([])
             frequency = np.array([])
             maxtime = np.floor(max(alltime))
@@ -434,12 +446,6 @@ class AudioProcessor(QRunnable): #processes data from audio file
             
             temperature = freqtotemp(frequency)
             depth = timetodepth(time)
-
-            #rounding to hundreths place
-            temperature = np.round(temperature, 2)
-            depth = np.round(depth, 2)
-            frequency = np.round(frequency, 2)
-            time = np.round(time, 2)
         
             #identifying profile start
             percent = []
