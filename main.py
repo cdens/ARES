@@ -91,17 +91,10 @@ class RunProgram(QMainWindow):
         
     def initUI(self):
 
-        # startpix = 10
-        # Wsize = app.desktop().screenGeometry()
-        # cursize = QDesktopWidget().availableGeometry(self).size()
-        # self.setGeometry(0,0,cursize.width()-startpix,cursize.height()-3*startpix)
-        # self.setFrameGeometry(startpix, startpix, Wsize.width() - startpix, Wsize.height() - startpix)
-        # self.setWindowState(Qt.WindowMaximized)
-
+        #setting window size
+        cursize = QDesktopWidget().availableGeometry(self).size()
         titleBarHeight = self.style().pixelMetric(QStyle.PM_TitleBarHeight, QStyleOptionTitleBar(), self)
-        geometry = app.desktop().availableGeometry()
-        geometry.setHeight(geometry.height() - titleBarHeight)
-        self.setGeometry(geometry)
+        self.resize(cursize.width(), cursize.height()-titleBarHeight)
 
         # setting title/icon, background color
         self.setWindowTitle('AXBT Realtime Editing System')
@@ -612,7 +605,7 @@ class RunProgram(QMainWindow):
                         else:
                            vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
                            alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
-                                     alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"])
+                                     alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],0.25)
                            alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
 
                     alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
@@ -623,6 +616,7 @@ class RunProgram(QMainWindow):
 
                 #the code is still running but data collection has at least been initialized. This allows self.savecurrenttab() to save LOG/EDF files
                 alltabdata[curtabstr]["tabtype"] = "SignalProcessor_completed"
+
         except Exception:
             traceback.print_exc()
             self.posterror("Failed to start processor!")
@@ -715,7 +709,7 @@ class RunProgram(QMainWindow):
             tablefreq.setBackground(curcolor)
             tabletemp = QTableWidgetItem(str(ctemp))
             tabletemp.setBackground(curcolor)
-            if csig >= -120:
+            if csig >= -150:
                 tablesignal = QTableWidgetItem(str(csig))
             else:
                 tablesignal = QTableWidgetItem('*****')
@@ -894,7 +888,7 @@ class RunProgram(QMainWindow):
                 
             #check and correct inputs
             try:
-                lat,lon,year,month,day,time,hour,minute = self.parsestringinputs(latstr,lonstr,profdatestr,timestr)
+                lat,lon,year,month,day,time,hour,minute = self.parsestringinputs(latstr,lonstr,profdatestr,timestr,True,True)
             except:
                 return
             
@@ -1081,7 +1075,7 @@ class RunProgram(QMainWindow):
                 
                 #check and correct inputs
                 try:
-                    lat,lon,year,month,day,time,_,_ = self.parsestringinputs(latstr,lonstr,profdatestr,timestr)
+                    lat,lon,year,month,day,time,_,_ = self.parsestringinputs(latstr,lonstr,profdatestr,timestr,True,True)
                 except:
                     return
                 
@@ -1275,7 +1269,7 @@ class RunProgram(QMainWindow):
             else:
                 nshem = ' \xB0S'
             proftxt = ('Profile Data: ' + '\n'  # profile data 
-                       + str(abs(lon)) + ewhem + ', ' + str(abs(lat)) + nshem + '\n' 
+                       + str(abs(round(lon,3))) + ewhem + ', ' + str(abs(round(lat,3))) + nshem + '\n'
                        + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
                        + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
                        + 'QC SFC Correction: ' + str(sfc_correction) + ' m' + '\n'
@@ -1448,7 +1442,7 @@ class RunProgram(QMainWindow):
                 sfctemp = np.interp(sfcdepth,depthplot,tempplot)
                 ind = depthplot <= sfcdepth
                 tempplot[ind] = sfctemp
-                
+
             if maxdepth < np.max(depthplot):
                 ind = depthplot <= maxdepth
                 tempplot = tempplot[ind]
@@ -1457,6 +1451,27 @@ class RunProgram(QMainWindow):
             #replacing t/d profile values
             alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
             alltabdata[curtabstr]["profdata"]["depth_plot"] = depthplot
+
+            # Replace drop info
+            lon = alltabdata[curtabstr]["profdata"]["lon"]
+            lat = alltabdata[curtabstr]["profdata"]["lat"]
+            oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
+            if lon >= 0:  # prepping coordinate string
+                ewhem = ' \xB0E'
+            else:
+                ewhem = ' \xB0W'
+            if lat >= 0:
+                nshem = ' \xB0N'
+            else:
+                nshem = ' \xB0S'
+            proftxt = ('Profile Data: ' + '\n'  # profile data
+                       + str(abs(round(lon, 3))) + ewhem + ', ' + str(abs(round(lat, 3))) + nshem + '\n'
+                       + 'Ocean Depth: ' + str(np.round(oceandepth, 1)) + ' m' + '\n'
+                       + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
+                       + 'QC SFC Correction: ' + str(sfcdepth) + ' m' + '\n'
+                       + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
+                       + '# Datapoints: ' + str(len(tempplot)))
+            alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
             
             #redo plot, disconnect add event
             del alltabdata[curtabstr]["ProfAx"].lines[-1]
@@ -1474,69 +1489,65 @@ class RunProgram(QMainWindow):
             QApplication.restoreOverrideCursor()
         
     def applychanges(self):
-        curtabstr = "Tab " + str(self.whatTab())
-        #current t/d profile
-        tempplot = alltabdata[curtabstr]["profdata"]["temp_qc"].copy()
-        depthplot = alltabdata[curtabstr]["profdata"]["depth_qc"].copy()
-        
-        #new depth correction settings
-        sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
-        maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
-        depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
+        try:
+            curtabstr = "Tab " + str(self.whatTab())
+            #current t/d profile
+            tempplot = alltabdata[curtabstr]["profdata"]["temp_qc"].copy()
+            depthplot = alltabdata[curtabstr]["profdata"]["depth_qc"].copy()
 
-        print(sfcdepth)
-        print(tempplot[0])
+            #new depth correction settings
+            sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
+            maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
+            depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
 
-        
-        if depthdelay > 0: #shifitng entire profile up if necessary
-            depthplot = depthplot - depthdelay
-            ind = depthplot >= 0
-            depthplot = depthplot[ind]
-            tempplot = tempplot[ind]
-        
-        if sfcdepth > 0: #replacing surface temperatures
-            sfctemp = np.interp(sfcdepth,depthplot,tempplot)
-            ind = depthplot <= sfcdepth
-            tempplot[ind] = sfctemp
-            
-        if maxdepth < np.max(depthplot): #truncating base of profile
-            ind = depthplot <= maxdepth
-            tempplot = tempplot[ind]
-            depthplot = depthplot[ind]
+            if depthdelay > 0: #shifitng entire profile up if necessary
+                depthplot = depthplot - depthdelay
+                ind = depthplot >= 0
+                depthplot = depthplot[ind]
+                tempplot = tempplot[ind]
 
-        print(sfcdepth)
-        print(tempplot[0])
-            
-        #replacing t/d profile values
-        alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
-        alltabdata[curtabstr]["profdata"]["depth_plot"] = depthplot
-        
-        #re-plotting
-        del alltabdata[curtabstr]["ProfAx"].lines[-1]
-        alltabdata[curtabstr]["ProfAx"].plot(tempplot,depthplot,'r',linewidth=2,label='QC')
-        alltabdata[curtabstr]["ProfCanvas"].draw()
-        
-        #Replace drop info
-        lon = alltabdata[curtabstr]["profdata"]["lon"]
-        lat = alltabdata[curtabstr]["profdata"]["lat"]
-        oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
-        if lon >= 0: #prepping coordinate string
-            ewhem = ' \xB0E'
-        else:
-            ewhem = ' \xB0W'
-        if lat >= 0:
-            nshem = ' \xB0N'
-        else:
-            nshem = ' \xB0S'
-        proftxt = ('Profile Data: ' + '\n'  # profile data 
-                   + str(abs(lon)) + ewhem + ', ' + str(abs(lat)) + nshem + '\n' 
-                   + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
-                   + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
-                   + 'QC SFC Correction: ' + str(sfcdepth) + ' m' + '\n'
-                   + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
-                   + '# Datapoints: ' + str(len(tempplot)) )
-        alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
-        
+            if sfcdepth > 0: #replacing surface temperatures
+                sfctemp = np.interp(sfcdepth,depthplot,tempplot)
+                ind = depthplot <= sfcdepth
+                tempplot[ind] = sfctemp
+
+            if maxdepth < np.max(depthplot): #truncating base of profile
+                ind = depthplot <= maxdepth
+                tempplot = tempplot[ind]
+                depthplot = depthplot[ind]
+
+            #replacing t/d profile values
+            alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
+            alltabdata[curtabstr]["profdata"]["depth_plot"] = depthplot
+
+            #re-plotting
+            del alltabdata[curtabstr]["ProfAx"].lines[-1]
+            alltabdata[curtabstr]["ProfAx"].plot(tempplot,depthplot,'r',linewidth=2,label='QC')
+            alltabdata[curtabstr]["ProfCanvas"].draw()
+
+            #Replace drop info
+            lon = alltabdata[curtabstr]["profdata"]["lon"]
+            lat = alltabdata[curtabstr]["profdata"]["lat"]
+            oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
+            if lon >= 0: #prepping coordinate string
+                ewhem = ' \xB0E'
+            else:
+                ewhem = ' \xB0W'
+            if lat >= 0:
+                nshem = ' \xB0N'
+            else:
+                nshem = ' \xB0S'
+            proftxt = ('Profile Data: ' + '\n'  # profile data
+                       + str(abs(round(lon, 3))) + ewhem + ', ' + str(abs(round(lat, 3))) + nshem + '\n'
+                       + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
+                       + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
+                       + 'QC SFC Correction: ' + str(sfcdepth) + ' m' + '\n'
+                       + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
+                       + '# Datapoints: ' + str(len(tempplot)) )
+            alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to update profile!")
         
     def rerunqc(self):
         try:
@@ -1554,6 +1565,7 @@ class RunProgram(QMainWindow):
             #resetting depth correction data
             sfc_correction = 0
             maxdepth = 10000
+            depthdelay = 0
             
             try:
                 #running QC, comparing to climo
@@ -1617,6 +1629,7 @@ class RunProgram(QMainWindow):
                        + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
                        + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
                        + 'QC SFC Correction: ' + str(sfc_correction) + ' m' + '\n'
+                       + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
                        + '# Datapoints: ' + str(len(temperature)) )
             alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
         except Exception:
@@ -1741,7 +1754,8 @@ class RunProgram(QMainWindow):
 
                 except:
                     self.posterror("Failed to retrieve profile information")
-                    return
+                    QApplication.restoreOverrideCursor()
+                    return False
 
                 if savefin == 1:
                     try:
@@ -1752,8 +1766,9 @@ class RunProgram(QMainWindow):
                         traceback.print_exc()
                         self.posterror("Failed to save FIN file")
                 if savejjvv == 1:
+                    isbtmstrike = alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].isChecked()
                     try:
-                        tfio.writejjvvfile(outdir + slash + filename + '.jjvv',temperature,depth,day,month,year,time,lat,lon,identifier)
+                        tfio.writejjvvfile(outdir + slash + filename + '.jjvv',temperature,depth,day,month,year,time,lat,lon,identifier,isbtmstrike)
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save JJVV file")
@@ -1795,24 +1810,46 @@ class RunProgram(QMainWindow):
                     rawdepth = alltabdata[curtabstr]["rawdata"]["depth"]
                     frequency = alltabdata[curtabstr]["rawdata"]["frequency"]
                     timefromstart = alltabdata[curtabstr]["rawdata"]["time"]
-                    
-                    lat = alltabdata[curtabstr]["rawdata"]["lat"]
-                    lon = alltabdata[curtabstr]["rawdata"]["lon"]
-                    year = alltabdata[curtabstr]["rawdata"]["year"]
-                    month = alltabdata[curtabstr]["rawdata"]["month"]
-                    day = alltabdata[curtabstr]["rawdata"]["day"]
-                    time = alltabdata[curtabstr]["rawdata"]["droptime"]
-                    hour = alltabdata[curtabstr]["rawdata"]["hour"]
-                    minute = alltabdata[curtabstr]["rawdata"]["minute"]
-                    
+
+                    #pulling profile metadata if necessary
+                    try:
+                        lat = alltabdata[curtabstr]["rawdata"]["lat"]
+                        lon = alltabdata[curtabstr]["rawdata"]["lon"]
+                        year = alltabdata[curtabstr]["rawdata"]["year"]
+                        month = alltabdata[curtabstr]["rawdata"]["month"]
+                        day = alltabdata[curtabstr]["rawdata"]["day"]
+                        time = alltabdata[curtabstr]["rawdata"]["droptime"]
+                        hour = alltabdata[curtabstr]["rawdata"]["hour"]
+                        minute = alltabdata[curtabstr]["rawdata"]["minute"]
+                    except:
+                        # pulling data from inputs
+                        latstr = alltabdata[curtabstr]["tabwidgets"]["latedit"].text()
+                        lonstr = alltabdata[curtabstr]["tabwidgets"]["lonedit"].text()
+                        profdatestr = alltabdata[curtabstr]["tabwidgets"]["dateedit"].text()
+                        timestr = alltabdata[curtabstr]["tabwidgets"]["timeedit"].text()
+
+                        #only checks validity of necessary data
+                        try:
+                            if saveedf == 1:
+                                lat, lon, year, month, day, time, hour, minute = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, True, True)
+                            else:
+                                _, _, year, month, day, time, hour, minute = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, False, True)
+                        except:
+                            self.postwarning("Failed to save raw data files!")
+                            QApplication.restoreOverrideCursor()
+                            return False
+
+                    #date and time strings for LOG file
                     initdatestr = str(year) + '/' + str(month).zfill(2) + '/' + str(day).zfill(2)
-                    inittimestr = str(hour).zfill(2) + ':' + str(minute).zfill(2) + ':'
+                    inittimestr = str(hour).zfill(2) + ':' + str(minute).zfill(2) + ':00'
                     
                     filename = str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4)
+
                 except Exception:
                     traceback.print_exc()
                     self.posterror("Failed to pull raw profile data")
-                    return
+                    QApplication.restoreOverrideCursor()
+                    return False
                 
                 if savelog == 1:
                     try:
@@ -1831,7 +1868,7 @@ class RunProgram(QMainWindow):
                 
         except Exception:
             traceback.print_exc() #if something else in the file save code broke
-            self.posterror("Filed to save profiles")
+            self.posterror("Filed to save files")
             QApplication.restoreOverrideCursor()
             return False
         finally:
@@ -1885,72 +1922,89 @@ class RunProgram(QMainWindow):
 # =============================================================================
 #    PARSE STRING INPUTS/CHECK VALIDITY WHEN TRANSITIONING TO PROFILE EDITOR
 # =============================================================================
-    def parsestringinputs(self,latstr,lonstr,profdatestr,timestr):
+    def parsestringinputs(self,latstr,lonstr,profdatestr,timestr,checkcoords,checktime):
         try:
             #parsing and checking data
-            try:
-                latstr = latstr.split(',')
-                latsign = np.sign(float(latstr[0]))
-                if len(latstr) == 3:
-                    lat = float(latstr[0]) + latsign*float(latstr[1])/60 + latsign*float(latstr[2])/3600
-                elif len(latstr) == 2:
-                    lat = float(latstr[0]) + latsign*float(latstr[1])/60
-                else:
-                    lat = float(latstr[0])
-            except:
-                self.postwarning('Invalid Latitude Entered!')
-                return
-                
-            try:
-                lonstr = lonstr.split(',')
-                lonsign = np.sign(float(lonstr[0]))
-                if len(lonstr) == 3:
-                    lon = float(lonstr[0]) + lonsign*float(lonstr[1])/60 + lonsign*float(lonstr[2])/3600
-                elif len(lonstr) == 2:
-                    lon = float(lonstr[0]) + lonsign*float(lonstr[1])/60
-                else:
-                    lon = float(lonstr[0])
-            except:
-                self.postwarning('Invalid Longitude Entered!')
-                return
-            
-            if lon < -180 or lon > 180:
-                self.postwarning('Longitude must be between -180 and 180')
-            elif lat < -90 or lat > 90:
-                self.postwarning('Latitude must be between -90 and 90')
-            
-            if len(timestr) != 4:
-                self.postwarning('Invalid Time Format!')
-                return
-            elif len(profdatestr) != 8:
-                self.postwarning('Invalid Date Format!')
-                return
-            
-            try:
-                year = int(profdatestr[:4])
-                month = int(profdatestr[4:6])
-                day = int(profdatestr[6:])
-            except:
-                self.postwarning('Invalid Date Entered!')
-                return
-            try:
-                time = int(timestr)
-                hour = int(timestr[:2])
-                minute = int(timestr[2:4])
-            except:
-                self.postwarning('Invalid Time Entered!')
-                return
-            
-            curtime = timemodule.gmtime()
-            deltat = dt.datetime(curtime[0],curtime[1],curtime[2],curtime[3],curtime[4],curtime[5]) - dt.datetime(year,month,day,hour,minute,0)
-            option = ''
-            if givedtgwarn == 1:
-                if deltat.days < 0:
-                    option = self.postwarning_option("Drop time appears to be after the current time. Continue anyways?")
-                elif deltat.days > 1 or (deltat.days == 0 and deltat.seconds > 12*3600):
-                    option = self.postwarning_option("Drop time appears to be more than 12 hours ago. Continue anyways?")
-                if option == 'cancel':
+            if checkcoords:
+                try:
+                    latstr = latstr.split(',')
+                    latsign = np.sign(float(latstr[0]))
+                    if len(latstr) == 3:
+                        lat = float(latstr[0]) + latsign*float(latstr[1])/60 + latsign*float(latstr[2])/3600
+                    elif len(latstr) == 2:
+                        lat = float(latstr[0]) + latsign*float(latstr[1])/60
+                    else:
+                        lat = float(latstr[0])
+                except:
+                    self.postwarning('Invalid Latitude Entered!')
                     return
+
+                try:
+                    lonstr = lonstr.split(',')
+                    lonsign = np.sign(float(lonstr[0]))
+                    if len(lonstr) == 3:
+                        lon = float(lonstr[0]) + lonsign*float(lonstr[1])/60 + lonsign*float(lonstr[2])/3600
+                    elif len(lonstr) == 2:
+                        lon = float(lonstr[0]) + lonsign*float(lonstr[1])/60
+                    else:
+                        lon = float(lonstr[0])
+                except:
+                    self.postwarning('Invalid Longitude Entered!')
+                    return
+
+                if lon < -180 or lon > 180:
+                    self.postwarning('Longitude must be between -180 and 180')
+                elif lat < -90 or lat > 90:
+                    self.postwarning('Latitude must be between -90 and 90')
+
+                lon = round(lon,3)
+                lat = round(lat,3)
+
+            else:
+                lon = np.NaN
+                lat = np.NaN
+
+
+            if checktime:
+                if len(timestr) != 4:
+                    self.postwarning('Invalid Time Format!')
+                    return
+                elif len(profdatestr) != 8:
+                    self.postwarning('Invalid Date Format!')
+                    return
+
+                try:
+                    year = int(profdatestr[:4])
+                    month = int(profdatestr[4:6])
+                    day = int(profdatestr[6:])
+                except:
+                    self.postwarning('Invalid Date Entered!')
+                    return
+                try:
+                    time = int(timestr)
+                    hour = int(timestr[:2])
+                    minute = int(timestr[2:4])
+                except:
+                    self.postwarning('Invalid Time Entered!')
+                    return
+
+                curtime = timemodule.gmtime()
+                deltat = dt.datetime(curtime[0],curtime[1],curtime[2],curtime[3],curtime[4],curtime[5]) - dt.datetime(year,month,day,hour,minute,0)
+                option = ''
+                if givedtgwarn == 1:
+                    if deltat.days < 0:
+                        option = self.postwarning_option("Drop time appears to be after the current time. Continue anyways?")
+                    elif deltat.days > 1 or (deltat.days == 0 and deltat.seconds > 12*3600):
+                        option = self.postwarning_option("Drop time appears to be more than 12 hours ago. Continue anyways?")
+                    if option == 'cancel':
+                        return
+            else:
+                year = np.NaN
+                month = np.NaN
+                day = np.NaN
+                time = np.NaN
+                hour = np.NaN
+                minute = np.NaN
                 
             return lat,lon,year,month,day,time,hour,minute
         except Exception:

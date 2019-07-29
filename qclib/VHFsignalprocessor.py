@@ -108,7 +108,7 @@ class ThreadProcessor(QRunnable):
         # self.f_s = samplerate
         # self.audiostream.extend(bufferdata[:])
 
-    def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, *args, **kwargs):
+    def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, fftwindow, *args, **kwargs):
         super(ThreadProcessor, self).__init__()
 
         #UI inputs
@@ -119,6 +119,8 @@ class ThreadProcessor(QRunnable):
 
         self.keepgoing = True  # signal connections
         self.signals = ThreadProcessorSignals()
+
+        self.fftwindow = fftwindow
 
         # initialize audio data variables
         self.f_s = 64000  # default value
@@ -198,8 +200,8 @@ class ThreadProcessor(QRunnable):
                 if sigstrength == int(-1):
                     sigstrength = -15000
                 sigstrength = float(sigstrength)/10 #signal strength in dBm
-                if sigstrength >= -75:
-                    cfreq = dofft(audiostream[-int(self.f_s * 0.1):], self.f_s)
+                if sigstrength >= -150:
+                    cfreq = dofft(audiostream[-int(self.f_s * self.fftwindow):], self.f_s)
                 else:
                     cfreq = 0
 
@@ -318,7 +320,7 @@ class ThreadProcessorSignals(QObject):
 # =============================================================================
 # initialize radioinfo structure
 class Radiofeatures(Structure):
-    _fields_ = [("ExtRef", c_int), ("FMWEnabled", c_int), ("Reserved", c_int)]
+    _fields_ = [("ExtRef", c_ulong), ("FMWEnabled", c_ulong), ("Reserved", c_ulong)]
 
 class RADIO_INFO2(Structure):
     _fields_ = [("bLength", c_ulong), ("szSerNum", c_char*9), ("szProdName", c_char*9), ("MinFreq", c_ulonglong),("MaxFreq", c_ulonglong), ("Features", Radiofeatures)]
@@ -405,29 +407,16 @@ class AudioProcessor(QRunnable): #processes data from audio file
             time = np.array([])
             frequency = np.array([])
             maxtime = np.floor(max(alltime))
-            dT = 1/f_s
-            
+
             np.warnings.filterwarnings('ignore')
             
             #running fast fourier transform to get maximum frequency
             for ctrtime in np.arange(0,maxtime,res):
                 ind = np.all([np.greater_equal(alltime,ctrtime-0.15),np.less_equal(alltime,ctrtime + 0.15)],axis=0)
                 curx = x[ind]
-    
-                #conducting fft, converting to real space
-                rawfft = np.fft.fft(curx)
-                fftdata = np.abs(rawfft)
 
-                N = len(curx)
-                T = dT*N
-                df = 1/T
-                f = np.array([df*n if n<N/2 else df*(n-N) for n in range(N)])
-                ind = np.greater_equal(f,0)
-                f = f[ind]
-                fftdata = fftdata[ind]
-                
-                #pulls max frequency, appends
-                curfreq = f[np.argmax(fftdata)]
+                curfreq = dofft(curx, f_s)
+
                 time = np.append(time,ctrtime,axis=None)
                 frequency = np.append(frequency,curfreq,axis=None)
 
@@ -439,8 +428,8 @@ class AudioProcessor(QRunnable): #processes data from audio file
                 if not self.keepgoing:
                     self.signals.aborted.emit(self.curtabnum,0)
                     return
-            
-            #constraining by realistic temperatures (-3 to 35 C)
+
+            #constraining by realistic temperatures (-3 to 35 C)- already done in dofft but doing again to be safe
             frequency[frequency > 2800] = np.NaN
             frequency[frequency < 1300] = np.NaN
             

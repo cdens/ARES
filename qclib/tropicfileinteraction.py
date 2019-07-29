@@ -246,7 +246,7 @@ Depth (m)  - Temperature (°C)\n"""
     
     #adding temperature-depth data now
     for d,t in zip(rawdepth,rawtemperature):
-        line = str(round(d,1))+"\t"+str(round(t,2))+"\n"
+        line = str(round(d,1)).zfill(5) +"\t"+str(round(t,2)).zfill(4)+"\n"
         line = bytes(line,'utf-8')
         f_out.write(line)
     
@@ -287,6 +287,9 @@ def readjjvvfile(jjvvfile,decade):
     lastdepth = -1
     hundreds = 0
     l = 0
+
+    identifier = 'UNKNOWN'
+
     for line in f_in:
         l = l + 1
         
@@ -310,7 +313,7 @@ def readjjvvfile(jjvvfile,decade):
                     
             except: identifier = curentry
 
-    identifier = 'AF309'
+
     
     f_in.close()
     
@@ -324,7 +327,7 @@ def readjjvvfile(jjvvfile,decade):
 
 
 #write data to JJVV file
-def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identifier):
+def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identifier,isbtmstrike):
     
     #open file for writing
     f_out = open(jjvvfile,'w')
@@ -341,7 +344,7 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
     else:
         quad = '5'
         
-    line = 'JJVV ' + str(day).zfill(2)+str(month).zfill(2)+str(year)[3] + ' ' + str(time).zfill(4)+'/ ' + quad + latstr + ' ' + lonstr + ' 8888\n'
+    line = 'JJVV ' + str(day).zfill(2)+str(month).zfill(2)+str(year)[3] + ' ' + str(time).zfill(4)+'/ ' + quad + latstr + ' ' + lonstr + ' 88888\n'
     f_out.write(line)
     
     #create a list with all of the entries for the file
@@ -349,12 +352,19 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
     filestrings.append('51099')
     hundreds = 0
     i = 0
+    lastdepth = -1
+
     while i < len(depth):
-        if depth[i]-hundreds > 99:
+        curdepth = int(depth[i])
+        if curdepth-hundreds > 99:
             hundreds = hundreds + 100
-            filestrings.append('999' + str(int(hundreds/100)).zfill(2))        
-        filestrings.append(str(int(depth[i]-hundreds)).zfill(2) + str(int(round(temperature[i],1)*10)).zfill(3))
+            filestrings.append('999' + str(int(hundreds/100)).zfill(2))
+        if curdepth - lastdepth >= 1: #depth must be increasing
+            filestrings.append(str(curdepth-hundreds).zfill(2) + str(int(round(temperature[i],1)*10)).zfill(3))
+            lastdepth = curdepth
         i = i + 1
+    if isbtmstrike: #note if the profile struck the bottom
+        filestrings.append('00000')
     filestrings.append(identifier) #tack identifier onto end of file entries
         
     #writing all data to file
@@ -438,9 +448,30 @@ def writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
     f_out = open(finfile,'w')
     
     dayofyear = date.toordinal(date(year,month,day)) - date.toordinal(date(year-1,12,31))
-    
-    line = (str(year) + '   ' + str(dayofyear) + '   ' + str(time) + '   ' + str(lat) + '   ' +
-            str(lon) + '   ' + str(num) + '   6   ' + str(len(depth)) + '   0   0   \n')
+
+    #formatting latitude string
+    if lat >= 0:
+        signstr = ' '
+    else:
+        signstr = '-'
+        lat = abs(lat)
+    latfloor = np.floor(lat)
+    latrem = np.round((lat - latfloor)*1000)
+    latstr = signstr + str(int(latfloor)).zfill(2) + '.' + str(int(latrem))
+
+    #formatting longitude string
+    if lon >= 0:
+        signstr = ' '
+    else:
+        signstr = '-'
+        lon = abs(lon)
+    lonfloor = np.floor(lon)
+    lonrem = np.round((lon - lonfloor)*1000)
+    lonstr = signstr + str(int(lonfloor)).zfill(3) + '.' + str(int(lonrem))
+
+
+    line = (str(year) + '   ' + str(dayofyear) + '   ' + str(time) + '   ' + latstr + '   ' +
+            lonstr + '   ' + str(num) + '   6   ' + str(len(depth)) + '   0   0   \n')
     f_out.write(line)
     
     
