@@ -422,6 +422,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["idtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             
             #should be 19 entries 
+            widgetorder = ["datasourcetitle","datasource","channeltitle","freqtitle","vhfchannel","vhffreq","startprocessing","stopprocessing","processprofile","datetitle","dateedit","timetitle","timeedit","lattitle","latedit","lontitle","lonedit","idtitle","idedit"]
             wrows     = [1,2,3,4,3,4,5,5,6,1,1,2,2,3,3,4,4,5,5]
             wcols     = [2,2,2,2,3,3,2,3,3,4,5,4,5,4,5,4,5,4,5]
             
@@ -435,7 +436,7 @@ class RunProgram(QMainWindow):
             wfixhght  = [thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt]    
     
             #adding user inputs
-            for i,r,c,re,ce,ww,hh in zip(alltabdata[curtabstr]["tabwidgets"],wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
+            for i,r,c,re,ce,ww,hh in zip(widgetorder,wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
                 alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
                 alltabdata[curtabstr]["tabwidgets"][i].setFixedWidth(ww)
                 alltabdata[curtabstr]["tabwidgets"][i].setFixedHeight(hh)
@@ -1017,6 +1018,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["logtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             
             #should be 15 entries
+            widgetorder = ["title","lattitle","latedit","lontitle","lonedit","datetitle","dateedit","timetitle","timeedit","idtitle","idedit","logtitle","logedit","logbutton","submitbutton"]
             wrows     = [1,2,2,3,3,4,4,5,5,6,6,7,7,8,9]
             wcols     = [1,1,2,1,2,1,2,1,2,1,2,1,2,1,1]
             
@@ -1028,7 +1030,7 @@ class RunProgram(QMainWindow):
             wfixhght  = [15,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt]    
             
             #adding user inputs
-            for i,r,c,re,ce,ww,hh in zip(alltabdata[curtabstr]["tabwidgets"],wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
+            for i,r,c,re,ce,ww,hh in zip(widgetorder,wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
                 alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
                 alltabdata[curtabstr]["tabwidgets"][i].setFixedWidth(ww) 
             
@@ -1148,7 +1150,7 @@ class RunProgram(QMainWindow):
             oceandepth,exportlat,exportlon,exportrelief = oci.getoceandepth(lat,lon,6)
             
             #limit profile depth by climatology cutoff, ocean depth cutoff
-            maxdepth = np.max(depth)+50
+            maxdepth = np.ceil(np.max(depth))
             isbottomstrike = 0
             if useoceanbottom == 1 and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
                 maxdepth = oceandepth
@@ -1229,7 +1231,7 @@ class RunProgram(QMainWindow):
             
             alltabdata[curtabstr]["tabwidgets"]["sfccorrectiontitle"] = QLabel('Isothermal Layer (m):') #4
             alltabdata[curtabstr]["tabwidgets"]["sfccorrection"] = QSpinBox() #5
-            alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setRange(0, int(np.max(rawdepth)))
+            alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setRange(0, int(np.max(rawdepth+200)))
             alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setSingleStep(1)
             alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setValue(0)
             alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].valueChanged.connect(self.applychanges)
@@ -1238,7 +1240,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["maxdepth"] = QSpinBox() #7
             alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setRange(0, int(np.round(np.max(rawdepth+200),-2)))
             alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setSingleStep(1)
-            alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setValue(np.max(rawdepth))
+            alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setValue(maxdepth)
             alltabdata[curtabstr]["tabwidgets"]["maxdepth"].valueChanged.connect(self.applychanges)
             
             alltabdata[curtabstr]["tabwidgets"]["depthdelaytitle"] = QLabel('Depth Delay (m):') #8
@@ -1271,7 +1273,7 @@ class RunProgram(QMainWindow):
             proftxt = ('Profile Data: ' + '\n'  # profile data 
                        + str(abs(round(lon,3))) + ewhem + ', ' + str(abs(round(lat,3))) + nshem + '\n'
                        + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
-                       + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
+                       + 'QC Profile Depth: ' + str(int(maxdepth)) + ' m' + '\n'
                        + 'QC SFC Correction: ' + str(sfc_correction) + ' m' + '\n'
                        + 'QC Depth Delay: ' + str(0) + ' m' + '\n'
                        + '# Datapoints: ' + str(len(temperature)) )
@@ -1313,6 +1315,9 @@ class RunProgram(QMainWindow):
             
             
             #should be 16 entries 
+            Wsize = app.desktop().screenGeometry()
+            widgetorder = ["toggleclimooverlay","addpoint","removepoint","sfccorrectiontitle","sfccorrection","maxdepthtitle","maxdepth","depthdelaytitle","depthdelay","mdslidetitle","mdslide","rerunqc","proftxt","isbottomstrike","rcodetitle","rcode"]
+            
             wrows     = [2,3,3,4,4,5,5,6,6,7,8,9,1,5,6,6]
             wcols     = [2,2,3,2,3,2,3,2,3,2,2,2,5,5,5,6]
             
@@ -1322,18 +1327,18 @@ class RunProgram(QMainWindow):
             twid = 155
             twid2 = 2*twid
             thgt = 30
+            thgt = int(Wsize.height()/30)
             thgt2 = 4*thgt
             wfixwidth = [twid2,twid,twid,twid,twid,twid,twid,twid,twid,twid2,twid2,twid2,twid2,twid,twid,twid]
             wfixhght  = [thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt2,thgt,thgt,thgt]    
             
             #adding user inputs
-            for i,r,c,re,ce,ww,hh in zip(alltabdata[curtabstr]["tabwidgets"],wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
+            for i,r,c,re,ce,ww,hh in zip(widgetorder,wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
                 alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
                 alltabdata[curtabstr]["tabwidgets"][i].setFixedWidth(ww)
                 alltabdata[curtabstr]["tabwidgets"][i].setFixedHeight(hh)
                     
             #Applying other preferences to grid layout
-            Wsize = app.desktop().screenGeometry()
             alltabdata[curtabstr]["tablayout2"].setColumnMinimumWidth(0,int(0.4*Wsize.width())) #Space between left and first entry 
             alltabdata[curtabstr]["tablayout2"].setColumnStretch(1,2)
             alltabdata[curtabstr]["tablayout2"].setColumnStretch(4,1)
@@ -1467,7 +1472,7 @@ class RunProgram(QMainWindow):
             proftxt = ('Profile Data: ' + '\n'  # profile data
                        + str(abs(round(lon, 3))) + ewhem + ', ' + str(abs(round(lat, 3))) + nshem + '\n'
                        + 'Ocean Depth: ' + str(np.round(oceandepth, 1)) + ' m' + '\n'
-                       + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
+                       + 'QC Profile Depth: ' + str(int(maxdepth)) + ' m' + '\n'
                        + 'QC SFC Correction: ' + str(sfcdepth) + ' m' + '\n'
                        + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
                        + '# Datapoints: ' + str(len(tempplot)))
@@ -1540,7 +1545,7 @@ class RunProgram(QMainWindow):
             proftxt = ('Profile Data: ' + '\n'  # profile data
                        + str(abs(round(lon, 3))) + ewhem + ', ' + str(abs(round(lat, 3))) + nshem + '\n'
                        + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
-                       + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
+                       + 'QC Profile Depth: ' + str(int(maxdepth)) + ' m' + '\n'
                        + 'QC SFC Correction: ' + str(sfcdepth) + ' m' + '\n'
                        + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
                        + '# Datapoints: ' + str(len(tempplot)) )
@@ -1577,7 +1582,7 @@ class RunProgram(QMainWindow):
                 self.posterror("Error raised in automatic profile QC")
                 
             #limit profile depth by climatology cutoff, ocean depth cutoff
-            maxdepth = np.max(depth)+50
+            maxdepth = np.ceil(np.max(depth))
             isbottomstrike = 0
             if useoceanbottom == 1 and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
                 maxdepth = oceandepth
@@ -1597,7 +1602,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["profdata"]["matchclimo"] = matchclimo
             
             #resetting depth correction QSpinBoxes
-            alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setValue(np.max(rawdepth))
+            alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setValue(maxdepth)
             alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setValue(0)
             alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setValue(0)
             
@@ -1627,7 +1632,7 @@ class RunProgram(QMainWindow):
             proftxt = ('Profile Data: ' + '\n' 
                        + str(abs(lon)) + ewhem + ', ' + str(abs(lat)) + nshem + '\n' 
                        + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
-                       + 'QC Profile Depth: ' + str(maxdepth) + ' m' + '\n'
+                       + 'QC Profile Depth: ' + str(int(maxdepth)) + ' m' + '\n'
                        + 'QC SFC Correction: ' + str(sfc_correction) + ' m' + '\n'
                        + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
                        + '# Datapoints: ' + str(len(temperature)) )
