@@ -772,7 +772,8 @@ class RunProgram(QMainWindow):
             self.postwarning("Failed to adjust volume on the specified WiNRADIO!")
         elif messagenum == 6:
             self.posterror("Failed to configure the WiNRADIO audio stream!")
-
+        elif messagenum == 7:
+            self.posterror("Contact lost with WiNRADIO receiver! Please ensure device is connected and powered on!")
 
 
     def processfromaudio(self,curtabstr):

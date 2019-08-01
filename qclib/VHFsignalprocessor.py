@@ -140,6 +140,7 @@ class ThreadProcessor(QRunnable):
             if wrdll.SetPower(self.hradio, True) == 0:
                 self.keepgoing = False
                 self.signals.failed.emit(1)
+                self.signals.terminated.emit(curtabnum)
                 self.wrdll.CloseRadioDevice(self.hradio)
                 return
 
@@ -147,6 +148,7 @@ class ThreadProcessor(QRunnable):
             if wrdll.InitializeDemodulator(self.hradio) == 0:
                 self.keepgoing = False
                 self.signals.failed.emit(2)
+                self.signals.terminated.emit(curtabnum)
                 self.wrdll.CloseRadioDevice(self.hradio)
                 return
 
@@ -155,6 +157,7 @@ class ThreadProcessor(QRunnable):
             if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
                 self.keepgoing = False
                 self.signals.failed.emit(3)
+                self.signals.terminated.emit(curtabnum)
                 self.wrdll.CloseRadioDevice(self.hradio)
                 return
 
@@ -165,6 +168,7 @@ class ThreadProcessor(QRunnable):
         except Exception:
             self.keepgoing = False
             self.signals.failed.emit(4)
+            self.signals.terminated.emit(curtabnum)
             self.wrdll.SetupStreams(self.hradio, None, None, None, None)
             self.wrdll.CloseRadioDevice(self.hradio)  # closes the radio if initialization fails
             traceback.print_exc()
@@ -186,6 +190,7 @@ class ThreadProcessor(QRunnable):
         # initializes audio callback function
         if self.wrdll.SetupStreams(self.hradio, None, None, updateaudiobuffer, c_int(self.curtabnum)) == 0:
             self.signals.failed.emit(6)
+            self.signals.terminated.emit(curtabnum)
             self.wrdll.CloseRadioDevice(self.hradio)
         else:
             timemodule.sleep(0.3)  # gives the buffer time to populate
@@ -195,6 +200,15 @@ class ThreadProcessor(QRunnable):
             i = -1
             while self.keepgoing:
                 i += 1
+
+                if i%10 == 0:
+                    if not self.wrdll.IsDeviceConnected(self.hradio):
+                        self.wrdll.SetupStreams(self.hradio, None, None, None, None)
+                        self.wrdll.CloseRadioDevice(self.hradio)
+                        self.signals.failed.emit(7)
+                        self.signals.terminated.emit(curtabnum)
+                        self.keepgoing = False
+                        return
 
                 # listens to current frequency, gets sound level and corresponding time
                 sigstrength = self.wrdll.GetSignalStrengthdBm(self.hradio)
