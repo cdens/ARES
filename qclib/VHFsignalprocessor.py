@@ -17,7 +17,7 @@ import traceback
 
 from sys import getsizeof
 from os import remove
-from ctypes import (Structure, pointer, c_int, c_ulong, c_ulonglong, c_char,
+from ctypes import (Structure, pointer, c_int, c_ulong, c_ulonglong, c_char, c_uint32,
                     c_char_p, c_void_p, POINTER, c_int16, cast, WINFUNCTYPE, CFUNCTYPE)
 
 #convert time(s) into depth (m)
@@ -31,24 +31,28 @@ def freqtotemp(frequency):
     return temp
 
 #function to run fft here
-def dofft(pcmdata,fs):
+def dofft(pcmdata,fs,minratio):
+
     # conducting fft, converting to real space
     rawfft = np.fft.fft(pcmdata)
     fftdata = np.abs(rawfft)
 
+    #building corresponding frequency array
     N = len(pcmdata)
     T = N/fs
     df = 1 / T
     f = np.array([df * n if n < N / 2 else df * (n - N) for n in range(N)])
-    ind = np.greater_equal(f, 0)
+
+    #limiting frequencies, converting to ratio
+    maxf = np.max(fftdata)
+    ind = np.all((np.greater_equal(f,1300),np.less_equal(f,2800)),axis=0)
     f = f[ind]
-    fftdata = fftdata[ind]
+    fftdata = fftdata[ind]/maxf
 
-    # pulls max frequency, appends
-    freq = f[np.argmax(fftdata)]
-
-    # constraining by realistic temperatures (-3 to 35 C)
-    if freq > 2800 or freq < 1300:
+    # pulls max frequency if criteria are met
+    if np.max(fftdata) >= minratio:
+        freq = f[np.argmax(fftdata)]
+    else:
         freq = 0
 
     return freq
@@ -99,19 +103,10 @@ def channelandfrequencylookup(value,direction):
 
 class ThreadProcessor(QRunnable):
 
-    @CFUNCTYPE(None, c_void_p, c_void_p, c_ulong, c_ulong)
-    def updateaudiobuffer(streampointer_int, bufferpointer_int, size, samplerate):
-        bufferlength = int(size / 2)
-        bufferpointer = cast(bufferpointer_int, POINTER(c_int16 * bufferlength))
-        bufferdata = bufferpointer.contents
-        audiostream.extend(bufferdata[:])
-        # self.f_s = samplerate
-        # self.audiostream.extend(bufferdata[:])
-
-    def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, fftwindow, *args, **kwargs):
+    def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, fftwindow, minfftratio, *args,**kwargs):
         super(ThreadProcessor, self).__init__()
 
-        #UI inputs
+        # UI inputs
         self.curtabnum = curtabnum
         self.starttime = starttime
         self.istriggered = istriggered
@@ -121,17 +116,16 @@ class ThreadProcessor(QRunnable):
         self.signals = ThreadProcessorSignals()
 
         self.fftwindow = fftwindow
+        self.minfftratio = minfftratio
 
         # initialize audio data variables
         self.f_s = 64000  # default value
-        global audiostream
-        audiostream = [0] * 64000
         self.audiostream = [0] * 64000
 
-        #saves library
+        # saves library
         self.wrdll = wrdll
 
-        #initialize winradio
+        # initialize winradio
         self.serial = datasource  # translate winradio identifier
         self.serialnum_2WR = c_char_p(self.serial.encode('utf-8'))
 
@@ -142,21 +136,21 @@ class ThreadProcessor(QRunnable):
             return
 
         try:
-            #power on- kill if failed
+            # power on- kill if failed
             if wrdll.SetPower(self.hradio, True) == 0:
                 self.keepgoing = False
                 self.signals.failed.emit(1)
                 self.wrdll.CloseRadioDevice(self.hradio)
                 return
 
-            #initialize demodulator- kill if failed
+            # initialize demodulator- kill if failed
             if wrdll.InitializeDemodulator(self.hradio) == 0:
                 self.keepgoing = False
                 self.signals.failed.emit(2)
                 self.wrdll.CloseRadioDevice(self.hradio)
                 return
 
-            #change frequency- kill if failed
+            # change frequency- kill if failed
             self.vhffreq_2WR = c_ulong(int(vhffreq * 1E6))
             if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
                 self.keepgoing = False
@@ -164,7 +158,7 @@ class ThreadProcessor(QRunnable):
                 self.wrdll.CloseRadioDevice(self.hradio)
                 return
 
-            #set volume- warn if failed
+            # set volume- warn if failed
             if self.wrdll.SetVolume(self.hradio, 31) == 0:
                 self.signals.failed.emit(5)
 
@@ -172,92 +166,98 @@ class ThreadProcessor(QRunnable):
             self.keepgoing = False
             self.signals.failed.emit(4)
             self.wrdll.SetupStreams(self.hradio, None, None, None, None)
-            self.wrdll.CloseRadioDevice(self.hradio) #closes the radio if initialization fails
+            self.wrdll.CloseRadioDevice(self.hradio)  # closes the radio if initialization fails
             traceback.print_exc()
-    
+
     @pyqtSlot()
     def run(self):
+
+        #Declaring the callbuck function to update the audio buffer
+        @CFUNCTYPE(None, c_void_p, c_void_p, c_ulong, c_ulong)
+        def updateaudiobuffer(streampointer_int, bufferpointer_int, size, samplerate):
+            bufferlength = int(size / 2)
+            bufferpointer = cast(bufferpointer_int, POINTER(c_int16 * bufferlength))
+            bufferdata = bufferpointer.contents
+            self.f_s = samplerate
+            self.audiostream.extend(bufferdata[:])
+
         curtabnum = self.curtabnum
 
         # initializes audio callback function
-        # if self.wrdll.SetupStreams(self.hradio, None, None, None, None) == 0:
-        if self.wrdll.SetupStreams(self.hradio, None, None, self.updateaudiobuffer, c_int(self.curtabnum)) == 0:
+        if self.wrdll.SetupStreams(self.hradio, None, None, updateaudiobuffer, c_int(self.curtabnum)) == 0:
             self.signals.failed.emit(6)
             self.wrdll.CloseRadioDevice(self.hradio)
         else:
             timemodule.sleep(0.3)  # gives the buffer time to populate
 
-        global audiostream
-
         try:
-            #setting up while loop- terminates when user clicks "STOP"
-            i= -1
+            # setting up while loop- terminates when user clicks "STOP"
+            i = -1
             while self.keepgoing:
                 i += 1
-                
-                #listens to current frequency, gets sound level and corresponding time
+
+                # listens to current frequency, gets sound level and corresponding time
                 sigstrength = self.wrdll.GetSignalStrengthdBm(self.hradio)
                 if sigstrength == int(-1):
                     sigstrength = -15000
-                sigstrength = float(sigstrength)/10 #signal strength in dBm
+                sigstrength = float(sigstrength) / 10  # signal strength in dBm
                 if sigstrength >= -150:
-                    cfreq = dofft(audiostream[-int(self.f_s * self.fftwindow):], self.f_s)
+                    cfreq = dofft(self.audiostream[-int(self.f_s * self.fftwindow):], self.f_s, self.minfftratio)
                 else:
                     cfreq = 0
 
-                curtime = dt.datetime.utcnow() #current time
-                
-                #finds time from profile start in seconds
+                curtime = dt.datetime.utcnow()  # current time
+
+                # finds time from profile start in seconds
                 deltat = curtime - self.starttime
                 ctime = deltat.total_seconds()
-                
-                #if statement to trigger reciever after first frequency arrives
+
+                # if statement to trigger reciever after first frequency arrives
                 if (not self.istriggered) and cfreq != 0:
                     self.istriggered = True
                     self.firstpointtime = ctime
-                    self.signals.triggered.emit(curtabnum,ctime)
-                
+                    self.signals.triggered.emit(curtabnum, ctime)
+
                 if self.istriggered:
                     timefromtrigger = ctime - self.firstpointtime
                     cdepth = timetodepth(timefromtrigger)
-                
+
                     if cfreq != 0:
                         ctemp = freqtotemp(cfreq)
                     else:
                         ctemp = np.NaN
-                        
-                else: #if processor hasnt been triggered yet
+
+                else:  # if processor hasnt been triggered yet
                     cdepth = np.NaN
                     ctemp = np.NaN
-                
-                #tells GUI to update data structure, plot, and table
-                ctemp = np.round(ctemp,2)
-                cdepth = np.round(cdepth,1)
-                cfreq = np.round(cfreq,2)
-                ctime = np.round(ctime,1)
-                sigstrength = np.round(sigstrength,2)
-                self.signals.iterated.emit(curtabnum,ctemp,cdepth,cfreq,sigstrength,ctime,i)
-                timemodule.sleep(0.1) #pauses before getting next point
-                
+
+                # tells GUI to update data structure, plot, and table
+                ctemp = np.round(ctemp, 2)
+                cdepth = np.round(cdepth, 1)
+                cfreq = np.round(cfreq, 2)
+                ctime = np.round(ctime, 1)
+                sigstrength = np.round(sigstrength, 2)
+                self.signals.iterated.emit(curtabnum, ctemp, cdepth, cfreq, sigstrength, ctime, i)
+                timemodule.sleep(0.1)  # pauses before getting next point
+
         except Exception:
             self.keepgoing = False
             self.wrdll.SetupStreams(self.hradio, None, None, None, None)
             self.wrdll.CloseRadioDevice(self.hradio)
             self.signals.failed.emit(4)
-            traceback.print_exc() #if there is an error, terminates processing
+            traceback.print_exc()  # if there is an error, terminates processing
             self.signals.terminated.emit(curtabnum)
-
 
     @pyqtSlot()
     def abort(self):
         curtabnum = self.curtabnum
-        self.keepgoing = False #kills while loop
+        self.keepgoing = False  # kills while loop
         self.wrdll.SetupStreams(self.hradio, None, None, None, None)
         self.wrdll.CloseRadioDevice(self.hradio)
-        self.signals.terminated.emit(curtabnum) #emits signal that processor has been terminated
-        
+        self.signals.terminated.emit(curtabnum)  # emits signal that processor has been terminated
+
     @pyqtSlot(float)
-    def changecurrentfrequency(self,newfreq):
+    def changecurrentfrequency(self, newfreq):
         # change frequency- kill if failed
         self.vhffreq_2WR = c_ulong(int(newfreq * 1E6))
         if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
@@ -319,12 +319,17 @@ class ThreadProcessorSignals(QObject):
 # C++ INTEGRATED FUNCTIONS FOR WINRADIO:
 # =============================================================================
 # initialize radioinfo structure
-class Radiofeatures(Structure):
-    _fields_ = [("ExtRef", c_ulong), ("FMWEnabled", c_ulong), ("Reserved", c_ulong)]
-
+# class Radiofeatures(Structure):
+#     _fields_ = [("ExtRef", c_ulong), ("FMWEnabled", c_ulong), ("Reserved", c_ulong)]
+#
+# class RADIO_INFO2(Structure):
+#     _fields_ = [("bLength", c_ulong), ("szSerNum", c_char*9), ("szProdName", c_char*9), ("MinFreq", c_ulonglong),("MaxFreq", c_ulonglong), ("Features", Radiofeatures)]
+class Features(Structure):
+    _pack_ = 1
+    _fields_ = [("ExtRef", c_uint32), ("FMWEnabled", c_uint32), ("Reserved", c_uint32)]
 class RADIO_INFO2(Structure):
-    _fields_ = [("bLength", c_ulong), ("szSerNum", c_char*9), ("szProdName", c_char*9), ("MinFreq", c_ulonglong),("MaxFreq", c_ulonglong), ("Features", Radiofeatures)]
-
+    _pack_ = 1
+    _fields_ = [("bLength", c_uint32), ("szSerNum", c_char*9), ("szProdName", c_char*9), ("MinFreq", c_uint32),("MaxFreq", c_uint32), ("Features", Features)]
 
 #gets list of current winradios
 def listwinradios(wrdll):
@@ -415,7 +420,7 @@ class AudioProcessor(QRunnable): #processes data from audio file
                 ind = np.all([np.greater_equal(alltime,ctrtime-0.15),np.less_equal(alltime,ctrtime + 0.15)],axis=0)
                 curx = x[ind]
 
-                curfreq = dofft(curx, f_s)
+                curfreq = dofft(curx, f_s, 0.25)
 
                 time = np.append(time,ctrtime,axis=None)
                 frequency = np.append(frequency,curfreq,axis=None)

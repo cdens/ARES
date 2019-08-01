@@ -490,13 +490,10 @@ class RunProgram(QMainWindow):
                     if ctab != curtabstr and (alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or
                                               alltabdata[ctab]["tabtype"] == "SignalProcessor_completed"):
                         if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == woption:
-                            option = self.postwarning_option("This WINRADIO appears to currently be in use. Continue anyways?")
-                            if option == 'cancel':
-                                if index >= 0:
-                                    alltabdata[curtabstr]["tabwidgets"]["datasource"].setCurrentIndex(index)
-                                    return
-                            else: #stop checking to see if its busy if the user says they don't care
-                                break
+                            self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
+                            if index >= 0:
+                                alltabdata[curtabstr]["tabwidgets"]["datasource"].setCurrentIndex(index)
+                            return
      
             #only lets you change the WINRADIO if the current tab isn't already processing
             if not alltabdata[curtabstr]["isprocessing"]:
@@ -577,11 +574,22 @@ class RunProgram(QMainWindow):
 
                 datasource = alltabdata[curtabstr]["datasource"]
                 #running processor here
+
+                if self.threadpool.activeThreadCount() + 1 > self.threadpool.maxThreadCount():
+                    self.postwarning("The maximum number of simultaneous processing threads has been exceeded. This processor will automatically begin collecting data when STOP is selected on another tab.")
+
                 if datasource == 'Audio':
                     self.processfromaudio(curtabstr)
                 else:
-                    if self.threadpool.activeThreadCount() + 1 > self.threadpool.maxThreadCount():
-                        self.postwarning("The maximum number of simultaneous processing threads has been exceeded. This processor will automatically begin collecting data when STOP is selected on another tab.")
+
+                    # checks to see if selection is busy
+                    if datasource != "Test":
+                        for ctab in alltabdata:
+                            if ctab != curtabstr and (alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or
+                                                      alltabdata[ctab]["tabtype"] == "SignalProcessor_completed"):
+                                if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == datasource:
+                                    self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
+                                    return
 
                     curtabnum = alltabdata[curtabstr]["tabnum"]
                     alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -605,8 +613,10 @@ class RunProgram(QMainWindow):
                             return
                         else:
                            vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
+                           fftwindow = 0.25 #FFT time window (seconds)
+                           minfftratio = 0.25 #minimum ratio of max sound level within temperature frequency range necessary to recognize signal
                            alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
-                                     alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],0.25)
+                                     alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],fftwindow,minfftratio)
                            alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
 
                     alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
