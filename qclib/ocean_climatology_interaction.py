@@ -1,8 +1,8 @@
-from netCDF4 import Dataset
 import numpy as np
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 import scipy.interpolate as sint
+import scipy.io as sio
 
 def runningsmooth(data,halfwindow):
     
@@ -27,14 +27,22 @@ def runningsmooth(data,halfwindow):
 #pulling climatology profile, creating polygon for shaded "climo match" region
 def getclimatologyprofile(lat,lon,month):
 
-    climodata = Dataset('qcdata/climo/Levitus_monthlyoceanclimo.nc', mode='r')
-    
-    clon = climodata.variables['X'][:]
-    clat = climodata.variables['Y'][:]
-    depth = climodata.variables['Z'][:]
-    temp_climo_gridded = climodata.variables['temp'][:]
-    temp_climo_curmonth = temp_climo_gridded[month-1,:,:,:]
-    
+    # climodata = Dataset('qcdata/climo/Levitus_monthlyoceanclimo.nc', mode='r')
+    # clon = climodata.variables['X'][:]
+    # clat = climodata.variables['Y'][:]
+    # depth = climodata.variables['Z'][:]
+    # temp_climo_gridded = climodata.variables['temp'][:]
+
+    climodata = sio.loadmat('qcdata/climo/LevitusClimo.mat')
+    clon = climodata['X'][:,0]
+    clat = climodata['Y'][:,0]
+    depth = climodata['Z'][:,0]
+    temp_climo_gridded = climodata['temp']
+
+    #get current month of climo
+    # temp_climo_curmonth = temp_climo_gridded[month-1,:,:,:]
+    temp_climo_curmonth = temp_climo_gridded[:,:,:,month-1]
+
     #convert profile longitude from degW<0 to degW>180 to match climo arrangement
     if lon < 0:
         lon = 360 + lon
@@ -50,8 +58,9 @@ def getclimatologyprofile(lat,lon,month):
         lat = 89.5
 
     #interpolate to current latitude/longitude
-    climotemps = sint.interpn((clon,clat,depth),temp_climo_curmonth,(lon,lat,depth))    
-    
+    # climotemps = sint.interpn((clon,clat,depth),temp_climo_curmonth,(lon,lat,depth))
+    climotemps = sint.interpn((depth,clat, clon), temp_climo_curmonth, (depth,lat, lon))
+
     #introduce error range for fill- should be +/- 1 standard deviation when standard deviation data is available
     climotemperrors = np.array([3.,3.,3.,3.,3.,3.,3.,3.,3.,3.,2.,2.,2.,2.,1.,1.,1.,1.,1.])
     
@@ -123,14 +132,18 @@ def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climod
 #Data source: NOAA-NGDC: https://www.ngdc.noaa.gov/mgg/global/global.html
 def getoceandepth(lat,lon,dcoord):
 
-    bathydata = Dataset('qcdata/bathy/ETOPO1_Ice_g_gmt4.grd', mode='r')
-    
-    clon = np.array(bathydata.variables['x'][:])
-    clat = np.array(bathydata.variables['y'][:])
-    z = np.array(bathydata.variables['z'][:])
+    bathydata = sio.loadmat('qcdata/bathy/ETOPO1_bathymetry.mat')
+
+    # clon = np.array(bathydata.variables['x'][:])
+    # clat = np.array(bathydata.variables['y'][:])
+    # z = np.array(bathydata.variables['z'][:])
+
+    clon = bathydata['x'][:,0]
+    clat = bathydata['y'][:,0]
+    z = bathydata['z']
     
     #interpolate maximum ocean depth
-    maxoceandepth = -sint.interpn((clat,clon),z,(lat,lon))
+    maxoceandepth = -sint.interpn((clon,clat),z,(lon,lat))
     maxoceandepth = maxoceandepth[0]
     
     isnearlatind = np.less_equal(clat,lat+dcoord+3)*np.greater_equal(clat,lat-dcoord-3)
@@ -138,13 +151,14 @@ def getoceandepth(lat,lon,dcoord):
     
     exportlat = clat[isnearlatind]
     exportlon = clon[isnearlonind]
-    exportrelief = z[:,isnearlonind]
-    exportrelief = exportrelief[isnearlatind,:]
+    exportrelief = z[:,isnearlatind]
+    exportrelief = exportrelief[isnearlonind,:]
     
     num = 1 #adjust this to pull every n elements for topographic data
     exportlat = exportlat[::num]
     exportlon = exportlon[::num]
     exportrelief = exportrelief[::num,::num]
+    exportrelief = exportrelief.transpose()
     
     return maxoceandepth,exportlat,exportlon,exportrelief
     

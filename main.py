@@ -455,7 +455,9 @@ class RunProgram(QMainWindow):
             header.setSectionResizeMode(2, QHeaderView.Stretch)
             header.setSectionResizeMode(3, QHeaderView.Stretch)
             header.setSectionResizeMode(4, QHeaderView.Stretch)
-            alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"]["table"],8,2,2,4)  
+            alltabdata[curtabstr]["tabwidgets"]["table"].setEditTriggers(QTableWidget.NoEditTriggers)
+
+            alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"]["table"],8,2,2,4)
                
             #Applying other preferences to grid layout
             Wsize = app.desktop().screenGeometry()
@@ -614,7 +616,7 @@ class RunProgram(QMainWindow):
                         else:
                            vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
                            fftwindow = 0.25 #FFT time window (seconds)
-                           minfftratio = 0.25 #minimum ratio of max sound level within temperature frequency range necessary to recognize signal
+                           minfftratio = 0.75 #minimum ratio of max sound level within temperature frequency range necessary to recognize signal
                            alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
                                      alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],fftwindow,minfftratio)
                            alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)

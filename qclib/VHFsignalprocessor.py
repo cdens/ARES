@@ -118,6 +118,9 @@ class ThreadProcessor(QRunnable):
         self.fftwindow = fftwindow
         self.minfftratio = minfftratio
 
+        self.disconnectcount = 0
+        self.bufferlen = 0
+
         # initialize audio data variables
         self.f_s = 64000  # default value
         self.audiostream = [0] * 64000
@@ -198,17 +201,31 @@ class ThreadProcessor(QRunnable):
         try:
             # setting up while loop- terminates when user clicks "STOP"
             i = -1
+
+            self.audiostream.extend([0] * 64000)
+
             while self.keepgoing:
                 i += 1
 
-                if i%10 == 0:
-                    if not self.wrdll.IsDeviceConnected(self.hradio):
-                        self.wrdll.SetupStreams(self.hradio, None, None, None, None)
-                        self.wrdll.CloseRadioDevice(self.hradio)
-                        self.signals.failed.emit(7)
-                        self.signals.terminated.emit(curtabnum)
-                        self.keepgoing = False
-                        return
+                # #checks to see if device is disconnected for ten attempts (~1 second), terminates stream if so
+                # if not self.wrdll.IsDeviceConnected(self.hradio):
+                #     self.disconnectcount += 1
+                # else:
+                #     self.disconnectcount = 0
+
+                if len(self.audiostream) == self.bufferlen:
+                    self.disconnectcount += 1
+                else:
+                    self.disconnectcount == 0
+                    self.bufferlen = len(self.audiostream)
+
+                if self.disconnectcount >= 30:
+                    self.wrdll.SetupStreams(self.hradio, None, None, None, None)
+                    self.wrdll.CloseRadioDevice(self.hradio)
+                    self.signals.failed.emit(7)
+                    self.signals.terminated.emit(curtabnum)
+                    self.keepgoing = False
+                    return
 
                 # listens to current frequency, gets sound level and corresponding time
                 sigstrength = self.wrdll.GetSignalStrengthdBm(self.hradio)

@@ -1,6 +1,7 @@
 import qclib.geoplotfunctions as gplt
 import numpy as np
 import cmocean.cm as cmo
+from matplotlib.colors import ListedColormap
 
 def makeprofileplot(ax,rawtemperature,rawdepth,temperature,depth,climotempfill,climodepthfill,dtg,matchclimo):
     climohandle = ax.fill(climotempfill,climodepthfill,color='b',alpha=0.3,label='Climo')
@@ -29,8 +30,13 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     #set inital axis limits
     lonrange = [round(lon)-dcoord,round(lon)+dcoord]
     latrange = [round(lat)-dcoord,round(lat)+dcoord]
-   
-    c = ax.pcolormesh(exportlon,exportlat,exportrelief,vmin=-4000,vmax=4000,cmap = cmo.topo)
+
+    topo = np.genfromtxt('qclib/topocolors.txt',delimiter=',')
+    alphavals = np.ones((np.shape(topo)[0], 1))
+    topo = np.append(topo, alphavals, axis=1)
+    topomap = ListedColormap(topo)
+
+    c = ax.pcolormesh(exportlon,exportlat,exportrelief,vmin=-4000,vmax=4000,cmap = topomap)
     cbar = fig.colorbar(c,ax=ax)
     cbar.set_label('Elevation (m)')
 #    gplt.addcoastdata(ax,latrange,lonrange,'k')
@@ -48,4 +54,3 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     gplt.setgeotick(ax)
     ax.grid()
     ax.set_title(' Region: ' + region,fontweight="bold")
-    
