@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (QMainWindow, QAction, QApplication, QMenu, QLineEdi
                              QTabWidget, QVBoxLayout, QInputDialog, QGridLayout, QSlider, QDoubleSpinBox, 
                              QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QDesktopWidget, QStyle, QStyleOptionTitleBar)
 from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot
-from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient
+from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
 from PyQt5.Qt import QThreadPool
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -31,6 +31,8 @@ import matplotlib.pyplot as plt
 import time as timemodule
 import datetime as dt
 import numpy as np
+
+from scipy.io import wavfile #for wav
 
 #autoQC-specific modules
 import qclib.tropicfileinteraction as tfio
@@ -103,6 +105,11 @@ class RunProgram(QMainWindow):
         p.setColor(self.backgroundRole(), QColor(255,255,255))
         self.setPalette(p)
 
+        #changing font size
+        font = QFont()
+        font.setPointSize(11)
+        font.setFamily("Arial")
+        self.setFont(font)
 
         
 # =============================================================================
@@ -110,15 +117,20 @@ class RunProgram(QMainWindow):
 # =============================================================================
     def setdefaults(self):
         #autoQC preferences- make tunable in GUI
+        global fftwindow, minfftratio, minsiglev
         global maxderiv, reslev, checkforgaps, alltabdata, givedtgwarn, renametabstodtg
         global useoceanbottom, useclimobottom, resoptions, overlayclimo, comparetoclimo
-        global savefin, savejjvv, saveprof, saveloc, savelog, saveedf
+        global savefin, savejjvv, saveprof, saveloc, savelog, saveedf, savewav, savesig
         global autosave, populatedtg
         
         resoptions = ["High", "Low", "Inflection Only"]
-        
+
+        fftwindow = 0.3 #window to run FFT (in seconds)
+        minfftratio = 0.5 #minimum signal to noise ratio to ID data
+        minsiglev = 5E6 #minimum total signal level to receive data
+
         maxderiv = 1.5 #d2Tdz2 threshold to call a point an inflection point
-        reslev = 1 #profile resolution (1=1m,2=10m,3=inflection points only)
+        reslev = 2 #profile resolution (1=1m,2=10m,3=inflection points only)
         checkforgaps = 1 #look for/correct gaps in profile due to false starts from VHF interference
         useoceanbottom = 1 #use NTOPO1 bathymetry data to ID bottom strikes
         useclimobottom = 1 #use climatology to ID bottom strikes
@@ -133,7 +145,9 @@ class RunProgram(QMainWindow):
         saveprof = 1
         saveloc = 1
         savelog = 1
-        saveedf = 1
+        saveedf = 0
+        savewav = 1
+        savesig = 1
         
         autosave = 0 #automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
         populatedtg = 1 #auto determine profile date/time as system date/time on clicking "START"
@@ -200,13 +214,23 @@ class RunProgram(QMainWindow):
         savelogact.triggered.connect(self.toggle_savelog)
         saveedfact = QAction('Save EDF',self,checkable=True)
         saveedfact.triggered.connect(self.toggle_saveedf)
+        savewavact = QAction('Save WAV',self,checkable=True)
+        savewavact.triggered.connect(self.toggle_savewav)
+        savesigact = QAction('Save SIGDATA',self,checkable=True)
+        savesigact.triggered.connect(self.toggle_savesig)
         if savelog == 1:
             savelogact.setChecked(True)
         if saveedf == 1:
             saveedfact.setChecked(True)
+        if savewav== 1:
+            savewavact.setChecked(True)
+        if savesig == 1:
+            savesigact.setChecked(True)
         SaveRawMenu = QMenu('Raw Data File Types:',self)
         SaveRawMenu.addAction(savelogact)
         SaveRawMenu.addAction(saveedfact)
+        SaveRawMenu.addAction(savewavact)
+        SaveRawMenu.addAction(savesigact)
         FileMenu.addMenu(SaveRawMenu)
         
         #Processed file save times
@@ -232,22 +256,54 @@ class RunProgram(QMainWindow):
         SaveMenu.addAction(saveprofact)
         SaveMenu.addAction(savelocact)
         FileMenu.addMenu(SaveMenu)
-        
-        #warn if DTG is out of range
-        warningopt = QAction('Provide warning if drop is not within 12 hours',self,checkable=True)
+
+
+
+        # adjust FFT window
+        fftwindowopt = QAction('Adjust FFT window', self)
+        # add triggered connection here
+        Mk21Menu.addAction(fftwindowopt)
+
+        # adjust FFT signal ratio
+        fftratioopt = QAction('Adjust minimum signal ratio', self)
+        # add triggered connection here
+        Mk21Menu.addAction(fftratioopt)
+
+        # adjust FFT minimum signal level
+        minsiglevopt = QAction('Adjust minimum signal level', self)
+        # add triggered connection here
+        Mk21Menu.addAction(minsiglevopt)
+
+        # warn if DTG is out of range
+        warningopt = QAction('Provide warning if drop is not within 12 hours', self, checkable=True)
         warningopt.triggered.connect(self.toggle_warningopt)
         if givedtgwarn == 1:
             warningopt.setChecked(True)
-        FileMenu.addAction(warningopt)
-        
-        #offer to rename tab
-        renameopt = QAction('Rename tab to DTG when loading profile editor',self,checkable=True)
+        Mk21Menu.addAction(warningopt)
+
+        # offer to rename tab
+        renameopt = QAction('Rename tab to DTG when loading profile editor', self, checkable=True)
         renameopt.triggered.connect(self.toggle_renameopt)
         if renametabstodtg == 1:
             renameopt.setChecked(True)
-        FileMenu.addAction(renameopt)
-        
-        
+        Mk21Menu.addAction(renameopt)
+
+        # save data before loading profile editor
+        autosaveopt = QAction('Autosave raw data files before loading profile editor', self, checkable=True)
+        autosaveopt.triggered.connect(self.toggle_autosaveopt)
+        if autosave == 1:
+            autosaveopt.setChecked(True)
+        Mk21Menu.addAction(autosaveopt)
+
+        # auto-update with system time for non-audio processing
+        populatedtgopt = QAction('Autopopulate sytem date/time for non-audio processing', self, checkable=True)
+        populatedtgopt.triggered.connect(self.toggle_populatedtgopt)
+        if populatedtg == 1:
+            populatedtgopt.setChecked(True)
+        Mk21Menu.addAction(populatedtgopt)
+
+
+
         #QCMenu>Climatology (with submenu)
         overlayclimoact = QAction('Overlay climatology in saved plots',self,checkable=True)
         overlayclimoact.triggered.connect(self.toggle_overlayclimo)
@@ -291,23 +347,8 @@ class RunProgram(QMainWindow):
         if checkforgaps == 1:
             findgapact.setChecked(True)
         QCMenu.addAction(findgapact)
-        
-        #save data before loading profile editor
-        autosaveopt = QAction('Autosave raw data files before loading profile editor',self,checkable=True)
-        autosaveopt.triggered.connect(self.toggle_autosaveopt)
-        if autosave == 1:
-            autosaveopt.setChecked(True)
-        Mk21Menu.addAction(autosaveopt)
-        
-        #auto-update with system time for non-audio processing
-        populatedtgopt = QAction('Autopopulate sytem date/time for non-audio processing',self,checkable=True)
-        populatedtgopt.triggered.connect(self.toggle_populatedtgopt)
-        if populatedtg == 1:
-            populatedtgopt.setChecked(True)
-        Mk21Menu.addAction(populatedtgopt)
-        
-        
-        
+
+
         
         
 # =============================================================================
@@ -370,7 +411,9 @@ class RunProgram(QMainWindow):
 
             #making widgets
             alltabdata[curtabstr]["tabwidgets"]["datasourcetitle"] = QLabel('Data Source:') #1
-            alltabdata[curtabstr]["tabwidgets"]["datasource"] = QComboBox() #2
+            alltabdata[curtabstr]["tabwidgets"]["refreshdataoptions"] = QPushButton('Refresh')  # 2
+            alltabdata[curtabstr]["tabwidgets"]["refreshdataoptions"].clicked.connect(self.datasourcerefresh)
+            alltabdata[curtabstr]["tabwidgets"]["datasource"] = QComboBox() #3
             alltabdata[curtabstr]["tabwidgets"]["datasource"].addItem('Test')
             alltabdata[curtabstr]["tabwidgets"]["datasource"].addItem('Audio')
             for wr in winradiooptions:
@@ -378,39 +421,39 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["datasource"].currentIndexChanged.connect(self.datasourcechange)
             alltabdata[curtabstr]["datasource"] = alltabdata[curtabstr]["tabwidgets"]["datasource"].currentText()
             
-            alltabdata[curtabstr]["tabwidgets"]["channeltitle"] = QLabel('VHF Channel:') #3
-            alltabdata[curtabstr]["tabwidgets"]["freqtitle"] = QLabel('VHF Frequency (MHz):') #4
+            alltabdata[curtabstr]["tabwidgets"]["channeltitle"] = QLabel('VHF Channel:') #4
+            alltabdata[curtabstr]["tabwidgets"]["freqtitle"] = QLabel('VHF Frequency (MHz):') #5
             
-            alltabdata[curtabstr]["tabwidgets"]["vhfchannel"] = QSpinBox() #5
+            alltabdata[curtabstr]["tabwidgets"]["vhfchannel"] = QSpinBox() #6
             alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setRange(1,99)
             alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setSingleStep(1)
             alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setValue(12)
             alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].valueChanged.connect(self.changefrequencytomatchchannel)
             
-            alltabdata[curtabstr]["tabwidgets"]["vhffreq"] = QDoubleSpinBox() #6
+            alltabdata[curtabstr]["tabwidgets"]["vhffreq"] = QDoubleSpinBox() #7
             alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setRange(136, 173.5)
             alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setSingleStep(0.375)
             alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setDecimals(3)
             alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setValue(170.5)
             alltabdata[curtabstr]["tabwidgets"]["vhffreq"].valueChanged.connect(self.changechanneltomatchfrequency)
             
-            alltabdata[curtabstr]["tabwidgets"]["startprocessing"] = QPushButton('START') #7
+            alltabdata[curtabstr]["tabwidgets"]["startprocessing"] = QPushButton('START') #8
             alltabdata[curtabstr]["tabwidgets"]["startprocessing"].clicked.connect(self.startprocessor)
-            alltabdata[curtabstr]["tabwidgets"]["stopprocessing"] = QPushButton('STOP') #8
+            alltabdata[curtabstr]["tabwidgets"]["stopprocessing"] = QPushButton('STOP') #9
             alltabdata[curtabstr]["tabwidgets"]["stopprocessing"].clicked.connect(self.stopprocessor)
-            alltabdata[curtabstr]["tabwidgets"]["processprofile"] = QPushButton('PROCESS PROFILE') #9
+            alltabdata[curtabstr]["tabwidgets"]["processprofile"] = QPushButton('PROCESS PROFILE') #10
             alltabdata[curtabstr]["tabwidgets"]["processprofile"].clicked.connect(self.processprofile)
             
-            alltabdata[curtabstr]["tabwidgets"]["datetitle"] = QLabel('Date: ') #10
-            alltabdata[curtabstr]["tabwidgets"]["dateedit"] = QLineEdit('YYYYMMDD') #11
-            alltabdata[curtabstr]["tabwidgets"]["timetitle"] = QLabel('Time (UTC): ') #12
-            alltabdata[curtabstr]["tabwidgets"]["timeedit"] = QLineEdit('HHMM') #13
-            alltabdata[curtabstr]["tabwidgets"]["lattitle"] = QLabel('Latitude (N>0): ') #14
-            alltabdata[curtabstr]["tabwidgets"]["latedit"] = QLineEdit('XX.XXX') #15
-            alltabdata[curtabstr]["tabwidgets"]["lontitle"] = QLabel('Longitude (E>0): ') #16
-            alltabdata[curtabstr]["tabwidgets"]["lonedit"] = QLineEdit('XX.XXX') #17
-            alltabdata[curtabstr]["tabwidgets"]["idtitle"] = QLabel('Platform ID/Tail#: ') #18
-            alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit('AFNNN') #19
+            alltabdata[curtabstr]["tabwidgets"]["datetitle"] = QLabel('Date: ') #11
+            alltabdata[curtabstr]["tabwidgets"]["dateedit"] = QLineEdit('YYYYMMDD') #12
+            alltabdata[curtabstr]["tabwidgets"]["timetitle"] = QLabel('Time (UTC): ') #13
+            alltabdata[curtabstr]["tabwidgets"]["timeedit"] = QLineEdit('HHMM') #14
+            alltabdata[curtabstr]["tabwidgets"]["lattitle"] = QLabel('Latitude (N>0): ') #15
+            alltabdata[curtabstr]["tabwidgets"]["latedit"] = QLineEdit('XX.XXX') #16
+            alltabdata[curtabstr]["tabwidgets"]["lontitle"] = QLabel('Longitude (E>0): ') #17
+            alltabdata[curtabstr]["tabwidgets"]["lonedit"] = QLineEdit('XX.XXX') #18
+            alltabdata[curtabstr]["tabwidgets"]["idtitle"] = QLabel('Platform ID/Tail#: ') #19
+            alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit('AFNNN') #20
             
             #formatting widgets
             alltabdata[curtabstr]["tabwidgets"]["channeltitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -422,18 +465,18 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["idtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             
             #should be 19 entries 
-            widgetorder = ["datasourcetitle","datasource","channeltitle","freqtitle","vhfchannel","vhffreq","startprocessing","stopprocessing","processprofile","datetitle","dateedit","timetitle","timeedit","lattitle","latedit","lontitle","lonedit","idtitle","idedit"]
-            wrows     = [1,2,3,4,3,4,5,5,6,1,1,2,2,3,3,4,4,5,5]
-            wcols     = [2,2,2,2,3,3,2,3,3,4,5,4,5,4,5,4,5,4,5]
+            widgetorder = ["datasourcetitle","refreshdataoptions","datasource","channeltitle","freqtitle","vhfchannel","vhffreq","startprocessing","stopprocessing","processprofile","datetitle","dateedit","timetitle","timeedit","lattitle","latedit","lontitle","lonedit","idtitle","idedit"]
+            wrows     = [1,1,2,3,4,3,4,5,5,6,1,1,2,2,3,3,4,4,5,5]
+            wcols     = [2,3,2,2,2,3,3,2,3,3,4,5,4,5,4,5,4,5,4,5]
             
-            wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-            wcolext   = [2,2,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1]
+            wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+            wcolext   = [1,1,2,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1]
             
             twid = 155
             twid2 = 2*twid
             thgt = 30
-            wfixwidth = [twid2,twid2,twid,twid,twid,twid,twid,twid,twid2,twid,twid,twid,twid,twid,twid,twid,twid,twid,twid]
-            wfixhght  = [thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt]    
+            wfixwidth = [twid,twid,twid2,twid,twid,twid,twid,twid,twid,twid2,twid,twid,twid,twid,twid,twid,twid,twid,twid,twid]
+            wfixhght  = [thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt]
     
             #adding user inputs
             for i,r,c,re,ce,ww,hh in zip(widgetorder,wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
@@ -479,6 +522,29 @@ class RunProgram(QMainWindow):
 # =============================================================================
 #         BUTTONS FOR PROCESSOR TAB
 # =============================================================================
+    def datasourcerefresh(self):
+        try:
+            curtabstr = "Tab " + str(self.whatTab())
+            # only lets you change the WINRADIO if the current tab isn't already processing
+            if not alltabdata[curtabstr]["isprocessing"]:
+                alltabdata[curtabstr]["tabwidgets"]["datasource"].clear()
+                alltabdata[curtabstr]["tabwidgets"]["datasource"].addItem('Test')
+                alltabdata[curtabstr]["tabwidgets"]["datasource"].addItem('Audio')
+                # Getting necessary data
+                if self.wrdll != 0:
+                    winradiooptions = vsp.listwinradios(self.wrdll)
+                else:
+                    winradiooptions = []
+                for wr in winradiooptions:
+                    alltabdata[curtabstr]["tabwidgets"]["datasource"].addItem(wr)  # ADD COLOR OPTION
+                alltabdata[curtabstr]["tabwidgets"]["datasource"].currentIndexChanged.connect(self.datasourcechange)
+                alltabdata[curtabstr]["datasource"] = alltabdata[curtabstr]["tabwidgets"]["datasource"].currentText()
+            else:
+                self.postwarning("You cannot refresh input devices while processing. Please click STOP to discontinue processing before refreshing device list")
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to refresh available receivers")
+
     def datasourcechange(self):
         try:
             #only lets you change the data source if it isn't currently processing
@@ -568,6 +634,18 @@ class RunProgram(QMainWindow):
         except Exception:
             traceback.print_exc()
             self.posterror("Frequency/channel mismatch!")
+
+    def updatefftsettings(self):
+        try:
+            #updates fft settings for any active tabs
+            for ctab in alltabdata:
+                if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
+                    if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] != 'Test' and alltabdata[ctab]["datasource"] != 'Audio':
+                        alltabdata[curtabstr]["processor"].changethresholds(fftwindow,minfftratio,minsiglev)
+
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Frequency/channel mismatch!")
             
     def startprocessor(self):
         try:
@@ -615,10 +693,8 @@ class RunProgram(QMainWindow):
                             return
                         else:
                            vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
-                           fftwindow = 0.25 #FFT time window (seconds)
-                           minfftratio = 0.75 #minimum ratio of max sound level within temperature frequency range necessary to recognize signal
                            alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
-                                     alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],fftwindow,minfftratio)
+                                     alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],fftwindow,minfftratio, minsiglev)
                            alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
 
                     alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
@@ -746,6 +822,8 @@ class RunProgram(QMainWindow):
     def updateUIfinal(self,plottabnum):
         try:
             plottabstr = self.gettabstrfromnum(plottabnum)
+            # alltabdata[plottabstr]["rawdata"]["fs"] = fs
+            # alltabdata[plottabstr]["rawdata"]["audiostream"] = audiostream
             try:
                 del alltabdata[plottabstr]["ProcessorAx"].lines[-1]
             except:
@@ -1300,7 +1378,7 @@ class RunProgram(QMainWindow):
             else:
                 alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].setChecked(False)
             
-            alltabdata[curtabstr]["tabwidgets"]["rcodetitle"] = QLabel('Profile Flag:') #15
+            alltabdata[curtabstr]["tabwidgets"]["rcodetitle"] = QLabel('Profile Quality:') #15
             alltabdata[curtabstr]["tabwidgets"]["rcode"] = QComboBox() #16
             alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Good Profile")
             alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("No Signal")
@@ -1322,20 +1400,22 @@ class RunProgram(QMainWindow):
             #formatting widgets
             alltabdata[curtabstr]["tabwidgets"]["proftxt"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             alltabdata[curtabstr]["tabwidgets"]["rcodetitle"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            titlefont = QFont()
+            titlefont.setBold(True)
+            alltabdata[curtabstr]["tabwidgets"]["rcodetitle"].setFont(titlefont)
             alltabdata[curtabstr]["tabwidgets"]["depthdelaytitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             alltabdata[curtabstr]["tabwidgets"]["sfccorrectiontitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             alltabdata[curtabstr]["tabwidgets"]["maxdepthtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            
             
             #should be 16 entries 
             Wsize = app.desktop().screenGeometry()
             widgetorder = ["toggleclimooverlay","addpoint","removepoint","sfccorrectiontitle","sfccorrection","maxdepthtitle","maxdepth","depthdelaytitle","depthdelay","mdslidetitle","mdslide","rerunqc","proftxt","isbottomstrike","rcodetitle","rcode"]
             
-            wrows     = [2,3,3,4,4,5,5,6,6,7,8,9,1,5,6,6]
-            wcols     = [2,2,3,2,3,2,3,2,3,2,2,2,5,5,5,6]
+            wrows     = [2,3,3,4,4,5,5,6,6,7,8,9,1,6,6,7]
+            wcols     = [2,2,3,2,3,2,3,2,3,2,2,2,5,6,5,6]
             
             wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,4,1,1,1]
-            wcolext   = [2,1,1,1,1,1,1,1,1,2,2,2,2,2,1,1]
+            wcolext   = [2,1,1,1,1,1,1,1,1,2,2,2,2,1,1,1]
             
             twid = 155
             twid2 = 2*twid
@@ -1881,6 +1961,24 @@ class RunProgram(QMainWindow):
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save EDF file")
+
+                if savewav == 1:
+                    try:
+                        oldfile = 'tempwav_' + str(alltabdata[curtabstr]["tabnum"]) + '.WAV'
+                        newfile = outdir + slash + filename + '.WAV'
+                        os.rename(oldfile,newfile)
+                    except Exception:
+                        traceback.print_exc()
+                        self.posterror("Failed to save WAV file")
+
+                if savesig == 1:
+                    try:
+                        oldfile = 'sigdata_' + str(alltabdata[curtabstr]["tabnum"]) + '.txt'
+                        newfile = outdir + slash + filename + '.sigdata'
+                        os.rename(oldfile, newfile)
+                    except Exception:
+                        pass
+
             else:
                 self.postwarning('You must process the profile before attempting to save data!')
                 
@@ -1933,6 +2031,16 @@ class RunProgram(QMainWindow):
             QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
             event.accept()
+            #delete all temporary wav files
+            allfilesanddirs = os.listdir()
+            for cfile in allfilesanddirs:
+                if len(cfile) >= 5:
+                    cfilestart = cfile[:4]
+                    cfileext = cfile[-3:]
+                    if cfilestart.lower() == 'temp' and cfileext.lower() == 'wav':
+                        os.remove(cfile)
+                    elif cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt':
+                        os.remove(cfile)
         else:
             event.ignore() 
     
@@ -2078,6 +2186,18 @@ class RunProgram(QMainWindow):
             saveedf = 1
         else:
             saveedf = 0
+    def toggle_savewav(self, state):
+        global savewav
+        if state:
+            savewav = 1
+        else:
+            savewav = 0
+    def toggle_savesig(self, state):
+        global savesig
+        if state:
+            savesig = 1
+        else:
+            savesig = 0
             
     def toggle_autosaveopt(self, state):
         global autosave

@@ -3,6 +3,7 @@
 
 import numpy as np
 from scipy.io import wavfile #for wav
+import wave
 from pydub import AudioSegment #for mp3
 
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject
@@ -31,7 +32,7 @@ def freqtotemp(frequency):
     return temp
 
 #function to run fft here
-def dofft(pcmdata,fs,minratio):
+def dofft(pcmdata,fs,minratio,minsiglev):
 
     # conducting fft, converting to real space
     rawfft = np.fft.fft(pcmdata)
@@ -45,17 +46,18 @@ def dofft(pcmdata,fs,minratio):
 
     #limiting frequencies, converting to ratio
     maxf = np.max(fftdata)
+    print(maxf)
     ind = np.all((np.greater_equal(f,1300),np.less_equal(f,2800)),axis=0)
     f = f[ind]
     fftdata = fftdata[ind]/maxf
 
     # pulls max frequency if criteria are met
-    if np.max(fftdata) >= minratio:
+    if np.max(fftdata) >= minratio and maxf >= minsiglev:
         freq = f[np.argmax(fftdata)]
     else:
         freq = 0
 
-    return freq
+    return freq, maxf, np.max(fftdata)
     
 #table lookup for VHF channels and frequencies
 def channelandfrequencylookup(value,direction):
@@ -103,7 +105,7 @@ def channelandfrequencylookup(value,direction):
 
 class ThreadProcessor(QRunnable):
 
-    def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, fftwindow, minfftratio, *args,**kwargs):
+    def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, fftwindow, minfftratio, minsiglev, *args,**kwargs):
         super(ThreadProcessor, self).__init__()
 
         # UI inputs
@@ -117,6 +119,7 @@ class ThreadProcessor(QRunnable):
 
         self.fftwindow = fftwindow
         self.minfftratio = minfftratio
+        self.minsiglev = minsiglev
 
         self.disconnectcount = 0
         self.bufferlen = 0
@@ -132,9 +135,22 @@ class ThreadProcessor(QRunnable):
         self.serial = datasource  # translate winradio identifier
         self.serialnum_2WR = c_char_p(self.serial.encode('utf-8'))
 
+        self.txtfilename = "sigdata_" + str(self.curtabnum) + '.txt'
+        self.txtfile = open(self.txtfilename,'w')
+
+        #setup wave filename stuff
+        self.wavfilename = "tempwav_" + str(self.curtabnum) + '.WAV'
+        self.wavfile = wave.open(self.wavfilename,'wb')
+        wave.Wave_write.setnchannels(self.wavfile,1)
+        wave.Wave_write.setsampwidth(self.wavfile,2)
+        wave.Wave_write.setframerate(self.wavfile,self.f_s)
+        wave.Wave_write.writeframes(self.wavfile,bytearray(self.audiostream))
+
         self.hradio = self.wrdll.Open(self.serialnum_2WR)
         if self.hradio == 0:
             self.keepgoing = False
+            self.txtfile.close()
+            wave.Wave_write.close(self.wavfile)
             self.signals.failed.emit(0)
             return
 
@@ -143,6 +159,8 @@ class ThreadProcessor(QRunnable):
             if wrdll.SetPower(self.hradio, True) == 0:
                 self.keepgoing = False
                 self.signals.failed.emit(1)
+                self.txtfile.close()
+                wave.Wave_write.close(self.wavfile)
                 self.signals.terminated.emit(curtabnum)
                 self.wrdll.CloseRadioDevice(self.hradio)
                 return
@@ -151,6 +169,8 @@ class ThreadProcessor(QRunnable):
             if wrdll.InitializeDemodulator(self.hradio) == 0:
                 self.keepgoing = False
                 self.signals.failed.emit(2)
+                self.txtfile.close()
+                wave.Wave_write.close(self.wavfile)
                 self.signals.terminated.emit(curtabnum)
                 self.wrdll.CloseRadioDevice(self.hradio)
                 return
@@ -159,6 +179,8 @@ class ThreadProcessor(QRunnable):
             self.vhffreq_2WR = c_ulong(int(vhffreq * 1E6))
             if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
                 self.keepgoing = False
+                self.txtfile.close()
+                wave.Wave_write.close(self.wavfile)
                 self.signals.failed.emit(3)
                 self.signals.terminated.emit(curtabnum)
                 self.wrdll.CloseRadioDevice(self.hradio)
@@ -172,6 +194,8 @@ class ThreadProcessor(QRunnable):
             self.keepgoing = False
             self.signals.failed.emit(4)
             self.signals.terminated.emit(curtabnum)
+            self.txtfile.close()
+            wave.Wave_write.close(self.wavfile)
             self.wrdll.SetupStreams(self.hradio, None, None, None, None)
             self.wrdll.CloseRadioDevice(self.hradio)  # closes the radio if initialization fails
             traceback.print_exc()
@@ -187,6 +211,7 @@ class ThreadProcessor(QRunnable):
             bufferdata = bufferpointer.contents
             self.f_s = samplerate
             self.audiostream.extend(bufferdata[:])
+            wave.Wave_write.writeframes(self.wavfile,bytearray(bufferdata))
 
         curtabnum = self.curtabnum
 
@@ -194,6 +219,8 @@ class ThreadProcessor(QRunnable):
         if self.wrdll.SetupStreams(self.hradio, None, None, updateaudiobuffer, c_int(self.curtabnum)) == 0:
             self.signals.failed.emit(6)
             self.signals.terminated.emit(curtabnum)
+            self.txtfile.close()
+            wave.Wave_write.close(self.wavfile)
             self.wrdll.CloseRadioDevice(self.hradio)
         else:
             timemodule.sleep(0.3)  # gives the buffer time to populate
@@ -207,22 +234,18 @@ class ThreadProcessor(QRunnable):
             while self.keepgoing:
                 i += 1
 
-                # #checks to see if device is disconnected for ten attempts (~1 second), terminates stream if so
-                # if not self.wrdll.IsDeviceConnected(self.hradio):
-                #     self.disconnectcount += 1
-                # else:
-                #     self.disconnectcount = 0
-
                 if len(self.audiostream) == self.bufferlen:
                     self.disconnectcount += 1
                 else:
-                    self.disconnectcount == 0
+                    self.disconnectcount = 0
                     self.bufferlen = len(self.audiostream)
 
-                if self.disconnectcount >= 30:
+                if self.disconnectcount >= 30 and not self.wrdll.IsDeviceConnected(self.hradio):
                     self.wrdll.SetupStreams(self.hradio, None, None, None, None)
                     self.wrdll.CloseRadioDevice(self.hradio)
                     self.signals.failed.emit(7)
+                    self.txtfile.close()
+                    wave.Wave_write.close(self.wavfile)
                     self.signals.terminated.emit(curtabnum)
                     self.keepgoing = False
                     return
@@ -233,15 +256,20 @@ class ThreadProcessor(QRunnable):
                     sigstrength = -15000
                 sigstrength = float(sigstrength) / 10  # signal strength in dBm
                 if sigstrength >= -150:
-                    cfreq = dofft(self.audiostream[-int(self.f_s * self.fftwindow):], self.f_s, self.minfftratio)
+                    cfreq,actmax,ratiomax = dofft(self.audiostream[-int(self.f_s * self.fftwindow):], self.f_s, self.minfftratio, self.minsiglev)
                 else:
                     cfreq = 0
+                    actmax = 0
+                    ratiomax = 0
+
 
                 curtime = dt.datetime.utcnow()  # current time
-
                 # finds time from profile start in seconds
                 deltat = curtime - self.starttime
                 ctime = deltat.total_seconds()
+
+                cline = str(ctime) + ',' + str(cfreq) + ',' + str(actmax) + ',' + str(ratiomax) + '\n'
+                self.txtfile.write(cline)
 
                 # if statement to trigger reciever after first frequency arrives
                 if (not self.istriggered) and cfreq != 0:
@@ -273,6 +301,8 @@ class ThreadProcessor(QRunnable):
 
         except Exception:
             self.keepgoing = False
+            self.txtfile.close()
+            wave.Wave_write.close(self.wavfile)
             self.wrdll.SetupStreams(self.hradio, None, None, None, None)
             self.wrdll.CloseRadioDevice(self.hradio)
             self.signals.failed.emit(4)
@@ -283,6 +313,8 @@ class ThreadProcessor(QRunnable):
     def abort(self):
         curtabnum = self.curtabnum
         self.keepgoing = False  # kills while loop
+        self.txtfile.close()
+        wave.Wave_write.close(self.wavfile)
         self.wrdll.SetupStreams(self.hradio, None, None, None, None)
         self.wrdll.CloseRadioDevice(self.hradio)
         self.signals.terminated.emit(curtabnum)  # emits signal that processor has been terminated
@@ -292,10 +324,21 @@ class ThreadProcessor(QRunnable):
         # change frequency- kill if failed
         self.vhffreq_2WR = c_ulong(int(newfreq * 1E6))
         if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
+            self.txtfile.close()
+            wave.Wave_write.close(self.wavfile)
             self.signals.failed.emit(3)
             self.wrdll.SetupStreams(self.hradio, None, None, None, None)
             self.wrdll.CloseRadioDevice(self.hradio)
             return
+
+    @pyqtSlot(float,float,int)
+    def changethresholds(self,fftwindow,minfftratio,minsiglev):
+        if fftwindow <= 1:
+            self.fftwindow = fftwindow
+        else:
+            self.fftwindow = 1
+        self.minfftratio = minfftratio
+        self.minsiglev = minsiglev
         
         
 class ThreadProcessorExample(QRunnable): #tests signal processor tab with LOG file data
@@ -387,22 +430,12 @@ def listwinradios(wrdll):
 
 
 
-#gets current tone from specified winradio
-def listentowinradio(wrdll,hradio):
-    frequency = 0
-    return frequency
-
-
-
-
-
-
 
 # =============================================================================
 # AUDIO FILE PROCESSOR
 # =============================================================================
 class AudioProcessor(QRunnable): #processes data from audio file
-    def __init__(self, curtabnum, res, filename, *args, **kwargs):
+    def __init__(self, curtabnum, res, filename, minfftratio, minsiglev,  *args, **kwargs):
         
         super(AudioProcessor, self).__init__()
         
@@ -411,6 +444,9 @@ class AudioProcessor(QRunnable): #processes data from audio file
         self.res = res
         self.filename = filename
 
+        self.minfftratio = minfftratio
+        self.minsiglev = minsiglev
+
         self.keepgoing = True #signal connections
         self.signals = AudioProcessorSignals()
     
@@ -418,8 +454,6 @@ class AudioProcessor(QRunnable): #processes data from audio file
     def run(self):
         try:
             res = self.res
-
-
             
             #reading file, getting raw times/sound amplitude
             if self.filename[-4:].lower() == '.wav':
@@ -451,7 +485,7 @@ class AudioProcessor(QRunnable): #processes data from audio file
                 ind = np.all([np.greater_equal(alltime,ctrtime-0.15),np.less_equal(alltime,ctrtime + 0.15)],axis=0)
                 curx = x[ind]
 
-                curfreq = dofft(curx, f_s, 0.25)
+                curfreq,_,_ = dofft(curx, f_s, self.minratio, self.minsiglev)
 
                 time = np.append(time,ctrtime,axis=None)
                 frequency = np.append(frequency,curfreq,axis=None)
@@ -502,6 +536,7 @@ class AudioProcessor(QRunnable): #processes data from audio file
     @pyqtSlot()
     def abort(self):
         self.keepgoing = False
+
 
 
 class AudioProcessorSignals(QObject):
