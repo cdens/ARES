@@ -33,6 +33,7 @@ import datetime as dt
 import numpy as np
 
 from scipy.io import wavfile #for wav
+import scipy.io as sio
 
 #autoQC-specific modules
 import qclib.tropicfileinteraction as tfio
@@ -55,37 +56,10 @@ class RunProgram(QMainWindow):
         
         try:
             self.initUI()
-
-            # prepping to include tabs
-            mainWidget = QWidget()
-            self.setCentralWidget(mainWidget)
-            mainLayout = QVBoxLayout()
-            mainWidget.setLayout(mainLayout)
-            self.tabWidget = QTabWidget()
-            mainLayout.addWidget(self.tabWidget)
-            self.myBoxLayout = QVBoxLayout()
-            self.tabWidget.setLayout(self.myBoxLayout)
-            self.show()
-            self.totaltabs = 0
-
-            # creating threadpool
-            self.threadpool = QThreadPool()
-            self.threadpool.setMaxThreadCount(6)
-
-            #loading DLL
-            try:
-                # self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI.dll")
-                # self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI.dll")
-                self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI_64.dll")
-            except:
-                self.postwarning("WiNRADIO driver NOT FOUND! Please ensure a WiNRADIO Receiver is connected and powered on and then restart the program!")
-                self.wrdll = 0
-                traceback.print_exc()
-
             self.setdefaults() #Default autoQC preferences
             self.buildmenu() #Creates interactive menu, options to create tabs and start autoQC
+            self.loaddata() #loads climo and bathy data into program
             self.makenewprocessortab() #Opens first tab
-
 
         except Exception:
             traceback.print_exc()
@@ -110,6 +84,32 @@ class RunProgram(QMainWindow):
         font.setPointSize(11)
         font.setFamily("Arial")
         self.setFont(font)
+
+        # prepping to include tabs
+        mainWidget = QWidget()
+        self.setCentralWidget(mainWidget)
+        mainLayout = QVBoxLayout()
+        mainWidget.setLayout(mainLayout)
+        self.tabWidget = QTabWidget()
+        mainLayout.addWidget(self.tabWidget)
+        self.myBoxLayout = QVBoxLayout()
+        self.tabWidget.setLayout(self.myBoxLayout)
+        self.show()
+        self.totaltabs = 0
+
+        # creating threadpool
+        self.threadpool = QThreadPool()
+        self.threadpool.setMaxThreadCount(6)
+
+        # loading DLL
+        try:
+            # self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI.dll")
+            # self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI.dll")
+            self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI_64.dll")
+        except:
+            self.postwarning("WiNRADIO driver NOT FOUND! Please ensure a WiNRADIO Receiver is connected and powered on and then restart the program!")
+            self.wrdll = 0
+            traceback.print_exc()
 
         
 # =============================================================================
@@ -163,8 +163,23 @@ class RunProgram(QMainWindow):
         
         
 # =============================================================================
-#    BUILD MENU, GENERAL SETTINGS
+#    LOAD DATA, BUILD MENU, GENERAL SETTINGS
 # =============================================================================
+
+    def loaddata(self):
+        climodata = sio.loadmat('qcdata/climo/LevitusClimo.mat')
+        self.climodata = {}
+        self.climodata["lon"] =  climodata['X'][:, 0]
+        self.climodata["lat"] = climodata['Y'][:, 0]
+        self.climodata["depth"] = climodata['Z'][:, 0]
+        self.climodata["temp_climo_gridded"] = climodata['temp']
+
+        bathydata = sio.loadmat('qcdata/bathy/ETOPO1_bathymetry.mat')
+        self.bathymetrydata = {}
+        self.bathymetrydata['x']= bathydata['x'][:,0]
+        self.bathymetrydata['y'] = bathydata['y'][:,0]
+        self.bathymetrydata['z'] = bathydata['z']
+
     def buildmenu(self):
         
         #setting up primary menu bar
@@ -1226,7 +1241,7 @@ class RunProgram(QMainWindow):
             dtg = str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4)
             
             #getting climatology
-            climotemps,climodepths,climotempfill,climodepthfill = oci.getclimatologyprofile(lat,lon,month)
+            climotemps,climodepths,climotempfill,climodepthfill = oci.getclimatologyprofile(lat,lon,month,self.climodata)
             
             #running autoqc code
             sfc_correction = 0
@@ -1238,7 +1253,7 @@ class RunProgram(QMainWindow):
             
             #pull ocean depth from ETOPO1 Grid-Registered Ice Sheet based global relief dataset 
             #Data source: NOAA-NGDC: https://www.ngdc.noaa.gov/mgg/global/global.html
-            oceandepth,exportlat,exportlon,exportrelief = oci.getoceandepth(lat,lon,6)
+            oceandepth,exportlat,exportlon,exportrelief = oci.getoceandepth(lat,lon,6,self.bathymetrydata)
             
             #limit profile depth by climatology cutoff, ocean depth cutoff
             maxdepth = np.ceil(np.max(depth))

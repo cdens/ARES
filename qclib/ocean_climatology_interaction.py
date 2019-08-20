@@ -25,7 +25,7 @@ def runningsmooth(data,halfwindow):
 
 
 #pulling climatology profile, creating polygon for shaded "climo match" region
-def getclimatologyprofile(lat,lon,month):
+def getclimatologyprofile(lat,lon,month,climodata):
 
     # climodata = Dataset('qcdata/climo/Levitus_monthlyoceanclimo.nc', mode='r')
     # clon = climodata.variables['X'][:]
@@ -33,11 +33,16 @@ def getclimatologyprofile(lat,lon,month):
     # depth = climodata.variables['Z'][:]
     # temp_climo_gridded = climodata.variables['temp'][:]
 
-    climodata = sio.loadmat('qcdata/climo/LevitusClimo.mat')
-    clon = climodata['X'][:,0]
-    clat = climodata['Y'][:,0]
-    depth = climodata['Z'][:,0]
-    temp_climo_gridded = climodata['temp']
+    # climodata = sio.loadmat('qcdata/climo/LevitusClimo.mat')
+    # clon = climodata['X'][:,0]
+    # clat = climodata['Y'][:,0]
+    # depth = climodata['Z'][:,0]
+    # temp_climo_gridded = climodata['temp']
+
+    clon = climodata["lon"]
+    clat = climodata["lat"]
+    depth = climodata["depth"]
+    temp_climo_gridded = climodata["temp_climo_gridded"]
 
     #get current month of climo
     # temp_climo_curmonth = temp_climo_gridded[month-1,:,:,:]
@@ -130,18 +135,22 @@ def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climod
 
 #pull ocean depth from ETOPO1 Grid-Registered Ice Sheet based global relief dataset 
 #Data source: NOAA-NGDC: https://www.ngdc.noaa.gov/mgg/global/global.html
-def getoceandepth(lat,lon,dcoord):
+def getoceandepth(lat,lon,dcoord,bathydata):
 
-    bathydata = sio.loadmat('qcdata/bathy/ETOPO1_bathymetry.mat')
+    # bathydata = sio.loadmat('qcdata/bathy/ETOPO1_bathymetry.mat')
 
     # clon = np.array(bathydata.variables['x'][:])
     # clat = np.array(bathydata.variables['y'][:])
     # z = np.array(bathydata.variables['z'][:])
 
-    clon = bathydata['x'][:,0]
-    clat = bathydata['y'][:,0]
+    # clon = bathydata['x'][:,0]
+    # clat = bathydata['y'][:,0]
+    # z = bathydata['z']
+
+    clon = bathydata['x']
+    clat = bathydata['y']
     z = bathydata['z']
-    
+
     #interpolate maximum ocean depth
     maxoceandepth = -sint.interpn((clon,clat),z,(lon,lat))
     maxoceandepth = maxoceandepth[0]
@@ -154,7 +163,7 @@ def getoceandepth(lat,lon,dcoord):
     exportrelief = z[:,isnearlatind]
     exportrelief = exportrelief[isnearlonind,:]
     
-    num = 1 #adjust this to pull every n elements for topographic data
+    num = 2 #adjust this to pull every n elements for topographic data
     exportlat = exportlat[::num]
     exportlon = exportlon[::num]
     exportrelief = exportrelief[::num,::num]
