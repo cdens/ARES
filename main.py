@@ -41,6 +41,7 @@ import qclib.makeAXBTplots as tplot
 import qclib.autoqc as qc
 import qclib.ocean_climatology_interaction as oci
 import qclib.VHFsignalprocessor as vsp
+import settingswindow as swin
 
 
 
@@ -79,6 +80,9 @@ class RunProgram(QMainWindow):
         p.setColor(self.backgroundRole(), QColor(255,255,255))
         self.setPalette(p)
 
+        myappid = 'ARES_v1.0'  # arbitrary string
+        windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+
         #changing font size
         font = QFont()
         font.setPointSize(11)
@@ -116,43 +120,34 @@ class RunProgram(QMainWindow):
 #     DECLARE DEFAULT VARIABLES, GLOBAL PARAMETERS
 # =============================================================================
     def setdefaults(self):
-        #autoQC preferences- make tunable in GUI
-        global fftwindow, minfftratio, minsiglev
-        global maxderiv, reslev, checkforgaps, alltabdata, givedtgwarn, renametabstodtg
-        global useoceanbottom, useclimobottom, resoptions, overlayclimo, comparetoclimo
-        global savefin, savejjvv, saveprof, saveloc, savelog, saveedf, savewav, savesig
-        global autosave, populatedtg
-        
-        resoptions = ["High", "Low", "Inflection Only"]
+        # processor preferences
+        self.autodtg = 1  # auto determine profile date/time as system date/time on clicking "START"
+        self.autolocation = 1  # auto determine location with GPS
+        self.autoid = 1  # autopopulate platform ID
+        self.platformID = 'AFNNN'
+        self.savelog = 1
+        self.saveedf = 0
+        self.savewav = 1
+        self.savesig = 1
+        self.dtgwarn = 1  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
+        self.renametabstodtg = 1  # auto rename tab to dtg when loading profile editor
+        self.autosave = 0  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
+        self.fftwindow = 0.3  # window to run FFT (in seconds)
+        self.minfftratio = 0.5  # minimum signal to noise ratio to ID data
+        self.minsiglev = 5E6  # minimum total signal level to receive data
 
-        fftwindow = 0.3 #window to run FFT (in seconds)
-        minfftratio = 0.5 #minimum signal to noise ratio to ID data
-        minsiglev = 5E6 #minimum total signal level to receive data
-
-        maxderiv = 1.5 #d2Tdz2 threshold to call a point an inflection point
-        reslev = 2 #profile resolution (1=1m,2=10m,3=inflection points only)
-        checkforgaps = 1 #look for/correct gaps in profile due to false starts from VHF interference
-        useoceanbottom = 1 #use NTOPO1 bathymetry data to ID bottom strikes
-        useclimobottom = 1 #use climatology to ID bottom strikes
-        overlayclimo = 1 #overlay the climatology on the plot
-        comparetoclimo = 1 #check for climatology mismatch and display result on plot
-        
-        givedtgwarn = 1 #warn user if entered dtg is more than 12 hours old or after current system time (in future)
-        renametabstodtg = 1 #auto rename tab to dtg when loading profile editor
-        
-        savefin = 1 #file types to save
-        savejjvv = 1
-        saveprof = 1
-        saveloc = 1
-        savelog = 1
-        saveedf = 0
-        savewav = 1
-        savesig = 1
-        
-        autosave = 0 #automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
-        populatedtg = 1 #auto determine profile date/time as system date/time on clicking "START"
-        
-        alltabdata = {}
+        # profeditorpreferences
+        self.useclimobottom = 1  # use climatology to ID bottom strikes
+        self.overlayclimo = 1  # overlay the climatology on the plot
+        self.comparetoclimo = 1  # check for climatology mismatch and display result on plot
+        self.savefin = 1  # file types to save
+        self.savejjvv = 1
+        self.saveprof = 1
+        self.saveloc = 1
+        self.useoceanbottom = 1  # use NTOPO1 bathymetry data to ID bottom strikes
+        self.checkforgaps = 1  # look for/correct gaps in profile due to false starts from VHF interference
+        self.maxderiv = 1.5  # d2Tdz2 threshold to call a point an inflection point
+        self.profres = 8  # profile minimum vertical resolution (m)
         
         #setting slash dependent on OS
         global slash
@@ -160,6 +155,12 @@ class RunProgram(QMainWindow):
             slash = '\\'
         else:
             slash = '/'
+
+        global alltabdata
+        alltabdata = {}
+
+        #track whether preferences tab is opened
+        self.preferencesopened = False
         
         
 # =============================================================================
@@ -184,9 +185,7 @@ class RunProgram(QMainWindow):
         
         #setting up primary menu bar
         menubar = self.menuBar()
-        FileMenu = menubar.addMenu('File')
-        Mk21Menu = menubar.addMenu('Signal Processor Preferences')
-        QCMenu = menubar.addMenu('Profile Editor Preferences')
+        FileMenu = menubar.addMenu('Options')
         
         #File>New Signal Processor (Mk21) Tab
         newsigtab = QAction('&New Signal Processor Tab',self)
@@ -217,154 +216,77 @@ class RunProgram(QMainWindow):
         savedataintab.setShortcut('Ctrl+S')
         savedataintab.triggered.connect(self.savedataincurtab)
         FileMenu.addAction(savedataintab)
-        
-        #File>Export Files (transmit to GTS?)
-        exportdataintab = QAction('&Export Profile',self)
-        exportdataintab.setShortcut('Ctrl+E')
-        exportdataintab.triggered.connect(self.exportdataincurtab)
-        FileMenu.addAction(exportdataintab)
-        
-        #File save times
-        savelogact = QAction('Save LOG',self,checkable=True)
-        savelogact.triggered.connect(self.toggle_savelog)
-        saveedfact = QAction('Save EDF',self,checkable=True)
-        saveedfact.triggered.connect(self.toggle_saveedf)
-        savewavact = QAction('Save WAV',self,checkable=True)
-        savewavact.triggered.connect(self.toggle_savewav)
-        savesigact = QAction('Save SIGDATA',self,checkable=True)
-        savesigact.triggered.connect(self.toggle_savesig)
-        if savelog == 1:
-            savelogact.setChecked(True)
-        if saveedf == 1:
-            saveedfact.setChecked(True)
-        if savewav== 1:
-            savewavact.setChecked(True)
-        if savesig == 1:
-            savesigact.setChecked(True)
-        SaveRawMenu = QMenu('Raw Data File Types:',self)
-        SaveRawMenu.addAction(savelogact)
-        SaveRawMenu.addAction(saveedfact)
-        SaveRawMenu.addAction(savewavact)
-        SaveRawMenu.addAction(savesigact)
-        FileMenu.addMenu(SaveRawMenu)
-        
-        #Processed file save times
-        savefinact = QAction('Save 1M (FIN)',self,checkable=True)
-        savefinact.triggered.connect(self.toggle_savefin)
-        savejjvvact = QAction('Save JJVV',self,checkable=True)
-        savejjvvact.triggered.connect(self.toggle_savejjvv)
-        saveprofact = QAction('Save Profile PNG',self,checkable=True)
-        saveprofact.triggered.connect(self.toggle_saveprof)
-        savelocact = QAction('Save Location PNG',self,checkable=True)
-        savelocact.triggered.connect(self.toggle_saveloc)
-        if savefin == 1:
-            savefinact.setChecked(True)
-        if savejjvv == 1:
-            savejjvvact.setChecked(True)
-        if saveprof == 1:
-            saveprofact.setChecked(True)
-        if saveloc == 1:
-            savelocact.setChecked(True)
-        SaveMenu = QMenu('Processed Profile File Types:',self)
-        SaveMenu.addAction(savefinact)
-        SaveMenu.addAction(savejjvvact)
-        SaveMenu.addAction(saveprofact)
-        SaveMenu.addAction(savelocact)
-        FileMenu.addMenu(SaveMenu)
+
+        #File> Open Settings
+        openpreferences = QAction('&Preferences', self)
+        openpreferences.setShortcut('Ctrl+T')
+        openpreferences.triggered.connect(self.openpreferencesthread)
+        FileMenu.addAction(openpreferences)
 
 
 
-        # adjust FFT window
-        fftwindowopt = QAction('Adjust FFT window', self)
-        # add triggered connection here
-        Mk21Menu.addAction(fftwindowopt)
+# =============================================================================
+#     PREFERENCES THREAD CONNECTION AND SLOT
+# =============================================================================
 
-        # adjust FFT signal ratio
-        fftratioopt = QAction('Adjust minimum signal ratio', self)
-        # add triggered connection here
-        Mk21Menu.addAction(fftratioopt)
+    def openpreferencesthread(self):
+        if not self.preferencesopened:
+            self.preferencesopened = True
+            self.settingsthread = swin.RunSettings(self.autodtg, self.autolocation, self.autoid,
+                                                                self.platformID, self.savelog, self.saveedf, self.savewav,
+                                                                self.savesig, self.dtgwarn, self.renametabstodtg,
+                                                                self.autosave, self.fftwindow, self.minfftratio, self.minsiglev,
+                                                                self.useclimobottom, self.overlayclimo, self.comparetoclimo,
+                                                                self.savefin, self.savejjvv, self.saveprof, self.saveloc,
+                                                                self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres)
+            self.settingsthread.signals.exported.connect(self.updatesettings)
+            self.settingsthread.signals.closed.connect(self.settingsclosed)
+        else:
+            self.settingsthread.show()
+            self.settingsthread.raise_()
+            self.settingsthread.activateWindow()
 
-        # adjust FFT minimum signal level
-        minsiglevopt = QAction('Adjust minimum signal level', self)
-        # add triggered connection here
-        Mk21Menu.addAction(minsiglevopt)
+    @pyqtSlot(int,int,int,str,int,int,int,int,int,int,int,float,float,float,int,int,int,int,int,int,int,int,int,float,float)
+    def updatesettings(self,autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn,
+                       renametabstodtg, autosave, fftwindow,minfftratio, minsiglev, useclimobottom, overlayclimo,
+                       comparetoclimo,savefin, savejjvv, saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres):
 
-        # warn if DTG is out of range
-        warningopt = QAction('Provide warning if drop is not within 12 hours', self, checkable=True)
-        warningopt.triggered.connect(self.toggle_warningopt)
-        if givedtgwarn == 1:
-            warningopt.setChecked(True)
-        Mk21Menu.addAction(warningopt)
+        # processor preferences
+        self.autodtg = autodtg  # auto determine profile date/time as system date/time on clicking "START"
+        self.autolocation = autolocation  # auto determine location with GPS
+        self.autoid = autoid  # autopopulate platform ID
+        self.platformID = platformID
+        self.savelog = savelog
+        self.saveedf = saveedf
+        self.savewav = savewav
+        self.savesig = savesig
+        self.dtgwarn = dtgwarn  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
+        self.renametabstodtg = renametabstodtg  # auto rename tab to dtg when loading profile editor
+        self.autosave = autosave  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
+        self.fftwindow = fftwindow  # window to run FFT (in seconds)
+        self.minfftratio = minfftratio  # minimum signal to noise ratio to ID data
+        self.minsiglev = minsiglev  # minimum total signal level to receive data
 
-        # offer to rename tab
-        renameopt = QAction('Rename tab to DTG when loading profile editor', self, checkable=True)
-        renameopt.triggered.connect(self.toggle_renameopt)
-        if renametabstodtg == 1:
-            renameopt.setChecked(True)
-        Mk21Menu.addAction(renameopt)
+        #update FFT threshold settings in all active threads
+        self.updatefftsettings()
 
-        # save data before loading profile editor
-        autosaveopt = QAction('Autosave raw data files before loading profile editor', self, checkable=True)
-        autosaveopt.triggered.connect(self.toggle_autosaveopt)
-        if autosave == 1:
-            autosaveopt.setChecked(True)
-        Mk21Menu.addAction(autosaveopt)
+        # profeditorpreferences
+        self.useclimobottom = useclimobottom  # use climatology to ID bottom strikes
+        self.overlayclimo = overlayclimo  # overlay the climatology on the plot
+        self.comparetoclimo = comparetoclimo  # check for climatology mismatch and display result on plot
+        self.savefin = savefin  # file types to save
+        self.savejjvv = savejjvv
+        self.saveprof = saveprof
+        self.saveloc = saveloc
+        self.useoceanbottom = useoceanbottom  # use NTOPO1 bathymetry data to ID bottom strikes
+        self.checkforgaps = checkforgaps  # look for/correct gaps in profile due to false starts from VHF interference
+        self.maxderiv = maxderiv  # d2Tdz2 threshold to call a point an inflection point
+        self.profres = profres  # profile minimum vertical resolution (m)
 
-        # auto-update with system time for non-audio processing
-        populatedtgopt = QAction('Autopopulate sytem date/time for non-audio processing', self, checkable=True)
-        populatedtgopt.triggered.connect(self.toggle_populatedtgopt)
-        if populatedtg == 1:
-            populatedtgopt.setChecked(True)
-        Mk21Menu.addAction(populatedtgopt)
-
-
-
-        #QCMenu>Climatology (with submenu)
-        overlayclimoact = QAction('Overlay climatology in saved plots',self,checkable=True)
-        overlayclimoact.triggered.connect(self.toggle_overlayclimo)
-        useclimobottomact = QAction('Use climatology to detect bottom strikes',self,checkable=True)
-        useclimobottomact.triggered.connect(self.toggle_useclimobottom)
-        comparetoclimoact = QAction('Check if profile matches climatology',self,checkable=True)
-        comparetoclimoact.triggered.connect(self.toggle_comparetoclimo)
-        if useclimobottom == 1:
-            useclimobottomact.setChecked(True)
-        if overlayclimo == 1:
-            overlayclimoact.setChecked(True)
-        if comparetoclimo == 1:
-            comparetoclimoact.setChecked(True)
-        ClimoMenu = QMenu('Climatology',self)
-        ClimoMenu.addAction(overlayclimoact)
-        ClimoMenu.addAction(useclimobottomact)
-        ClimoMenu.addAction(comparetoclimoact)
-        QCMenu.addMenu(ClimoMenu)
-        
-        #QCMenu>Resolution (with submenu)
-        reslevel = QMenu('Select Resolution', self)
-        resgroup = QActionGroup(reslevel)
-        for curoption in resoptions:
-            action = QAction(curoption, reslevel, checkable=True, checked=curoption==resoptions[0])
-            reslevel.addAction(action)
-            resgroup.addAction(action)
-        resgroup.setExclusive(True)
-        resgroup.triggered.connect(self.toggle_resolution)
-        QCMenu.addMenu(reslevel)
-        
-        #QCMenu>use bathymetry (check option)
-        usebathyact = QAction('Use Bathymetry Data',self,checkable=True)
-        usebathyact.triggered.connect(self.toggle_usebathy)
-        if useoceanbottom == 1:
-            usebathyact.setChecked(True)
-        QCMenu.addAction(usebathyact)
-        
-        #QCMenu>FindGaps
-        findgapact = QAction('Check for False Starts',self,checkable=True)
-        findgapact.triggered.connect(self.toggle_findgaps)
-        if checkforgaps == 1:
-            findgapact.setChecked(True)
-        QCMenu.addAction(findgapact)
-
-
-        
+    @pyqtSlot(bool)
+    def settingsclosed(self,isclosed):
+        if isclosed:
+            self.preferencesopened = False
         
 # =============================================================================
 #     SIGNAL PROCESSOR TAB AND INPUTS HERE
@@ -468,7 +390,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["lontitle"] = QLabel('Longitude (E>0): ') #17
             alltabdata[curtabstr]["tabwidgets"]["lonedit"] = QLineEdit('XX.XXX') #18
             alltabdata[curtabstr]["tabwidgets"]["idtitle"] = QLabel('Platform ID/Tail#: ') #19
-            alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit('AFNNN') #20
+            alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit(self.platformID) #20
             
             #formatting widgets
             alltabdata[curtabstr]["tabwidgets"]["channeltitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -652,15 +574,16 @@ class RunProgram(QMainWindow):
 
     def updatefftsettings(self):
         try:
+            curtabstr = "Tab " + str(self.whatTab())
             #updates fft settings for any active tabs
             for ctab in alltabdata:
                 if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
                     if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] != 'Test' and alltabdata[ctab]["datasource"] != 'Audio':
-                        alltabdata[curtabstr]["processor"].changethresholds(fftwindow,minfftratio,minsiglev)
+                        alltabdata[curtabstr]["processor"].changethresholds(self.fftwindow,self.minfftratio,self.minsiglev)
 
         except Exception:
             traceback.print_exc()
-            self.posterror("Frequency/channel mismatch!")
+            self.posterror("Error updating FFT settings!")
             
     def startprocessor(self):
         try:
@@ -692,11 +615,13 @@ class RunProgram(QMainWindow):
                     if alltabdata[curtabstr]["rawdata"]["starttime"] == 0:
                         starttime = dt.datetime.utcnow()
                         alltabdata[curtabstr]["rawdata"]["starttime"] = starttime
-                        if populatedtg == 1:#populates date and time if requested
+                        if self.autodtg == 1:#populates date and time if requested
                             curdatestr = str(starttime.year) + str(starttime.month).zfill(2) + str(starttime.day).zfill(2)
                             alltabdata[curtabstr]["tabwidgets"]["dateedit"].setText(curdatestr)
                             curtimestr = str(starttime.hour).zfill(2) + str(starttime.minute).zfill(2)
                             alltabdata[curtabstr]["tabwidgets"]["timeedit"].setText(curtimestr)
+                        if self.autoid == 1:
+                            alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.platformID)
                     else:
                         starttime = alltabdata[curtabstr]["rawdata"]["starttime"]
 
@@ -709,7 +634,7 @@ class RunProgram(QMainWindow):
                         else:
                            vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
                            alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
-                                     alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],fftwindow,minfftratio, minsiglev)
+                                     alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],self.fftwindow,self.minfftratio,self.minsiglev)
                            alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
 
                     alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
@@ -837,8 +762,6 @@ class RunProgram(QMainWindow):
     def updateUIfinal(self,plottabnum):
         try:
             plottabstr = self.gettabstrfromnum(plottabnum)
-            # alltabdata[plottabstr]["rawdata"]["fs"] = fs
-            # alltabdata[plottabstr]["rawdata"]["audiostream"] = audiostream
             try:
                 del alltabdata[plottabstr]["ProcessorAx"].lines[-1]
             except:
@@ -889,7 +812,7 @@ class RunProgram(QMainWindow):
             #connecting signals, starting Audio Processor thread
             curtabnum = alltabdata[curtabstr]["tabnum"]
             alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            alltabdata[curtabstr]["processor"] = vsp.AudioProcessor(curtabnum,0.2,fname)
+            alltabdata[curtabstr]["processor"] = vsp.AudioProcessor(curtabnum,self.fftwindow,fname,self.minfftratio,self.minsiglev)
             alltabdata[curtabstr]["processor"].signals.updateprogress.connect(self.updateaudioprogressbar)
             alltabdata[curtabstr]["processor"].signals.finished.connect(self.finishaudioprocessing)
             alltabdata[curtabstr]["processor"].signals.aborted.connect(self.abortaudioprocessing)
@@ -1015,7 +938,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["rawdata"]["ID"] = identifier
             
             #saves profile if necessary
-            if autosave == 1:
+            if self.autosave == 1:
                 self.savedataincurtab()
             else:
                 reply = QMessageBox.question(self, 'Save Raw Data?',
@@ -1043,7 +966,7 @@ class RunProgram(QMainWindow):
             return
         
         #generating QC tab
-        self.continuetoqc(curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,time,"ProcessedInHouse",identifier)
+        self.continuetoqc(curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,time,"NotFromFile",identifier)
         
 
 
@@ -1093,27 +1016,6 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["submitbutton"] = QPushButton('PROCESS PROFILE')
             alltabdata[curtabstr]["tabwidgets"]["submitbutton"].clicked.connect(self.checkdatainputs_editorinput)
             
-            # #Create widgets for UI populated with test example
-            # alltabdata[curtabstr]["tabwidgets"] = {}
-            # alltabdata[curtabstr]["tabwidgets"]["title"] = QLabel('Enter AXBT Drop Information:')
-            # alltabdata[curtabstr]["tabwidgets"]["lattitle"] = QLabel('Latitude (N>0): ')
-            # alltabdata[curtabstr]["tabwidgets"]["latedit"] = QLineEdit('15.383')
-            # alltabdata[curtabstr]["tabwidgets"]["lontitle"] = QLabel('Longitude (E>0): ')
-            # alltabdata[curtabstr]["tabwidgets"]["lonedit"] = QLineEdit('-055.333')
-            # alltabdata[curtabstr]["tabwidgets"]["datetitle"] = QLabel('Date: ')
-            # alltabdata[curtabstr]["tabwidgets"]["dateedit"] = QLineEdit('20150826')
-            # alltabdata[curtabstr]["tabwidgets"]["timetitle"] = QLabel('Time (UTC): ')
-            # alltabdata[curtabstr]["tabwidgets"]["timeedit"] = QLineEdit('1131')
-            # alltabdata[curtabstr]["tabwidgets"]["idtitle"] = QLabel('Platform ID/Tail#: ')
-            # alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit('AF309')
-            # alltabdata[curtabstr]["tabwidgets"]["logtitle"] = QLabel('Select Source File: ')
-            # alltabdata[curtabstr]["tabwidgets"]["logbutton"] = QPushButton('Browse')
-            # alltabdata[curtabstr]["tabwidgets"]["logedit"] = QTextEdit('testdata/201508261140.DTA')
-            # alltabdata[curtabstr]["tabwidgets"]["logedit"].setMaximumHeight(100)
-            # alltabdata[curtabstr]["tabwidgets"]["logbutton"].clicked.connect(self.selectdatafile)
-            # alltabdata[curtabstr]["tabwidgets"]["submitbutton"] = QPushButton('PROCESS PROFILE')
-            # alltabdata[curtabstr]["tabwidgets"]["submitbutton"].clicked.connect(self.checkdatainputs_editorinput)
-            
             #formatting widgets
             alltabdata[curtabstr]["tabwidgets"]["title"].setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             alltabdata[curtabstr]["tabwidgets"]["lattitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -1124,7 +1026,8 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["logtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             
             #should be 15 entries
-            widgetorder = ["title","lattitle","latedit","lontitle","lonedit","datetitle","dateedit","timetitle","timeedit","idtitle","idedit","logtitle","logedit","logbutton","submitbutton"]
+            widgetorder = ["title","lattitle","latedit","lontitle","lonedit","datetitle","dateedit","timetitle",
+                           "timeedit","idtitle","idedit","logtitle","logedit","logbutton","submitbutton"]
             wrows     = [1,2,2,3,3,4,4,5,5,6,6,7,7,8,9]
             wcols     = [1,1,2,1,2,1,2,1,2,1,2,1,2,1,1]
             
@@ -1246,7 +1149,7 @@ class RunProgram(QMainWindow):
             #running autoqc code
             sfc_correction = 0
             maxdepth = 100000
-            temperature,depth = qc.autoqc(rawtemperature,rawdepth,sfc_correction,maxdepth,maxderiv,reslev,checkforgaps)
+            temperature,depth = qc.autoqc(rawtemperature,rawdepth,sfc_correction,maxdepth,self.maxderiv,self.profres,self.checkforgaps)
             
             #comparing to climatology
             matchclimo,climobottomcutoff = oci.comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climodepthfill)
@@ -1258,10 +1161,10 @@ class RunProgram(QMainWindow):
             #limit profile depth by climatology cutoff, ocean depth cutoff
             maxdepth = np.ceil(np.max(depth))
             isbottomstrike = 0
-            if useoceanbottom == 1 and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
+            if self.useoceanbottom == 1 and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
                 maxdepth = oceandepth
                 isbottomstrike = 1
-            if useclimobottom == 1 and np.isnan(climobottomcutoff) == 0 and climobottomcutoff <= maxdepth:
+            if self.useclimobottom == 1 and np.isnan(climobottomcutoff) == 0 and climobottomcutoff <= maxdepth:
                 isbottomstrike = 1
                 maxdepth = climobottomcutoff
             isbelowmaxdepth = np.less_equal(depth,maxdepth)
@@ -1276,7 +1179,7 @@ class RunProgram(QMainWindow):
                       "climodepthfill":climodepthfill,"matchclimo":matchclimo,"datasourcefile":logfile,
                       "ID":identifier,"oceandepth":oceandepth}
             
-            alltabdata[curtabstr]["maxderiv"] = maxderiv
+            alltabdata[curtabstr]["maxderiv"] = self.maxderiv
             
             #deleting old buttons and inputs
             for i in alltabdata[curtabstr]["tabwidgets"]:
@@ -1285,7 +1188,7 @@ class RunProgram(QMainWindow):
                 except:
                     alltabdata[curtabstr]["tabwidgets"][i] = 1 #bs variable- overwrites spacer item
                                 
-            if renametabstodtg == 1:
+            if self.renametabstodtg == 1:
                 curtab = int(self.whatTab())
                 self.tabWidget.setTabText(curtab,dtg)  
                 
@@ -1313,7 +1216,9 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["ProfToolbar"].setFixedWidth(300)
             
             #plot data
-            alltabdata[curtabstr]["climohandle"] = tplot.makeprofileplot(alltabdata[curtabstr]["ProfAx"],rawtemperature,rawdepth,temperature,depth,climotempfill,climodepthfill,dtg,matchclimo)
+            alltabdata[curtabstr]["climohandle"] = tplot.makeprofileplot(alltabdata[curtabstr]["ProfAx"],rawtemperature,
+                                                                         rawdepth,temperature,depth,climotempfill,
+                                                                         climodepthfill,dtg,matchclimo)
             tplot.makelocationplot(alltabdata[curtabstr]["LocFig"],alltabdata[curtabstr]["LocAx"],lat,lon,dtg,exportlon,exportlat,exportrelief,6)
             
             #refresh plots on window
@@ -1356,12 +1261,12 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setValue(0)
             alltabdata[curtabstr]["tabwidgets"]["depthdelay"].valueChanged.connect(self.applychanges)
             
-            alltabdata[curtabstr]["tabwidgets"]["mdslidetitle"] = QLabel('Inflection Point Threshold (C/m<sup>2</sup>): ' + str(alltabdata[curtabstr]["maxderiv"])) #10
-            alltabdata[curtabstr]["tabwidgets"]["mdslide"] = QSlider(Qt.Horizontal) #11
-            alltabdata[curtabstr]["tabwidgets"]["mdslide"].setValue(int(alltabdata[curtabstr]["maxderiv"]*100))
-            alltabdata[curtabstr]["tabwidgets"]["mdslide"].setMinimum(0)
-            alltabdata[curtabstr]["tabwidgets"]["mdslide"].setMaximum(400)
-            alltabdata[curtabstr]["tabwidgets"]["mdslide"].valueChanged[int].connect(self.changeMDvalue)
+            # alltabdata[curtabstr]["tabwidgets"]["mdslidetitle"] = QLabel('Inflection Point Threshold (C/m<sup>2</sup>): ' + str(alltabdata[curtabstr]["maxderiv"])) #10
+            # alltabdata[curtabstr]["tabwidgets"]["mdslide"] = QSlider(Qt.Horizontal) #11
+            # alltabdata[curtabstr]["tabwidgets"]["mdslide"].setValue(int(alltabdata[curtabstr]["maxderiv"]*100))
+            # alltabdata[curtabstr]["tabwidgets"]["mdslide"].setMinimum(0)
+            # alltabdata[curtabstr]["tabwidgets"]["mdslide"].setMaximum(400)
+            # alltabdata[curtabstr]["tabwidgets"]["mdslide"].valueChanged[int].connect(self.changeMDvalue)
             
             alltabdata[curtabstr]["tabwidgets"]["rerunqc"] = QPushButton('Re-QC Profile (Reset)') #12
             alltabdata[curtabstr]["tabwidgets"]["rerunqc"].clicked.connect(self.rerunqc)    
@@ -1385,8 +1290,7 @@ class RunProgram(QMainWindow):
                        + '# Datapoints: ' + str(len(temperature)) )
             alltabdata[curtabstr]["tabwidgets"]["proftxt"] = QLabel(proftxt)#13
             
-            
-            
+
             alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"] = QCheckBox('Bottom Strike?') #14
             if isbottomstrike == 1:
                 alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].setChecked(True)
@@ -1424,21 +1328,23 @@ class RunProgram(QMainWindow):
             
             #should be 16 entries 
             Wsize = app.desktop().screenGeometry()
-            widgetorder = ["toggleclimooverlay","addpoint","removepoint","sfccorrectiontitle","sfccorrection","maxdepthtitle","maxdepth","depthdelaytitle","depthdelay","mdslidetitle","mdslide","rerunqc","proftxt","isbottomstrike","rcodetitle","rcode"]
+            widgetorder = ["toggleclimooverlay","addpoint","removepoint","sfccorrectiontitle","sfccorrection",
+                           "maxdepthtitle","maxdepth","depthdelaytitle","depthdelay",
+                           "rerunqc","proftxt","isbottomstrike","rcodetitle","rcode"]
             
-            wrows     = [2,3,3,4,4,5,5,6,6,7,8,9,1,6,6,7]
-            wcols     = [2,2,3,2,3,2,3,2,3,2,2,2,5,6,5,6]
+            wrows     = [2,3,3,4,4,5,5,6,6,9,1,6,6,7]
+            wcols     = [2,2,3,2,3,2,3,2,3,2,5,6,5,6]
             
-            wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,4,1,1,1]
-            wcolext   = [2,1,1,1,1,1,1,1,1,2,2,2,2,1,1,1]
+            wrext     = [1,1,1,1,1,1,1,1,1,1,4,1,1,1]
+            wcolext   = [2,1,1,1,1,1,1,1,1,2,2,1,1,1]
             
             twid = 155
             twid2 = 2*twid
             thgt = 30
             thgt = int(Wsize.height()/30)
             thgt2 = 4*thgt
-            wfixwidth = [twid2,twid,twid,twid,twid,twid,twid,twid,twid,twid2,twid2,twid2,twid2,twid,twid,twid]
-            wfixhght  = [thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt2,thgt,thgt,thgt]    
+            wfixwidth = [twid2,twid,twid,twid,twid,twid,twid,twid,twid,twid2,twid2,twid,twid,twid]
+            wfixhght  = [thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt2,thgt,thgt,thgt]
             
             #adding user inputs
             for i,r,c,re,ce,ww,hh in zip(widgetorder,wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
@@ -1682,7 +1588,7 @@ class RunProgram(QMainWindow):
             
             try:
                 #running QC, comparing to climo
-                temperature,depth = qc.autoqc(rawtemperature,rawdepth,sfc_correction,maxdepth,alltabdata[curtabstr]["maxderiv"],reslev,checkforgaps)
+                temperature,depth = qc.autoqc(rawtemperature,rawdepth,sfc_correction,maxdepth,self.maxderiv,self.profres,self.checkforgaps)
                 matchclimo,climobottomcutoff = oci.comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climodepthfill)
             except Exception:
                 temperature = depth = matchclimo = climobottomcutoff = 0
@@ -1692,10 +1598,10 @@ class RunProgram(QMainWindow):
             #limit profile depth by climatology cutoff, ocean depth cutoff
             maxdepth = np.ceil(np.max(depth))
             isbottomstrike = 0
-            if useoceanbottom == 1 and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
+            if self.useoceanbottom == 1 and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
                 maxdepth = oceandepth
                 isbottomstrike = 1
-            if useclimobottom == 1 and np.isnan(climobottomcutoff) == 0 and climobottomcutoff <= maxdepth:
+            if self.useclimobottom == 1 and np.isnan(climobottomcutoff) == 0 and climobottomcutoff <= maxdepth:
                 isbottomstrike = 1
                 maxdepth = climobottomcutoff
             isbelowmaxdepth = np.less_equal(depth,maxdepth)
@@ -1860,7 +1766,7 @@ class RunProgram(QMainWindow):
                     curtab = int(self.whatTab())
                     filename = self.tabWidget.tabText(curtab)
                     
-                    if comparetoclimo == 1:
+                    if self.comparetoclimo == 1:
                         matchclimo = alltabdata[curtabstr]["profdata"]["matchclimo"]
                     else:
                         matchclimo = 1
@@ -1870,7 +1776,7 @@ class RunProgram(QMainWindow):
                     QApplication.restoreOverrideCursor()
                     return False
 
-                if savefin == 1:
+                if self.savefin == 1:
                     try:
                         depth1m = np.arange(0,np.floor(depth[-1]))
                         temperature1m = np.interp(depth1m,depth,temperature)
@@ -1878,20 +1784,20 @@ class RunProgram(QMainWindow):
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save FIN file")
-                if savejjvv == 1:
+                if self.savejjvv == 1:
                     isbtmstrike = alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].isChecked()
                     try:
                         tfio.writejjvvfile(outdir + slash + filename + '.jjvv',temperature,depth,day,month,year,time,lat,lon,identifier,isbtmstrike)
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save JJVV file")
-                if saveprof == 1:
+                if self.saveprof == 1:
                     try:
                         fig1 = plt.figure()
                         fig1.clear()
                         ax1 = fig1.add_axes([0.1,0.1,0.85,0.85])
                         climohandle = tplot.makeprofileplot(ax1,rawtemperature,rawdepth,temperature,depth,climotempfill,climodepthfill,dtg,matchclimo)
-                        if overlayclimo == 0:
+                        if self.overlayclimo == 0:
                             climohandle.set_visible(False)
                         fig1.savefig(outdir + slash + filename + '_prof.png',format='png')
                     except Exception:
@@ -1900,12 +1806,12 @@ class RunProgram(QMainWindow):
                     finally:
                         plt.close('fig1')
 
-                if saveloc == 1:
+                if self.saveloc == 1:
                     try:
                         fig2 = plt.figure()
                         fig2.clear()
                         ax2 = fig2.add_axes([0.1,0.1,0.85,0.85])
-                        _,exportlat,exportlon,exportrelief = oci.getoceandepth(lat,lon,6)
+                        _,exportlat,exportlon,exportrelief = oci.getoceandepth(lat,lon,6,self.bathymetrydata)
                         tplot.makelocationplot(fig2,ax2,lat,lon,dtg,exportlon,exportlat,exportrelief,6)
                         fig2.savefig(outdir + slash + filename + '_loc.png',format='png')
                     except Exception:
@@ -1943,7 +1849,7 @@ class RunProgram(QMainWindow):
 
                         #only checks validity of necessary data
                         try:
-                            if saveedf == 1:
+                            if self.saveedf == 1:
                                 lat, lon, year, month, day, time, hour, minute = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, True, True)
                             else:
                                 _, _, year, month, day, time, hour, minute = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, False, True)
@@ -1964,20 +1870,20 @@ class RunProgram(QMainWindow):
                     QApplication.restoreOverrideCursor()
                     return False
                 
-                if savelog == 1:
+                if self.savelog == 1:
                     try:
                         tfio.writelogfile(outdir + slash + filename + '.DTA',initdatestr,inittimestr,timefromstart,rawdepth,frequency,rawtemperature)
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save LOG file")
-                if saveedf == 1:
+                if self.saveedf == 1:
                     try:
                         tfio.writeedffile(outdir + slash + filename + '.edf',rawtemperature,rawdepth,year,month,day,hour,minute,0,lat,lon)
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save EDF file")
 
-                if savewav == 1:
+                if self.savewav == 1:
                     try:
                         oldfile = 'tempwav_' + str(alltabdata[curtabstr]["tabnum"]) + '.WAV'
                         newfile = outdir + slash + filename + '.WAV'
@@ -1986,7 +1892,7 @@ class RunProgram(QMainWindow):
                         traceback.print_exc()
                         self.posterror("Failed to save WAV file")
 
-                if savesig == 1:
+                if self.savesig == 1:
                     try:
                         oldfile = 'sigdata_' + str(alltabdata[curtabstr]["tabnum"]) + '.txt'
                         newfile = outdir + slash + filename + '.sigdata'
@@ -2005,9 +1911,6 @@ class RunProgram(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
             return True
-        
-    def exportdataincurtab(self):
-        print("You sent data in the current tab (to GTS?)!")
         
     def postwarning(self,warningtext):
         msg = QMessageBox()
@@ -2045,6 +1948,10 @@ class RunProgram(QMainWindow):
             "Are you sure to close the application? \n All unsaved work will be lost!", QMessageBox.Yes | 
             QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
+
+            if self.preferencesopened:
+                self.settingsthread.close()
+
             event.accept()
             #delete all temporary wav files
             allfilesanddirs = os.listdir()
@@ -2132,7 +2039,7 @@ class RunProgram(QMainWindow):
                 curtime = timemodule.gmtime()
                 deltat = dt.datetime(curtime[0],curtime[1],curtime[2],curtime[3],curtime[4],curtime[5]) - dt.datetime(year,month,day,hour,minute,0)
                 option = ''
-                if givedtgwarn == 1:
+                if self.dtgwarn == 1:
                     if deltat.days < 0:
                         option = self.postwarning_option("Drop time appears to be after the current time. Continue anyways?")
                     elif deltat.days > 1 or (deltat.days == 0 and deltat.seconds > 12*3600):
@@ -2152,130 +2059,6 @@ class RunProgram(QMainWindow):
             traceback.print_exc()
             self.posterror("Unspecified error in reading profile information!")
             return
-    
-    
-    
-# =============================================================================
-#    GLOBAL PREFERENCE ADJUSTMENT
-# =============================================================================   
-            
-    def toggle_overlayclimo(self, state):
-        global overlayclimo
-        if state:
-            overlayclimo = 1
-        else:
-            overlayclimo = 0
-    def toggle_savejjvv(self, state):
-        global savejjvv
-        if state:
-            savejjvv = 1
-        else:
-            savejjvv = 0
-    def toggle_savefin(self, state):
-        global savefin
-        if state:
-            savefin = 1
-        else:
-            savefin = 0
-    def toggle_saveprof(self, state):
-        global saveprof
-        if state:
-            saveprof = 1
-        else:
-            saveprof = 0
-    def toggle_saveloc(self, state):
-        global saveloc
-        if state:
-            saveloc = 1
-        else:
-            saveloc = 0
-    def toggle_savelog(self, state):
-        global savelog
-        if state:
-            savelog = 1
-        else:
-            savelog = 0
-    def toggle_saveedf(self, state):
-        global saveedf
-        if state:
-            saveedf = 1
-        else:
-            saveedf = 0
-    def toggle_savewav(self, state):
-        global savewav
-        if state:
-            savewav = 1
-        else:
-            savewav = 0
-    def toggle_savesig(self, state):
-        global savesig
-        if state:
-            savesig = 1
-        else:
-            savesig = 0
-            
-    def toggle_autosaveopt(self, state):
-        global autosave
-        if state:
-            autosave = 1
-        else:
-            autosave = 0
-    def toggle_populatedtgopt(self, state):
-        global populatedtg
-        if state:
-            populatedtg = 1
-        else:
-            populatedtg = 0
-            
-            
-    def toggle_warningopt(self, state):
-        global givedtgwarn
-        if state:
-            givedtgwarn = 1
-        else:
-            givedtgwarn = 0
-    def toggle_renameopt(self, state):
-        global renametabstodtg
-        if state:
-            renametabstodtg = 1
-        else:
-            renametabstodtg = 0
-    def toggle_useclimobottom(self, state):
-        global useclimobottom
-        if state:
-            useclimobottom = 1
-        else:
-            useclimobottom = 0
-    def toggle_usebathy(self, state):
-        global useoceanbottom
-        if state:
-            useoceanbottom = 1
-        else:
-            useoceanbottom = 0
-    def toggle_findgaps(self, state):
-        global checkforgaps
-        if state:
-            checkforgaps = 1
-        else:
-            checkforgaps = 0
-    def toggle_comparetoclimo(self, state):
-        global comparetoclimo
-        if state:
-            comparetoclimo = 1
-        else:
-            comparetoclimo = 0
-    def toggle_resolution(self, action):
-        option = action.text()
-        global reslev
-        if option == resoptions[0]:
-            reslev = 1
-        elif option == resoptions[1]:
-            reslev = 2
-        elif option == resoptions[2]:
-            reslev = 3
-        else:
-            print("ERROR!! BAD RESOLUTION TYPE SPECIFIED")
-            
 
     
 # =============================================================================

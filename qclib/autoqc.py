@@ -1,6 +1,6 @@
 import numpy as np
 
-def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,reslev,checkforgaps):
+def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,profres,checkforgaps):
     
 # =============================================================================
 #     Code: autoqc.py
@@ -99,15 +99,8 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,reslev,checkforgaps
     lastdepth = -15
     for i in range(len(dT2dz2)):
         if dTdz[i] <= 0.5: #constraint on first derivative of temp with depth
-            if reslev == 1: #high resolution: data every 1m or critical points
-                iscriticalpoint = (depth_smooth[i+1]-lastdepth >= 1 or 
-                                   abs(dT2dz2[i]) >= maxderiv)
-            elif reslev == 2: #low resolution: data res depth dependent or critical points
-                iscriticalpoint = (depth_smooth[i+1]-lastdepth >= 10 or 
-                                   abs(dT2dz2[i]) >= maxderiv)
-                
-            elif reslev == 3: #extra low resolution: only critical points
-                iscriticalpoint = abs(dT2dz2[i]) >= maxderiv
+            iscriticalpoint = (depth_smooth[i+1]-lastdepth >= profres or
+                               abs(dT2dz2[i]) >= maxderiv)
             
             #if the point is a critical value given the selected resolution level
             if iscriticalpoint:

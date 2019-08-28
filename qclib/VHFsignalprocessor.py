@@ -46,7 +46,6 @@ def dofft(pcmdata,fs,minratio,minsiglev):
 
     #limiting frequencies, converting to ratio
     maxf = np.max(fftdata)
-    print(maxf)
     ind = np.all((np.greater_equal(f,1300),np.less_equal(f,2800)),axis=0)
     f = f[ind]
     fftdata = fftdata[ind]/maxf
@@ -485,7 +484,7 @@ class AudioProcessor(QRunnable): #processes data from audio file
                 ind = np.all([np.greater_equal(alltime,ctrtime-0.15),np.less_equal(alltime,ctrtime + 0.15)],axis=0)
                 curx = x[ind]
 
-                curfreq,_,_ = dofft(curx, f_s, self.minratio, self.minsiglev)
+                curfreq,_,_ = dofft(curx, f_s, self.minfftratio, self.minsiglev)
 
                 time = np.append(time,ctrtime,axis=None)
                 frequency = np.append(frequency,curfreq,axis=None)
