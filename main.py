@@ -16,6 +16,8 @@ import os
 import traceback
 from ctypes import windll
 
+import shutil
+
 from PyQt5.QtWidgets import (QMainWindow, QAction, QApplication, QMenu, QLineEdit, QLabel, QSpinBox, QCheckBox,
                              QPushButton, QMessageBox, QActionGroup, QWidget, QFileDialog, QComboBox, QTextEdit,
                              QTabWidget, QVBoxLayout, QInputDialog, QGridLayout, QSlider, QDoubleSpinBox, 
@@ -104,6 +106,17 @@ class RunProgram(QMainWindow):
         # creating threadpool
         self.threadpool = QThreadPool()
         self.threadpool.setMaxThreadCount(6)
+
+        # delete all temporary files
+        allfilesanddirs = os.listdir()
+        for cfile in allfilesanddirs:
+            if len(cfile) >= 5:
+                cfilestart = cfile[:4]
+                cfileext = cfile[-3:]
+                if cfilestart.lower() == 'temp' and cfileext.lower() == 'wav':
+                    os.remove(cfile)
+                elif cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt':
+                    os.remove(cfile)
 
         # loading DLL
         try:
@@ -578,7 +591,7 @@ class RunProgram(QMainWindow):
             #updates fft settings for any active tabs
             for ctab in alltabdata:
                 if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
-                    if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] != 'Test' and alltabdata[ctab]["datasource"] != 'Audio':
+                    if alltabdata[ctab]["isprocessing"]: # and alltabdata[ctab]["datasource"] != 'Test' and alltabdata[ctab]["datasource"] != 'Audio':
                         alltabdata[curtabstr]["processor"].changethresholds(self.fftwindow,self.minfftratio,self.minsiglev)
 
         except Exception:
@@ -597,24 +610,45 @@ class RunProgram(QMainWindow):
                     self.postwarning("The maximum number of simultaneous processing threads has been exceeded. This processor will automatically begin collecting data when STOP is selected on another tab.")
 
                 if datasource == 'Audio':
-                    self.processfromaudio(curtabstr)
-                else:
+                    #gets audio file to process
+                    try:
+                        # getting filename
+                        fname, ok = QFileDialog.getOpenFileName(self, 'Open file','',"Source Data Files (*.WAV *.Wav *.wav *PCM *Pcm *pcm *MP3 *Mp3 *mp3)")
+                        if not ok:
+                            alltabdata[curtabstr]["isprocessing"] = False
+                            return
 
-                    # checks to see if selection is busy
-                    if datasource != "Test":
-                        for ctab in alltabdata:
-                            if ctab != curtabstr and (alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or
-                                                      alltabdata[ctab]["tabtype"] == "SignalProcessor_completed"):
-                                if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == datasource:
-                                    self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
-                                    return
+                        datasource = datasource + '_' + fname
 
-                    curtabnum = alltabdata[curtabstr]["tabnum"]
-                    alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+                        # building progress bar
+                        alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"] = QProgressBar()
+                        alltabdata[curtabstr]["tablayout"].addWidget(
+                            alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"], 7, 2, 1, 4)
+                        alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"].setValue(0)
+                        QApplication.processEvents()
 
-                    if alltabdata[curtabstr]["rawdata"]["starttime"] == 0:
-                        starttime = dt.datetime.utcnow()
-                        alltabdata[curtabstr]["rawdata"]["starttime"] = starttime
+                    except Exception:
+                        self.posterror("Failed to execute audio processor!")
+                        traceback.print_exc()
+
+                elif datasource != "Test":
+
+                    #checks to make sure current receiver isn't busy
+                    for ctab in alltabdata:
+                        if ctab != curtabstr and (alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or
+                                                  alltabdata[ctab]["tabtype"] == "SignalProcessor_completed"):
+                            if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == datasource:
+                                self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
+                                return
+
+                curtabnum = alltabdata[curtabstr]["tabnum"]
+                alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+                if alltabdata[curtabstr]["rawdata"]["starttime"] == 0:
+                    starttime = dt.datetime.utcnow()
+                    alltabdata[curtabstr]["rawdata"]["starttime"] = starttime
+
+                    if datasource[:5] != 'Audio':
                         if self.autodtg == 1:#populates date and time if requested
                             curdatestr = str(starttime.year) + str(starttime.month).zfill(2) + str(starttime.day).zfill(2)
                             alltabdata[curtabstr]["tabwidgets"]["dateedit"].setText(curdatestr)
@@ -622,26 +656,27 @@ class RunProgram(QMainWindow):
                             alltabdata[curtabstr]["tabwidgets"]["timeedit"].setText(curtimestr)
                         if self.autoid == 1:
                             alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.platformID)
-                    else:
-                        starttime = alltabdata[curtabstr]["rawdata"]["starttime"]
+                else:
+                    starttime = alltabdata[curtabstr]["rawdata"]["starttime"]
 
-                    if datasource == 'Test':
-                        alltabdata[curtabstr]["processor"] = vsp.ThreadProcessorExample(curtabnum)
-                    else:
-                        if self.wrdll == 0:
-                            self.postwarning("The WiNRADIO driver was not successfully loaded! Please restart the program in order to initiate a processing tab with a connected WiNRADIO")
-                            return
-                        else:
-                           vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
-                           alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
-                                     alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],self.fftwindow,self.minfftratio,self.minsiglev)
-                           alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
+                if self.wrdll == 0 and datasource != 'Test' and datasource[:5] != 'Audio':
+                    self.postwarning("The WiNRADIO driver was not successfully loaded! Please restart the program in order to initiate a processing tab with a connected WiNRADIO")
+                    return
+                else:
+                   vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
+                   alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
+                             alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],self.fftwindow,self.minfftratio,self.minsiglev)
+                   alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
 
-                    alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
-                    alltabdata[curtabstr]["processor"].signals.triggered.connect(self.triggerUI)
-                    alltabdata[curtabstr]["processor"].signals.terminated.connect(self.updateUIfinal)
-                    self.threadpool.start(alltabdata[curtabstr]["processor"])
-                    alltabdata[curtabstr]["isprocessing"] = True
+                alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
+                alltabdata[curtabstr]["processor"].signals.triggered.connect(self.triggerUI)
+                alltabdata[curtabstr]["processor"].signals.terminated.connect(self.updateUIfinal)
+
+                if datasource[:5] == 'Audio':
+                    alltabdata[curtabstr]["processor"].signals.updateprogress.connect(self.updateaudioprogressbar)
+
+                self.threadpool.start(alltabdata[curtabstr]["processor"])
+                alltabdata[curtabstr]["isprocessing"] = True
 
                 #the code is still running but data collection has at least been initialized. This allows self.savecurrenttab() to save LOG/EDF files
                 alltabdata[curtabstr]["tabtype"] = "SignalProcessor_completed"
@@ -658,18 +693,12 @@ class RunProgram(QMainWindow):
                 curtabstr = "Tab " + str(self.whatTab())
                 datasource = alltabdata[curtabstr]["datasource"]
 
-                if datasource == 'Audio':
-                    option = self.postwarning_option("This will stop reading the audio file. All progress will be lost. Proceed?")
-                    if option == 'okay':
-                        alltabdata[curtabstr]["processor"].abort()
-                        alltabdata[curtabstr]["isprocessing"] = False #processing is done
-                        alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-                else:
-                    alltabdata[curtabstr]["processor"].abort()
-                    alltabdata[curtabstr]["isprocessing"] = False #processing is done
-                    alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+                alltabdata[curtabstr]["processor"].abort()
+                alltabdata[curtabstr]["isprocessing"] = False #processing is done
+                alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 
-                    # checks to make sure all other tabs with same receiver are stopped (because the radio device is stopped)
+                # checks to make sure all other tabs with same receiver are stopped (because the radio device is stopped)
+                if datasource != 'Test' and datasource != 'Audio':
                     for ctab in alltabdata:
                         if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
                             if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == datasource:
@@ -770,6 +799,10 @@ class RunProgram(QMainWindow):
             alltabdata[plottabstr]["ProcessorCanvas"].draw()
             alltabdata[plottabstr]["isprocessing"] = False
             alltabdata[plottabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+
+            if alltabdata[plottabstr]["tabwidgets"].__contains__("audioprogressbar"):
+                alltabdata[plottabstr]["tabwidgets"]["audioprogressbar"].deleteLater()
+
         except Exception:
             self.posterror("Failed to complete final UI update!")
             traceback.print_exc()
@@ -809,15 +842,10 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"].setValue(0)
             QApplication.processEvents()
 
-            #connecting signals, starting Audio Processor thread
-            curtabnum = alltabdata[curtabstr]["tabnum"]
-            alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            alltabdata[curtabstr]["processor"] = vsp.AudioProcessor(curtabnum,self.fftwindow,fname,self.minfftratio,self.minsiglev)
             alltabdata[curtabstr]["processor"].signals.updateprogress.connect(self.updateaudioprogressbar)
-            alltabdata[curtabstr]["processor"].signals.finished.connect(self.finishaudioprocessing)
-            alltabdata[curtabstr]["processor"].signals.aborted.connect(self.abortaudioprocessing)
             self.threadpool.start(alltabdata[curtabstr]["processor"])
             alltabdata[curtabstr]["isprocessing"] = True
+
         except Exception:
             self.posterror("Failed to execute audio processor!")
             traceback.print_exc()
@@ -830,76 +858,8 @@ class RunProgram(QMainWindow):
             alltabdata[plottabstr]["tabwidgets"]["audioprogressbar"].setValue(newprogress)
         except Exception:
             traceback.print_exc()
-        
-    @pyqtSlot(int,np.ndarray,np.ndarray,np.ndarray,np.ndarray)
-    def finishaudioprocessing(self,plottabnum,temperature,depth,frequency,time):
-        try:
-            plottabstr = self.gettabstrfromnum(plottabnum)
-            #cleaning up
-            alltabdata[plottabstr]["tabwidgets"]["audioprogressbar"].deleteLater()
-            alltabdata[plottabstr]["isprocessing"] = False #noting that the processing is done
 
-            #save data to tab dict
-            alltabdata[plottabstr]["rawdata"]["time"] = time
-            alltabdata[plottabstr]["rawdata"]["depth"] = depth
-            alltabdata[plottabstr]["rawdata"]["frequency"] = frequency
-            alltabdata[plottabstr]["rawdata"]["temperature"] = temperature
 
-            #scatter data
-            alltabdata[plottabstr]["ProcessorAx"].plot(temperature,depth,color='k')
-            alltabdata[plottabstr]["ProcessorCanvas"].draw()
-
-            #table data every 10 datapoints (~1 second)
-            for i,ctemp,cdep,cfreq,ctime in zip(range(len(temperature)),temperature,depth,frequency,time):
-                if np.isnan(ctemp):
-                    ctemp = '*****'
-                    cdep = '*****'
-                    curcolor = QColor(179, 179, 255) #light blue
-                else:
-                    curcolor = QColor(204, 255, 220) #light green
-                if np.isnan(cfreq):
-                    cfreq = 0.0
-                tabletime = QTableWidgetItem(str(ctime)) #creating table items
-                tabletime.setBackground(curcolor)
-                tabledepth = QTableWidgetItem(str(cdep))
-                tabledepth.setBackground(curcolor)
-                tablefreq = QTableWidgetItem(str(cfreq))
-                tablefreq.setBackground(curcolor)
-                tabletemp = QTableWidgetItem(str(ctemp))
-                tabletemp.setBackground(curcolor)
-                tablesignal = QTableWidgetItem('*****')
-                tablesignal.setBackground(curcolor)
-
-                crow = alltabdata[plottabstr]["tabwidgets"]["table"].rowCount() #appending data to table
-                alltabdata[plottabstr]["tabwidgets"]["table"].insertRow(crow)
-                alltabdata[plottabstr]["tabwidgets"]["table"].setCurrentCell(crow,0)
-                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 0, tabletime)
-                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 1, tablefreq)
-                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 2, tablesignal)
-                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 3, tabledepth)
-                alltabdata[plottabstr]["tabwidgets"]["table"].setItem(crow, 4, tabletemp)
-
-        except Exception:
-            self.posterror("Failed to complete audio processing")
-            traceback.print_exc()
-
-    @pyqtSlot(int,int)
-    def abortaudioprocessing(self,plottabnum,displaymessage):
-        try:
-            plottabstr = self.gettabstrfromnum(plottabnum)
-            #cleaning up
-            alltabdata[plottabstr]["tabwidgets"]["audioprogressbar"].deleteLater()
-            alltabdata[plottabstr]["isprocessing"] = False #noting that the processing is done
-
-            if displaymessage == 1:
-                self.posterror("An unspecified error occured while attempting to process the audio file")
-            elif displaymessage == 2:
-                self.posterror("Selected file type is unsupported!")
-
-        except Exception:
-            self.posterror("An unspecified error occured while processing the audio file, and a second error occured while aborting the audio processor.")
-            traceback.print_exc()
-        
         
 # =============================================================================
 #         CHECKS/PREPS TAB TO TRANSITION TO PROFILE EDITOR MODE
@@ -1260,14 +1220,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setSingleStep(1)
             alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setValue(0)
             alltabdata[curtabstr]["tabwidgets"]["depthdelay"].valueChanged.connect(self.applychanges)
-            
-            # alltabdata[curtabstr]["tabwidgets"]["mdslidetitle"] = QLabel('Inflection Point Threshold (C/m<sup>2</sup>): ' + str(alltabdata[curtabstr]["maxderiv"])) #10
-            # alltabdata[curtabstr]["tabwidgets"]["mdslide"] = QSlider(Qt.Horizontal) #11
-            # alltabdata[curtabstr]["tabwidgets"]["mdslide"].setValue(int(alltabdata[curtabstr]["maxderiv"]*100))
-            # alltabdata[curtabstr]["tabwidgets"]["mdslide"].setMinimum(0)
-            # alltabdata[curtabstr]["tabwidgets"]["mdslide"].setMaximum(400)
-            # alltabdata[curtabstr]["tabwidgets"]["mdslide"].valueChanged[int].connect(self.changeMDvalue)
-            
+
             alltabdata[curtabstr]["tabwidgets"]["rerunqc"] = QPushButton('Re-QC Profile (Reset)') #12
             alltabdata[curtabstr]["tabwidgets"]["rerunqc"].clicked.connect(self.rerunqc)    
             
@@ -1887,7 +1840,11 @@ class RunProgram(QMainWindow):
                     try:
                         oldfile = 'tempwav_' + str(alltabdata[curtabstr]["tabnum"]) + '.WAV'
                         newfile = outdir + slash + filename + '.WAV'
-                        os.rename(oldfile,newfile)
+
+                        if os.path.exists(newfile):
+                            os.remove(newfile)
+
+                        shutil.copy(oldfile,newfile)
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save WAV file")
@@ -1896,9 +1853,13 @@ class RunProgram(QMainWindow):
                     try:
                         oldfile = 'sigdata_' + str(alltabdata[curtabstr]["tabnum"]) + '.txt'
                         newfile = outdir + slash + filename + '.sigdata'
-                        os.rename(oldfile, newfile)
+
+                        if os.path.exists(newfile):
+                            os.remove(newfile)
+
+                        shutil.copy(oldfile, newfile)
                     except Exception:
-                        pass
+                        traceback.print_exc()
 
             else:
                 self.postwarning('You must process the profile before attempting to save data!')

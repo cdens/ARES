@@ -215,9 +215,9 @@ class RunSettings(QMainWindow):
             self.dtgwarn = 0
 
         if self.processortabwidgets["renametab"].isChecked():
-            self.renametab = 1
+            self.renametabstodtg = 1
         else:
-            self.renametab = 0
+            self.renametabstodtg = 0
 
         if self.processortabwidgets["autosave"].isChecked():
             self.autosave = 1
@@ -329,7 +329,7 @@ class RunSettings(QMainWindow):
             if self.dtgwarn == 1:
                 self.processortabwidgets["dtgwarn"].setChecked(True)
             self.processortabwidgets["renametab"] = QCheckBox('Auto-rename tab to DTG on transition to profile editing mode') #13
-            if self.renametab == 1:
+            if self.renametabstodtg == 1:
                 self.processortabwidgets["renametab"].setChecked(True)
             self.processortabwidgets["autosave"] = QCheckBox('Autosave raw data files when transitioning to profile editor mode') #14
             if self.autosave == 1:
@@ -338,7 +338,7 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["fftwindowlabel"] = QLabel('FFT Window (s): ' +str(self.fftwindow).ljust(4,'0')) #15
             self.processortabwidgets["fftwindow"] = QSlider(Qt.Horizontal) #16
             self.processortabwidgets["fftwindow"].setValue(int(self.fftwindow * 100))
-            self.processortabwidgets["fftwindow"].setMinimum(0)
+            self.processortabwidgets["fftwindow"].setMinimum(10)
             self.processortabwidgets["fftwindow"].setMaximum(100)
             self.processortabwidgets["fftwindow"].valueChanged[int].connect(self.changefftwindow)
 
@@ -446,6 +446,7 @@ class RunSettings(QMainWindow):
             if self.checkforgaps == 1:
                 self.profeditortabwidgets["checkforgaps"].setChecked(True)
 
+            self.profres = float(self.profres)
             self.profeditortabwidgets["profreslabel"] = QLabel(
                 'Minimum Profile Resolution (m): ' + str(float(self.profres)).ljust(4,'0'))  # 15
             self.profeditortabwidgets["profres"] = QSlider(Qt.Horizontal)  # 16
@@ -577,7 +578,7 @@ class RunSettings(QMainWindow):
         else:
             self.processortabwidgets["dtgwarn"].setChecked(False)
 
-        if self.renametab == 1:
+        if self.renametabstodtg == 1:
             self.processortabwidgets["renametab"].setChecked(True)
         else:
             self.processortabwidgets["renametab"].setChecked(False)
