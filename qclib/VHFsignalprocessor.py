@@ -4,7 +4,6 @@
 import numpy as np
 from scipy.io import wavfile #for wav
 import wave
-from pydub import AudioSegment #for mp3
 
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject
 from PyQt5.Qt import QRunnable
@@ -133,7 +132,10 @@ class ThreadProcessor(QRunnable):
             self.audiofile = datasource[6:]
             self.isfromaudio = True
             self.f_s, snd = wavfile.read(self.audiofile)
-            self.audiostream = snd[:, 0]
+            try: #if left/right stereo
+                self.audiostream = snd[:, 0]
+            except:
+                self.audiostream = snd
         elif datasource == 'Test':
             self.audiofile = 'testdata/MZ000006.WAV'
             self.isfromtest = True
@@ -276,7 +278,7 @@ class ThreadProcessor(QRunnable):
                     else:
                         self.disconnectcount = 0
                         self.bufferlen = len(self.audiostream)
-                    if self.disconnectcount >= 30 and not self.wrdll.IsDeviceConnected(self.hradio):
+                    if self.disconnectcount >= 30: # and not self.wrdll.IsDeviceConnected(self.hradio):
                         self.wrdll.SetupStreams(self.hradio, None, None, None, None)
                         self.wrdll.CloseRadioDevice(self.hradio)
                         self.signals.failed.emit(7)
