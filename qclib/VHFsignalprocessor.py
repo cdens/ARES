@@ -278,7 +278,7 @@ class ThreadProcessor(QRunnable):
                     else:
                         self.disconnectcount = 0
                         self.bufferlen = len(self.audiostream)
-                    if self.disconnectcount >= 30: # and not self.wrdll.IsDeviceConnected(self.hradio):
+                    if self.disconnectcount >= 30 and not self.wrdll.IsDeviceConnected(self.hradio):
                         self.wrdll.SetupStreams(self.hradio, None, None, None, None)
                         self.wrdll.CloseRadioDevice(self.hradio)
                         self.signals.failed.emit(7)
