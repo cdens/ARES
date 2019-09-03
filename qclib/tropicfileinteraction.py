@@ -457,7 +457,7 @@ def writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
         lat = abs(lat)
     latfloor = np.floor(lat)
     latrem = np.round((lat - latfloor)*1000)
-    latstr = signstr + str(int(latfloor)).zfill(2) + '.' + str(int(latrem))
+    latstr = signstr + str(int(latfloor)).zfill(2) + '.' + str(int(latrem)).rjust(3,'0')
 
     #formatting longitude string
     if lon >= 0:
@@ -467,7 +467,7 @@ def writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
         lon = abs(lon)
     lonfloor = np.floor(lon)
     lonrem = np.round((lon - lonfloor)*1000)
-    lonstr = signstr + str(int(lonfloor)).zfill(3) + '.' + str(int(lonrem))
+    lonstr = signstr + str(int(lonfloor)).zfill(3) + '.' + str(int(lonrem)).rjust(3,'0')
 
 
     line = (str(year) + '   ' + str(dayofyear) + '   ' + str(time) + '   ' + latstr + '   ' +
