@@ -36,7 +36,7 @@ class RunSettings(QMainWindow):
     #   INITIALIZE WINDOW, INTERFACE
     # =============================================================================
     def __init__(self,autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig, dtgwarn,
-                 renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, useclimobottom, overlayclimo,
+                 renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
                  comparetoclimo, savefin, savejjvv, saveprof, saveloc, useoceanbottom, checkforgaps, maxderiv, profres):
         super().__init__()
 
@@ -46,7 +46,7 @@ class RunSettings(QMainWindow):
             self.signals = SettingsSignals()
 
             self.saveinputsettings(autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig,
-                                   dtgwarn, renametabstodtg, autosave, fftwindow, minfftratio, minsiglev,
+                                   dtgwarn, renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,
                                    useclimobottom, overlayclimo, comparetoclimo, savefin, savejjvv, saveprof, saveloc,
                                    useoceanbottom, checkforgaps, maxderiv, profres)
             # self.setdefaultsettings()  # Default autoQC preferences
@@ -103,7 +103,7 @@ class RunSettings(QMainWindow):
     #     SAVE INPUT SETTINGS TO CLASS
     # =============================================================================
     def saveinputsettings(self, autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig, dtgwarn,
-                           renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, useclimobottom, overlayclimo,
+                           renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
                            comparetoclimo, savefin, savejjvv, saveprof, saveloc, useoceanbottom, checkforgaps, maxderiv,
                            profres):
 
@@ -122,6 +122,8 @@ class RunSettings(QMainWindow):
         self.fftwindow = fftwindow  # window to run FFT (in seconds)
         self.minfftratio = minfftratio  # minimum signal to noise ratio to ID data
         self.minsiglev = minsiglev  # minimum total signal level to receive data
+        self.triggerfftratio = triggerfftratio  # minimum signal to noise ratio to ID data
+        self.triggersiglev = triggersiglev  # minimum total signal level to receive data
 
         # profeditorpreferences
         self.useclimobottom = useclimobottom  # use climatology to ID bottom strikes
@@ -158,6 +160,9 @@ class RunSettings(QMainWindow):
         self.fftwindow = 0.3  # window to run FFT (in seconds)
         self.minfftratio = 0.5  # minimum signal to noise ratio to ID data
         self.minsiglev = 5E6  # minimum total signal level to receive data
+
+        self.triggerfftratio = 0.75  # minimum signal to noise ratio to ID data
+        self.triggersiglev = 1E7  # minimum total signal level to receive data
 
         #profeditorpreferences
         self.useclimobottom = 1  # use climatology to ID bottom strikes
@@ -227,6 +232,9 @@ class RunSettings(QMainWindow):
         self.fftwindow = float(self.processortabwidgets["fftwindow"].value())/100
         self.minsiglev = 10**(float(self.processortabwidgets["fftsiglev"].value())/100)
         self.minfftratio = float(self.processortabwidgets["fftratio"].value())/100
+
+        self.triggersiglev = 10**(float(self.processortabwidgets["triggersiglev"].value())/100)
+        self.triggerfftratio = float(self.processortabwidgets["triggerratio"].value())/100
 
         self.platformID = self.processortabwidgets["IDedit"].text()
 
@@ -356,20 +364,39 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["fftratio"].setMinimum(0)
             self.processortabwidgets["fftratio"].setMaximum(100)
             self.processortabwidgets["fftratio"].valueChanged[int].connect(self.changefftratio)
+
+            trigsigsliderval = np.log10(self.triggersiglev)
+            self.processortabwidgets["triggersiglevlabel"] = QLabel(
+                'Trigger Signal Level (log[x]): ' + str(np.round(trigsigsliderval, 2)).ljust(4, '0'))  # 17
+            self.processortabwidgets["triggersiglev"] = QSlider(Qt.Horizontal)  # 18
+            self.processortabwidgets["triggersiglev"].setMinimum(400)
+            self.processortabwidgets["triggersiglev"].setMaximum(900)
+            self.processortabwidgets["triggersiglev"].setValue(int(sigsliderval * 100))
+            self.processortabwidgets["triggersiglev"].valueChanged[int].connect(self.changetriggersiglev)
+
+            self.processortabwidgets["triggerratiolabel"] = QLabel(
+                'Trigger Signal Ratio (%): ' + str(np.round(self.triggerfftratio * 100)).ljust(4, '0'))  # 19
+            self.processortabwidgets["triggerratio"] = QSlider(Qt.Horizontal)  # 20
+            self.processortabwidgets["triggerratio"].setValue(int(self.minfftratio * 100))
+            self.processortabwidgets["triggerratio"].setMinimum(0)
+            self.processortabwidgets["triggerratio"].setMaximum(100)
+            self.processortabwidgets["triggerratio"].valueChanged[int].connect(self.changetriggerratio)
+
             # formatting widgets
             self.processortabwidgets["IDlabel"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
 
-            # should be 19 entries
+            # should be 24 entries
             widgetorder = ["autopopulatetitle", "autodtg", "autolocation", "autoID", "IDlabel",
                            "IDedit", "filesavetypes", "savelog", "saveedf","savewav", "savesig",
                            "dtgwarn", "renametab", "autosave", "fftwindowlabel", "fftwindow",
-                           "fftsiglevlabel", "fftsiglev", "fftratiolabel","fftratio"]
+                           "fftsiglevlabel", "fftsiglev", "fftratiolabel","fftratio", "triggersiglevlabel",
+                           "triggersiglev","triggerratiolabel","triggerratio"]
 
-            wcols = [1, 1, 1, 1, 1, 2, 4, 4, 4, 4, 4, 1, 1, 1, 5, 5, 5, 5, 5, 5]
-            wrows = [1, 2, 3, 4, 5, 5, 1, 2, 3, 4, 5, 7, 8, 9, 2, 3, 5, 6, 8, 9]
+            wcols = [1, 1, 1, 1, 1, 2, 4, 4, 4, 4, 4, 1, 1, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
+            wrows = [1, 2, 3, 4, 5, 5, 1, 2, 3, 4, 5, 7, 8, 9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-            wrext = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-            wcolext = [2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1]
+            wrext = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            wcolext = [2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
             # adding user inputs
             for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
@@ -514,6 +541,16 @@ class RunSettings(QMainWindow):
         self.minfftratio = float(value) / 100
         self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.minfftratio*100)).ljust(4,'0'))
 
+    def changetriggersiglev(self, value):
+        trigsigsliderval = float(value) / 100
+        self.triggersiglev = 10**trigsigsliderval
+        self.processortabwidgets["triggersiglevlabel"].setText('Trigger Signal Level (log[x]): ' + str(np.round(trigsigsliderval,2)).ljust(4,'0'))
+
+    def changetriggerratio(self, value):
+        self.triggerfftratio = float(value) / 100
+        self.processortabwidgets["triggerratiolabel"].setText('Trigger Signal Ratio (%): ' + str(np.round(self.triggerfftratio*100)).ljust(4,'0'))
+
+
     def changeprofres(self, value):
         self.profres = float(value) / 10
         self.profeditortabwidgets["profreslabel"].setText('Minimum Profile Resolution (m): ' + str(float(self.profres)).ljust(4,'0'))
@@ -530,7 +567,7 @@ class RunSettings(QMainWindow):
         self.updatepreferences()
         self.signals.exported.emit(self.autodtg, self.autolocation, self.autoid, self.platformID, self.savelog,
                                    self.saveedf, self.savewav, self.savesig, self.dtgwarn, self.renametabstodtg,
-                                   self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.useclimobottom,
+                                   self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.triggerfftratio, self.triggersiglev, self.useclimobottom,
                                    self.overlayclimo, self.comparetoclimo, self.savefin, self.savejjvv, self.saveprof,
                                    self.saveloc, self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres)
 
@@ -597,6 +634,15 @@ class RunSettings(QMainWindow):
 
         self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.minfftratio * 100)))  # 19
         self.processortabwidgets["fftratio"].setValue(int(self.minfftratio * 100))
+
+        trigsigsliderval = np.log10(self.triggersiglev)
+        self.processortabwidgets["triggersiglevlabel"].setText(
+            'Trigger Signal Level (log[x]): ' + str(np.round(trigsigsliderval, 2)).ljust(4, '0'))  # 17
+        self.processortabwidgets["triggersiglev"].setValue(int(trigsigsliderval * 100))
+
+        self.processortabwidgets["triggerratiolabel"].setText(
+            'Trigger Signal Ratio (%): ' + str(np.round(self.triggerfftratio * 100)))  # 19
+        self.processortabwidgets["triggerratio"].setValue(int(self.triggerfftratio * 100))
 
         if self.useclimobottom == 1:
             self.profeditortabwidgets["useclimobottom"].setChecked(True)
@@ -686,5 +732,5 @@ class RunSettings(QMainWindow):
 
 # SIGNAL SETUP HERE
 class SettingsSignals(QObject):
-    exported = pyqtSignal(int,int,int,str,int,int,int,int,int,int,int,float,float,float,int,int,int,int,int,int,int,int,int,float,float)
+    exported = pyqtSignal(int,int,int,str,int,int,int,int,int,int,int,float,float,float,float,float,int,int,int,int,int,int,int,int,int,float,float)
     closed = pyqtSignal(bool)

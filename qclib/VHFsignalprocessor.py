@@ -104,7 +104,7 @@ def channelandfrequencylookup(value,direction):
 
 class ThreadProcessor(QRunnable):
 
-    def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, fftwindow, minfftratio, minsiglev, *args,**kwargs):
+    def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, *args,**kwargs):
         super(ThreadProcessor, self).__init__()
 
 
@@ -120,6 +120,8 @@ class ThreadProcessor(QRunnable):
         self.fftwindow = fftwindow
         self.minfftratio = minfftratio
         self.minsiglev = minsiglev
+        self.triggerfftratio = triggerfftratio
+        self.triggersiglev = triggersiglev
 
         self.txtfilename = "sigdata_" + str(self.curtabnum) + '.txt'
         self.txtfile = open(self.txtfilename, 'w')
@@ -329,10 +331,12 @@ class ThreadProcessor(QRunnable):
                     self.txtfile.write(cline)
 
                 # if statement to trigger reciever after first frequency arrives
-                if (not self.istriggered) and cfreq != 0:
+                if not self.istriggered and cfreq != 0 and ratiomax >= self.triggerfftratio and actmax >= self.triggersiglev:
                     self.istriggered = True
                     self.firstpointtime = ctime
                     self.signals.triggered.emit(self.curtabnum, ctime)
+                elif not self.istriggered:
+                    cfreq = 0
 
                 if self.istriggered:
                     timefromtrigger = ctime - self.firstpointtime
@@ -396,14 +400,17 @@ class ThreadProcessor(QRunnable):
             self.wrdll.CloseRadioDevice(self.hradio)
             return
 
-    @pyqtSlot(float,float,int)
-    def changethresholds(self,fftwindow,minfftratio,minsiglev):
+    @pyqtSlot(float,float,int,float,int)
+    def changethresholds(self,fftwindow,minfftratio,minsiglev,triggerfftratio,triggersiglev):
         if fftwindow <= 1:
             self.fftwindow = fftwindow
         else:
             self.fftwindow = 1
         self.minfftratio = minfftratio
         self.minsiglev = minsiglev
+        self.triggerfftratio = triggerfftratio
+        self.triggersiglev = triggersiglev
+        print("Update in thread: trigsig=" + str(triggersiglev) + ", trigratio=" + str(triggerfftratio) + ", minsig=" + str(minsiglev) + ", minratio=" +str(minfftratio) )
         
 
 class ThreadProcessorSignals(QObject):

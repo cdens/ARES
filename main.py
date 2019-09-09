@@ -148,6 +148,8 @@ class RunProgram(QMainWindow):
         self.fftwindow = 0.3  # window to run FFT (in seconds)
         self.minfftratio = 0.5  # minimum signal to noise ratio to ID data
         self.minsiglev = 5E6  # minimum total signal level to receive data
+        self.triggerfftratio = 0.75  # minimum signal to noise ratio to ID data
+        self.triggersiglev = 1E7  # minimum total signal level to receive data
 
         # profeditorpreferences
         self.useclimobottom = 1  # use climatology to ID bottom strikes
@@ -248,7 +250,7 @@ class RunProgram(QMainWindow):
             self.settingsthread = swin.RunSettings(self.autodtg, self.autolocation, self.autoid,
                                                                 self.platformID, self.savelog, self.saveedf, self.savewav,
                                                                 self.savesig, self.dtgwarn, self.renametabstodtg,
-                                                                self.autosave, self.fftwindow, self.minfftratio, self.minsiglev,
+                                                                self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.triggerfftratio, self.triggersiglev,
                                                                 self.useclimobottom, self.overlayclimo, self.comparetoclimo,
                                                                 self.savefin, self.savejjvv, self.saveprof, self.saveloc,
                                                                 self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres)
@@ -259,9 +261,9 @@ class RunProgram(QMainWindow):
             self.settingsthread.raise_()
             self.settingsthread.activateWindow()
 
-    @pyqtSlot(int,int,int,str,int,int,int,int,int,int,int,float,float,float,int,int,int,int,int,int,int,int,int,float,float)
+    @pyqtSlot(int,int,int,str,int,int,int,int,int,int,int,float,float,float,float,float,int,int,int,int,int,int,int,int,int,float,float)
     def updatesettings(self,autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn,
-                       renametabstodtg, autosave, fftwindow,minfftratio, minsiglev, useclimobottom, overlayclimo,
+                       renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
                        comparetoclimo,savefin, savejjvv, saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres):
 
         # processor preferences
@@ -279,6 +281,8 @@ class RunProgram(QMainWindow):
         self.fftwindow = fftwindow  # window to run FFT (in seconds)
         self.minfftratio = minfftratio  # minimum signal to noise ratio to ID data
         self.minsiglev = minsiglev  # minimum total signal level to receive data
+        self.triggerfftratio = triggerfftratio  # minimum signal to noise ratio to ID data
+        self.triggersiglev = triggersiglev  # minimum total signal level to receive data
 
         #update FFT threshold settings in all active threads
         self.updatefftsettings()
@@ -592,7 +596,7 @@ class RunProgram(QMainWindow):
             for ctab in alltabdata:
                 if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
                     if alltabdata[ctab]["isprocessing"]: # and alltabdata[ctab]["datasource"] != 'Test' and alltabdata[ctab]["datasource"] != 'Audio':
-                        alltabdata[curtabstr]["processor"].changethresholds(self.fftwindow,self.minfftratio,self.minsiglev)
+                        alltabdata[curtabstr]["processor"].changethresholds(self.fftwindow,self.minfftratio,self.minsiglev,self.triggerfftratio,self.triggersiglev)
 
         except Exception:
             traceback.print_exc()
@@ -665,7 +669,7 @@ class RunProgram(QMainWindow):
                 else:
                    vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
                    alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
-                             alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],self.fftwindow,self.minfftratio,self.minsiglev)
+                             alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],self.fftwindow,self.minfftratio,self.minsiglev,self.triggerfftratio,self.triggersiglev)
                    alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
 
                 alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)

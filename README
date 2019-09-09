@@ -129,7 +129,7 @@ Installer command (Linux/MacOs):
 pip install numpy matplotlib scipy PyShp PyQt5 cmocean netCDF4 Shapely fbs pydub
 
 Installer command (Windows):
-pip install numpy matplotlib scipy PyShp PyQt5 cmocean netCDF4 wheel fbs pydub
+pip install numpy matplotlib scipy PyShp PyQt5==5.9.0 cmocean netCDF4 wheel fbs pydub
 ***download Shapely wheel for Python v3.x from https://www.lfd.uci.edu/~gohlke/pythonlibs/- 
 ***should be Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl depending on Python version and windows type
 ***e.g. Shapely-1.6.4.post2-cp37-cp37m-win_amd64.whl for Python v3.7, Windows x64-bit
