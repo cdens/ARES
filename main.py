@@ -1997,6 +1997,10 @@ class RunProgram(QMainWindow):
                     self.postwarning('Invalid Time Entered!')
                     return
 
+                if year < 1000:
+                    self.postwarning('Invalid Year Entered (< 1000 AD)!')
+                    return
+
                 curtime = timemodule.gmtime()
                 deltat = dt.datetime(curtime[0],curtime[1],curtime[2],curtime[3],curtime[4],curtime[5]) - dt.datetime(year,month,day,hour,minute,0)
                 option = ''

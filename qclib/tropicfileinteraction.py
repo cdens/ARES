@@ -470,8 +470,8 @@ def writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
     lonstr = signstr + str(int(lonfloor)).zfill(3) + '.' + str(int(lonrem)).rjust(3,'0')
 
 
-    line = (str(year) + '   ' + str(dayofyear) + '   ' + str(time) + '   ' + latstr + '   ' +
-            lonstr + '   ' + str(num) + '   6   ' + str(len(depth)) + '   0   0   \n')
+    line = (str(year).zfill(4) + '   ' + str(dayofyear).zfill(3) + '   ' + str(time).zfill(4) + '   ' + latstr + '   ' +
+            lonstr + '   ' + str(num).zfill(2) + '   6   ' + str(len(depth)) + '   0   0   \n')
     f_out.write(line)
     
     
