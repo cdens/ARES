@@ -43,6 +43,7 @@ import qclib.makeAXBTplots as tplot
 import qclib.autoqc as qc
 import qclib.ocean_climatology_interaction as oci
 import qclib.VHFsignalprocessor as vsp
+import qclib.GPS_COM_interaction as gps
 import settingswindow as swin
 
 
@@ -134,17 +135,17 @@ class RunProgram(QMainWindow):
 # =============================================================================
     def setdefaults(self):
         # processor preferences
-        self.autodtg = 1  # auto determine profile date/time as system date/time on clicking "START"
-        self.autolocation = 1  # auto determine location with GPS
-        self.autoid = 1  # autopopulate platform ID
+        self.autodtg = True  # auto determine profile date/time as system date/time on clicking "START"
+        self.autolocation = True  # auto determine location with GPS
+        self.autoid = True  # autopopulate platform ID
         self.platformID = 'AFNNN'
-        self.savelog = 1
-        self.saveedf = 0
-        self.savewav = 1
-        self.savesig = 1
-        self.dtgwarn = 1  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
-        self.renametabstodtg = 1  # auto rename tab to dtg when loading profile editor
-        self.autosave = 0  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
+        self.savelog = True
+        self.saveedf = False
+        self.savewav = True
+        self.savesig = True
+        self.dtgwarn = True  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
+        self.renametabstodtg = True  # auto rename tab to dtg when loading profile editor
+        self.autosave = False  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
         self.fftwindow = 0.3  # window to run FFT (in seconds)
         self.minfftratio = 0.5  # minimum signal to noise ratio to ID data
         self.minsiglev = 5E6  # minimum total signal level to receive data
@@ -152,17 +153,20 @@ class RunProgram(QMainWindow):
         self.triggersiglev = 1E7  # minimum total signal level to receive data
 
         # profeditorpreferences
-        self.useclimobottom = 1  # use climatology to ID bottom strikes
-        self.overlayclimo = 1  # overlay the climatology on the plot
-        self.comparetoclimo = 1  # check for climatology mismatch and display result on plot
-        self.savefin = 1  # file types to save
-        self.savejjvv = 1
-        self.saveprof = 1
-        self.saveloc = 1
-        self.useoceanbottom = 1  # use NTOPO1 bathymetry data to ID bottom strikes
-        self.checkforgaps = 1  # look for/correct gaps in profile due to false starts from VHF interference
+        self.useclimobottom = True  # use climatology to ID bottom strikes
+        self.overlayclimo = True  # overlay the climatology on the plot
+        self.comparetoclimo = True  # check for climatology mismatch and display result on plot
+        self.savefin = True  # file types to save
+        self.savejjvv = True
+        self.savebufr = True
+        self.saveprof = True
+        self.saveloc = True
+        self.useoceanbottom = True  # use NTOPO1 bathymetry data to ID bottom strikes
+        self.checkforgaps = True  # look for/correct gaps in profile due to false starts from VHF interference
         self.maxderiv = 1.5  # d2Tdz2 threshold to call a point an inflection point
         self.profres = 8  # profile minimum vertical resolution (m)
+
+        self.comport = 'n'
         
         #setting slash dependent on OS
         global slash
@@ -252,8 +256,8 @@ class RunProgram(QMainWindow):
                                                                 self.savesig, self.dtgwarn, self.renametabstodtg,
                                                                 self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.triggerfftratio, self.triggersiglev,
                                                                 self.useclimobottom, self.overlayclimo, self.comparetoclimo,
-                                                                self.savefin, self.savejjvv, self.saveprof, self.saveloc,
-                                                                self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres)
+                                                                self.savefin, self.savejjvv, self.savebufr, self.saveprof, self.saveloc,
+                                                                self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres, self.comport)
             self.settingsthread.signals.exported.connect(self.updatesettings)
             self.settingsthread.signals.closed.connect(self.settingsclosed)
         else:
@@ -261,10 +265,10 @@ class RunProgram(QMainWindow):
             self.settingsthread.raise_()
             self.settingsthread.activateWindow()
 
-    @pyqtSlot(int,int,int,str,int,int,int,int,int,int,int,float,float,float,float,float,int,int,int,int,int,int,int,int,int,float,float)
+    @pyqtSlot(bool,bool,bool,str,bool,bool,bool,bool,bool,bool,bool,float,float,float,float,float,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,float,float,str)
     def updatesettings(self,autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn,
                        renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
-                       comparetoclimo,savefin, savejjvv, saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres):
+                       comparetoclimo,savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, comport):
 
         # processor preferences
         self.autodtg = autodtg  # auto determine profile date/time as system date/time on clicking "START"
@@ -293,12 +297,15 @@ class RunProgram(QMainWindow):
         self.comparetoclimo = comparetoclimo  # check for climatology mismatch and display result on plot
         self.savefin = savefin  # file types to save
         self.savejjvv = savejjvv
+        self.savebufr = savebufr
         self.saveprof = saveprof
         self.saveloc = saveloc
         self.useoceanbottom = useoceanbottom  # use NTOPO1 bathymetry data to ID bottom strikes
         self.checkforgaps = checkforgaps  # look for/correct gaps in profile due to false starts from VHF interference
         self.maxderiv = maxderiv  # d2Tdz2 threshold to call a point an inflection point
         self.profres = profres  # profile minimum vertical resolution (m)
+
+        self.comport = comport
 
     @pyqtSlot(bool)
     def settingsclosed(self,isclosed):
@@ -653,12 +660,17 @@ class RunProgram(QMainWindow):
                     alltabdata[curtabstr]["rawdata"]["starttime"] = starttime
 
                     if datasource[:5] != 'Audio':
-                        if self.autodtg == 1:#populates date and time if requested
+                        if self.autodtg:#populates date and time if requested
                             curdatestr = str(starttime.year) + str(starttime.month).zfill(2) + str(starttime.day).zfill(2)
                             alltabdata[curtabstr]["tabwidgets"]["dateedit"].setText(curdatestr)
                             curtimestr = str(starttime.hour).zfill(2) + str(starttime.minute).zfill(2)
                             alltabdata[curtabstr]["tabwidgets"]["timeedit"].setText(curtimestr)
-                        if self.autoid == 1:
+                        if self.autolocation and self.comport != 'n':
+                            lat, lon, gpsdate, flag = gps.getcurrentposition(self.comport, 20)
+                            if flag == 0 and abs((gpsdate - starttime).total_seconds()) <= 60:
+                                alltabdata[curtabstr]["tabwidgets"]["latedit"].setText(str(lat))
+                                alltabdata[curtabstr]["tabwidgets"]["lonedit"].setText(str(lon))
+                        if self.autoid:
                             alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.platformID)
                 else:
                     starttime = alltabdata[curtabstr]["rawdata"]["starttime"]
@@ -902,7 +914,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["rawdata"]["ID"] = identifier
             
             #saves profile if necessary
-            if self.autosave == 1:
+            if self.autosave:
                 self.savedataincurtab()
             else:
                 reply = QMessageBox.question(self, 'Save Raw Data?',
@@ -1125,10 +1137,10 @@ class RunProgram(QMainWindow):
             #limit profile depth by climatology cutoff, ocean depth cutoff
             maxdepth = np.ceil(np.max(depth))
             isbottomstrike = 0
-            if self.useoceanbottom == 1 and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
+            if self.useoceanbottom and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
                 maxdepth = oceandepth
                 isbottomstrike = 1
-            if self.useclimobottom == 1 and np.isnan(climobottomcutoff) == 0 and climobottomcutoff <= maxdepth:
+            if self.useclimobottom and np.isnan(climobottomcutoff) == 0 and climobottomcutoff <= maxdepth:
                 isbottomstrike = 1
                 maxdepth = climobottomcutoff
             isbelowmaxdepth = np.less_equal(depth,maxdepth)
@@ -1152,7 +1164,7 @@ class RunProgram(QMainWindow):
                 except:
                     alltabdata[curtabstr]["tabwidgets"][i] = 1 #bs variable- overwrites spacer item
                                 
-            if self.renametabstodtg == 1:
+            if self.renametabstodtg:
                 curtab = int(self.whatTab())
                 self.tabWidget.setTabText(curtab,dtg)  
                 
@@ -1555,10 +1567,10 @@ class RunProgram(QMainWindow):
             #limit profile depth by climatology cutoff, ocean depth cutoff
             maxdepth = np.ceil(np.max(depth))
             isbottomstrike = 0
-            if self.useoceanbottom == 1 and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
+            if self.useoceanbottom and np.isnan(oceandepth) == 0 and oceandepth <= maxdepth:
                 maxdepth = oceandepth
                 isbottomstrike = 1
-            if self.useclimobottom == 1 and np.isnan(climobottomcutoff) == 0 and climobottomcutoff <= maxdepth:
+            if self.useclimobottom and np.isnan(climobottomcutoff) == 0 and climobottomcutoff <= maxdepth:
                 isbottomstrike = 1
                 maxdepth = climobottomcutoff
             isbelowmaxdepth = np.less_equal(depth,maxdepth)
@@ -1723,7 +1735,7 @@ class RunProgram(QMainWindow):
                     curtab = int(self.whatTab())
                     filename = self.tabWidget.tabText(curtab)
                     
-                    if self.comparetoclimo == 1:
+                    if self.comparetoclimo:
                         matchclimo = alltabdata[curtabstr]["profdata"]["matchclimo"]
                     else:
                         matchclimo = 1
@@ -1733,7 +1745,7 @@ class RunProgram(QMainWindow):
                     QApplication.restoreOverrideCursor()
                     return False
 
-                if self.savefin == 1:
+                if self.savefin:
                     try:
                         depth1m = np.arange(0,np.floor(depth[-1]))
                         temperature1m = np.interp(depth1m,depth,temperature)
@@ -1741,14 +1753,20 @@ class RunProgram(QMainWindow):
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save FIN file")
-                if self.savejjvv == 1:
+                if self.savejjvv:
                     isbtmstrike = alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].isChecked()
                     try:
                         tfio.writejjvvfile(outdir + slash + filename + '.jjvv',temperature,depth,day,month,year,time,lat,lon,identifier,isbtmstrike)
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save JJVV file")
-                if self.saveprof == 1:
+                if self.savebufr:
+                    try:
+                        tfio.writebufrfile(outdir + slash + filename + '.bufr',temperature,depth,year,month,day,time,lon,lat,identifier,False,b'\0')
+                    except Exception:
+                        traceback.print_exc()
+                        self.posterror("Failed to save BUFR file")
+                if self.saveprof:
                     try:
                         fig1 = plt.figure()
                         fig1.clear()
@@ -1763,7 +1781,7 @@ class RunProgram(QMainWindow):
                     finally:
                         plt.close('fig1')
 
-                if self.saveloc == 1:
+                if self.saveloc:
                     try:
                         fig2 = plt.figure()
                         fig2.clear()
@@ -1806,7 +1824,7 @@ class RunProgram(QMainWindow):
 
                         #only checks validity of necessary data
                         try:
-                            if self.saveedf == 1:
+                            if self.saveedf:
                                 lat, lon, year, month, day, time, hour, minute = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, True, True)
                             else:
                                 _, _, year, month, day, time, hour, minute = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, False, True)
@@ -1827,20 +1845,20 @@ class RunProgram(QMainWindow):
                     QApplication.restoreOverrideCursor()
                     return False
                 
-                if self.savelog == 1:
+                if self.savelog:
                     try:
                         tfio.writelogfile(outdir + slash + filename + '.DTA',initdatestr,inittimestr,timefromstart,rawdepth,frequency,rawtemperature)
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save LOG file")
-                if self.saveedf == 1:
+                if self.saveedf:
                     try:
                         tfio.writeedffile(outdir + slash + filename + '.edf',rawtemperature,rawdepth,year,month,day,hour,minute,0,lat,lon)
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save EDF file")
 
-                if self.savewav == 1:
+                if self.savewav:
                     try:
                         oldfile = 'tempwav_' + str(alltabdata[curtabstr]["tabnum"]) + '.WAV'
                         newfile = outdir + slash + filename + '.WAV'
@@ -1853,7 +1871,7 @@ class RunProgram(QMainWindow):
                         traceback.print_exc()
                         self.posterror("Failed to save WAV file")
 
-                if self.savesig == 1:
+                if self.savesig:
                     try:
                         oldfile = 'sigdata_' + str(alltabdata[curtabstr]["tabnum"]) + '.txt'
                         newfile = outdir + slash + filename + '.sigdata'
@@ -2008,7 +2026,7 @@ class RunProgram(QMainWindow):
                 curtime = timemodule.gmtime()
                 deltat = dt.datetime(curtime[0],curtime[1],curtime[2],curtime[3],curtime[4],curtime[5]) - dt.datetime(year,month,day,hour,minute,0)
                 option = ''
-                if self.dtgwarn == 1:
+                if self.dtgwarn:
                     if deltat.days < 0:
                         option = self.postwarning_option("Drop time appears to be after the current time. Continue anyways?")
                     elif deltat.days > 1 or (deltat.days == 0 and deltat.seconds > 12*3600):

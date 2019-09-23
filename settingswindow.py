@@ -25,6 +25,8 @@ from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot, pyqtSignal, QObjec
 from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
 from PyQt5.Qt import QRunnable
 
+import qclib.GPS_COM_interaction as gps
+
 from ctypes import windll
 
 
@@ -37,7 +39,7 @@ class RunSettings(QMainWindow):
     # =============================================================================
     def __init__(self,autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig, dtgwarn,
                  renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
-                 comparetoclimo, savefin, savejjvv, saveprof, saveloc, useoceanbottom, checkforgaps, maxderiv, profres):
+                 comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps, maxderiv, profres, comport):
         super().__init__()
 
         try:
@@ -47,12 +49,13 @@ class RunSettings(QMainWindow):
 
             self.saveinputsettings(autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig,
                                    dtgwarn, renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,
-                                   useclimobottom, overlayclimo, comparetoclimo, savefin, savejjvv, saveprof, saveloc,
-                                   useoceanbottom, checkforgaps, maxderiv, profres)
+                                   useclimobottom, overlayclimo, comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc,
+                                   useoceanbottom, checkforgaps, maxderiv, profres, comport)
             # self.setdefaultsettings()  # Default autoQC preferences
 
             self.makeprocessorsettingstab()  # processor settings
             self.makeprofileeditorsettingstab() #profile editor tab
+            self.makegpssettingstab() #add GPS settings
 
         except Exception:
             traceback.print_exc()
@@ -104,8 +107,8 @@ class RunSettings(QMainWindow):
     # =============================================================================
     def saveinputsettings(self, autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig, dtgwarn,
                            renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
-                           comparetoclimo, savefin, savejjvv, saveprof, saveloc, useoceanbottom, checkforgaps, maxderiv,
-                           profres):
+                           comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps, maxderiv,
+                           profres, comport):
 
         # processor preferences
         self.autodtg = autodtg  # auto determine profile date/time as system date/time on clicking "START"
@@ -131,6 +134,7 @@ class RunSettings(QMainWindow):
         self.comparetoclimo = comparetoclimo  # check for climatology mismatch and display result on plot
         self.savefin = savefin  # file types to save
         self.savejjvv = savejjvv
+        self.savebufr = savebufr
         self.saveprof = saveprof
         self.saveloc = saveloc
         self.useoceanbottom = useoceanbottom  # use ETOPO1 bathymetry data to ID bottom strikes
@@ -138,6 +142,7 @@ class RunSettings(QMainWindow):
         self.maxderiv = maxderiv  # d2Tdz2 threshold to call a point an inflection point
         self.profres = profres  # profile minimum vertical resolution (m)
 
+        self.comport = comport # COM port for GPS feed
 
 
 
@@ -146,17 +151,17 @@ class RunSettings(QMainWindow):
     # =============================================================================
     def setdefaultsettings(self):
         # processor preferences
-        self.autodtg = 1  # auto determine profile date/time as system date/time on clicking "START"
-        self.autolocation = 1 #auto determine location with GPS
-        self.autoid = 1 #autopopulate platform ID
+        self.autodtg = True  # auto determine profile date/time as system date/time on clicking "START"
+        self.autolocation = True #auto determine location with GPS
+        self.autoid = True #autopopulate platform ID
         self.platformID = 'AFNNN'
-        self.savelog = 1
-        self.saveedf = 0
-        self.savewav = 1
-        self.savesig = 1
-        self.dtgwarn = 1  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
-        self.renametabstodtg = 1  # auto rename tab to dtg when loading profile editor
-        self.autosave = 0  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
+        self.savelog = True
+        self.saveedf = False
+        self.savewav = True
+        self.savesig = True
+        self.dtgwarn = True  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
+        self.renametabstodtg = True  # auto rename tab to dtg when loading profile editor
+        self.autosave = False  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
         self.fftwindow = 0.3  # window to run FFT (in seconds)
         self.minfftratio = 0.5  # minimum signal to noise ratio to ID data
         self.minsiglev = 5E6  # minimum total signal level to receive data
@@ -165,69 +170,34 @@ class RunSettings(QMainWindow):
         self.triggersiglev = 1E7  # minimum total signal level to receive data
 
         #profeditorpreferences
-        self.useclimobottom = 1  # use climatology to ID bottom strikes
-        self.overlayclimo = 1  # overlay the climatology on the plot
-        self.comparetoclimo = 1  # check for climatology mismatch and display result on plot
-        self.savefin = 1  # file types to save
-        self.savejjvv = 1
-        self.saveprof = 1
-        self.saveloc = 1
-        self.useoceanbottom = 1  # use NTOPO1 bathymetry data to ID bottom strikes
-        self.checkforgaps = 1  # look for/correct gaps in profile due to false starts from VHF interference
+        self.useclimobottom = True  # use climatology to ID bottom strikes
+        self.overlayclimo = True  # overlay the climatology on the plot
+        self.comparetoclimo = True  # check for climatology mismatch and display result on plot
+        self.savefin = True  # file types to save
+        self.savejjvv = True
+        self.savebufr = True
+        self.saveprof = True
+        self.saveloc = True
+        self.useoceanbottom = True  # use NTOPO1 bathymetry data to ID bottom strikes
+        self.checkforgaps = True  # look for/correct gaps in profile due to false starts from VHF interference
         self.maxderiv = 1.5  # d2Tdz2 threshold to call a point an inflection point
         self.profres = 8 #profile minimum vertical resolution (m)
 
+
     def updatepreferences(self):
 
-        if self.processortabwidgets["autodtg"].isChecked():
-            self.autodtg = 1
-        else:
-            self.autodtg = 0
+        self.autodtg = self.processortabwidgets["autodtg"].isChecked()
+        self.autolocation = self.processortabwidgets["autolocation"].isChecked()
+        self.autoid = self.processortabwidgets["autoID"].isChecked()
 
-        if self.processortabwidgets["autolocation"].isChecked():
-            self.autolocation = 1
-        else:
-            self.autolocation = 0
+        self.savelog = self.processortabwidgets["savelog"].isChecked()
+        self.saveedf = self.processortabwidgets["saveedf"].isChecked()
+        self.savewav = self.processortabwidgets["savewav"].isChecked()
+        self.savesig = self.processortabwidgets["savesig"].isChecked()
 
-        if self.processortabwidgets["autoID"].isChecked():
-            self.autoid = 1
-        else:
-            self.autoid = 0
-
-        if self.processortabwidgets["savelog"].isChecked():
-            self.savelog = 1
-        else:
-            self.savelog = 0
-
-        if self.processortabwidgets["saveedf"].isChecked():
-            self.saveedf = 1
-        else:
-            self.saveedf = 0
-
-        if self.processortabwidgets["savewav"].isChecked():
-            self.savewav = 1
-        else:
-            self.savewav = 0
-
-        if self.processortabwidgets["savesig"].isChecked():
-            self.savesig = 1
-        else:
-            self.savesig = 0
-
-        if self.processortabwidgets["dtgwarn"].isChecked():
-            self.dtgwarn = 1
-        else:
-            self.dtgwarn = 0
-
-        if self.processortabwidgets["renametab"].isChecked():
-            self.renametabstodtg = 1
-        else:
-            self.renametabstodtg = 0
-
-        if self.processortabwidgets["autosave"].isChecked():
-            self.autosave = 1
-        else:
-            self.autosave = 0
+        self.dtgwarn = self.processortabwidgets["dtgwarn"].isChecked()
+        self.renametabstodtg = self.processortabwidgets["renametab"].isChecked()
+        self.autosave = self.processortabwidgets["autosave"].isChecked()
 
         self.fftwindow = float(self.processortabwidgets["fftwindow"].value())/100
         self.minsiglev = 10**(float(self.processortabwidgets["fftsiglev"].value())/100)
@@ -238,53 +208,23 @@ class RunSettings(QMainWindow):
 
         self.platformID = self.processortabwidgets["IDedit"].text()
 
-        if self.profeditortabwidgets["useclimobottom"].isChecked():
-            self.useclimobottom = 1
-        else:
-            self.useclimobottom = 0
+        self.useclimobottom = self.profeditortabwidgets["useclimobottom"].isChecked()
+        self.comparetoclimo =  self.profeditortabwidgets["comparetoclimo"].isChecked()
+        self.overlayclimo = self.profeditortabwidgets["overlayclimo"].isChecked()
 
-        if self.profeditortabwidgets["comparetoclimo"].isChecked():
-            self.comparetoclimo = 1
-        else:
-            self.comparetoclimo = 0
+        self.savefin = self.profeditortabwidgets["savefin"].isChecked()
+        self.savejjvv = self.profeditortabwidgets["savejjvv"].isChecked()
+        self.savebufr = self.profeditortabwidgets["savebufr"].isChecked()
+        self.saveprof = self.profeditortabwidgets["saveprof"].isChecked()
+        self.saveloc = self.profeditortabwidgets["saveloc"].isChecked()
 
-        if self.profeditortabwidgets["overlayclimo"].isChecked():
-            self.overlayclimo = 1
-        else:
-            self.overlayclimo = 0
-
-        if self.profeditortabwidgets["savefin"].isChecked():
-            self.savefin = 1
-        else:
-            self.savefin = 0
-
-        if self.profeditortabwidgets["savejjvv"].isChecked():
-            self.savejjvv = 1
-        else:
-            self.savejjvv = 0
-
-        if self.profeditortabwidgets["saveprof"].isChecked():
-            self.saveprof = 1
-        else:
-            self.saveprof = 0
-
-        if self.profeditortabwidgets["saveloc"].isChecked():
-            self.saveloc = 1
-        else:
-            self.saveloc = 0
-
-        if self.profeditortabwidgets["useoceanbottom"].isChecked():
-            self.useoceanbottom = 1
-        else:
-            self.useoceanbottom = 0
-
-        if self.profeditortabwidgets["checkforgaps"].isChecked():
-            self.checkforgaps = 1
-        else:
-            self.checkforgaps = 0
+        self.useoceanbottom = self.profeditortabwidgets["useoceanbottom"].isChecked()
+        self.checkforgaps = self.profeditortabwidgets["checkforgaps"].isChecked()
 
         self.profres = float(self.profeditortabwidgets["profres"].value())/10
         self.maxderiv = float(self.profeditortabwidgets["maxderiv"].value())/100
+
+        self.updatecomport()
 
 
     # =============================================================================
@@ -308,40 +248,30 @@ class RunSettings(QMainWindow):
             # making widgets
             self.processortabwidgets["autopopulatetitle"] = QLabel('Autopopulate Drop Entries:') #1
             self.processortabwidgets["autodtg"] = QCheckBox('Autopopulate DTG (UTC)') #2
-            if self.autodtg == 1:
-                self.processortabwidgets["autodtg"].setChecked(True)
+            self.processortabwidgets["autodtg"].setChecked(self.autodtg)
             self.processortabwidgets["autolocation"] = QCheckBox('Autopopulate Location') #3
-            if self.autolocation == 1:
-                self.processortabwidgets["autolocation"].setChecked(True)
+            self.processortabwidgets["autolocation"].setChecked(self.autolocation)
             self.processortabwidgets["autoID"] = QCheckBox('Autopopulate Platform Identifier') #4
-            if self.autoid == 1:
-                self.processortabwidgets["autoID"].setChecked(True)
+            self.processortabwidgets["autoID"].setChecked(self.autoid)
             self.processortabwidgets["IDlabel"] = QLabel('Platform Identifier:') #5
             self.processortabwidgets["IDedit"] = QLineEdit(self.platformID) #6
 
             self.processortabwidgets["filesavetypes"] = QLabel('Filetypes to save:       ') #7
             self.processortabwidgets["savelog"] = QCheckBox('LOG File') #8
-            if self.savelog == 1:
-                self.processortabwidgets["savelog"].setChecked(True)
+            self.processortabwidgets["savelog"].setChecked(self.savelog)
             self.processortabwidgets["saveedf"] = QCheckBox('EDF File') #9
-            if self.saveedf == 1:
-                self.processortabwidgets["saveedf"].setChecked(True)
+            self.processortabwidgets["saveedf"].setChecked(self.saveedf)
             self.processortabwidgets["savewav"] = QCheckBox('WAV File') #10
-            if self.savewav == 1:
-                self.processortabwidgets["savewav"].setChecked(True)
+            self.processortabwidgets["savewav"].setChecked(self.savewav)
             self.processortabwidgets["savesig"] = QCheckBox('Signal Data') #11
-            if self.savesig == 1:
-                self.processortabwidgets["savesig"].setChecked(True)
+            self.processortabwidgets["savesig"].setChecked(self.savesig)
 
             self.processortabwidgets["dtgwarn"] = QCheckBox('Warn if DTG is not within past 12 hours') #12
-            if self.dtgwarn == 1:
-                self.processortabwidgets["dtgwarn"].setChecked(True)
+            self.processortabwidgets["dtgwarn"].setChecked(self.dtgwarn)
             self.processortabwidgets["renametab"] = QCheckBox('Auto-rename tab to DTG on transition to profile editing mode') #13
-            if self.renametabstodtg == 1:
-                self.processortabwidgets["renametab"].setChecked(True)
+            self.processortabwidgets["renametab"].setChecked(self.renametabstodtg)
             self.processortabwidgets["autosave"] = QCheckBox('Autosave raw data files when transitioning to profile editor mode') #14
-            if self.autosave == 1:
-                self.processortabwidgets["autosave"].setChecked(True)
+            self.processortabwidgets["autosave"].setChecked(self.autosave)
 
             self.processortabwidgets["fftwindowlabel"] = QLabel('FFT Window (s): ' +str(self.fftwindow).ljust(4,'0')) #15
             self.processortabwidgets["fftwindow"] = QSlider(Qt.Horizontal) #16
@@ -421,6 +351,121 @@ class RunSettings(QMainWindow):
 
 
 
+
+
+
+    # =============================================================================
+    #     GPS COM PORT SELECTION TAB AND INPUTS HERE
+    # =============================================================================
+
+    def makegpssettingstab(self):
+        try:
+
+            self.gpstab = QWidget()
+            self.gpstablayout = QGridLayout()
+            self.setnewtabcolor(self.gpstab)
+
+            self.gpstablayout.setSpacing(10)
+
+            self.tabWidget.addTab(self.gpstab, 'GPS COM Selection')
+            self.tabWidget.setCurrentIndex(0)
+
+            # and add new buttons and other widgets
+            self.gpstabwidgets = {}
+
+            # making widgets
+            self.gpstabwidgets["updateports"] = QPushButton("Update COM Port List") # 1
+            self.gpstabwidgets["updateports"].clicked.connect(self.updategpslist)
+
+            self.gpstabwidgets["refreshgpsdata"] = QPushButton("Refresh GPS Info") # 2
+            self.gpstabwidgets["refreshgpsdata"].clicked.connect(self.refreshgpsdata)
+
+            self.gpstabwidgets["gpsdate"] = QLabel("Date/Time: ") # 3
+            self.gpstabwidgets["gpslat"] = QLabel("Latitude: ") # 4
+            self.gpstabwidgets["gpslon"] = QLabel("Longitude: ") # 5
+
+            self.gpstabwidgets["comporttitle"] = QLabel('COM Port Options:')  # 6
+            self.gpstabwidgets["comport"] = QComboBox()  # 7
+            self.gpstabwidgets["comport"].currentIndexChanged.connect(self.updatecomport)
+            self.updategpslist()
+            self.updatecomport()
+
+            # should be 24 entries
+            widgetorder = ["updateports", "refreshgpsdata", "gpsdate", "gpslat", "gpslon","comporttitle","comport"]
+
+            wcols = [1, 2, 1, 1, 1, 1, 1]
+            wrows = [1, 1, 5, 6, 7, 2, 3]
+            wrext = [1, 1, 1, 1, 1, 1, 1]
+            wcolext = [1, 1, 1, 1, 1, 1, 2]
+
+            # wcols = [1, 2, 4, 4, 4, 1, 1]
+            # wrows = [1, 1, 1, 2, 3, 2, 3]
+            # wrext = [1, 1, 1, 1, 1, 1, 1]
+            # wcolext = [1, 1, 1, 1, 1, 1, 2]
+
+            # adding user inputs
+            for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
+                self.gpstablayout.addWidget(self.gpstabwidgets[i], r, c, re, ce)
+
+            # Applying other preferences to grid layout
+            # cursize = self.frameGeometry()
+            # minwidthedge = int(0.15*cursize.width())
+            # minwidth4 = int(0.5*cursize.width())
+            # # self.gpstablayout.setColumnMinimumWidth(0, minwidthedge)
+            # # self.gpstablayout.setColumnMinimumWidth(3, minwidthedge)
+            # # self.gpstablayout.setColumnMinimumWidth(5, minwidthedge)
+            # self.gpstablayout.setColumnMinimumWidth(4, minwidth4)
+            self.gpstablayout.setRowStretch(0,4)
+            self.gpstablayout.setRowStretch(4,4)
+            self.gpstablayout.setRowStretch(8,4)
+
+            # making the current layout for the tab
+            self.gpstab.setLayout(self.gpstablayout)
+
+        except Exception:
+            traceback.print_exc()
+            self.posterror("Failed to build new GPS tab")
+
+    def updatecomport(self):
+        curcomnum = self.gpstabwidgets["comport"].currentIndex()
+        if curcomnum > 0:
+            self.comport = self.comports[curcomnum - 1]
+        else:
+            self.comport = 'n'
+        self.refreshgpsdata()
+
+    def updategpslist(self):
+        self.gpstabwidgets["comport"].clear()
+        self.gpstabwidgets["comport"].addItem('No COM Port Selected')
+        self.comports,comportoptions = gps.listcomports()
+        for curport in comportoptions:
+            self.gpstabwidgets["comport"].addItem(curport)
+
+    def refreshgpsdata(self):
+        if self.comport != 'n':
+            lat,lon,curdate,flag = gps.getcurrentposition(self.comport,20)
+            if flag == 0:
+                if lat > 0:
+                    latsign = 'N'
+                else:
+                    latsign = 'S'
+                if lon > 0:
+                    lonsign = 'E'
+                else:
+                    lonsign = 'W'
+                self.gpstabwidgets["gpsdate"].setText("Date/Time: {} UTC".format(curdate))
+                self.gpstabwidgets["gpslat"].setText("Latitude: {}{}".format(abs(lat),latsign))
+                self.gpstabwidgets["gpslon"].setText("Longitude: {}{}".format(abs(lon),lonsign))
+            elif flag == 1:
+                self.posterror("GPS request timed out!")
+            elif flag == 2:
+                self.posterror("Unable to communicate with specified COM port!")
+        else:
+            self.gpstabwidgets["gpsdate"].setText("Date/Time:")
+            self.gpstabwidgets["gpslat"].setText("Latitude:")
+            self.gpstabwidgets["gpslon"].setText("Longitude:")
+
+
     # =============================================================================
     #         PROFILE EDITOR TAB
     # =============================================================================
@@ -442,49 +487,42 @@ class RunSettings(QMainWindow):
             # making widgets
             self.profeditortabwidgets["climotitle"] = QLabel('Climatology Options:')  # 1
             self.profeditortabwidgets["useclimobottom"] = QCheckBox('Use climatology to detect bottom strikes')  # 2
-            if self.useclimobottom == 1:
-                self.profeditortabwidgets["useclimobottom"].setChecked(True)
+            self.profeditortabwidgets["useclimobottom"].setChecked(self.useclimobottom)
             self.profeditortabwidgets["comparetoclimo"] = QCheckBox('Autocompare profile to climatology')  # 3
-            if self.comparetoclimo == 1:
-                self.profeditortabwidgets["comparetoclimo"].setChecked(True)
+            self.profeditortabwidgets["comparetoclimo"].setChecked(self.comparetoclimo)
             self.profeditortabwidgets["overlayclimo"] = QCheckBox('Overlay climatology in saved plots')  # 4
-            if self.overlayclimo == 1:
-                self.profeditortabwidgets["overlayclimo"].setChecked(True)
+            self.profeditortabwidgets["overlayclimo"].setChecked(self.overlayclimo)
 
-            self.profeditortabwidgets["filesavetypes"] = QLabel('Filetypes to save:     ')  # 7
-            self.profeditortabwidgets["savefin"] = QCheckBox('FIN File')  # 8
-            if self.savefin == 1:
-                self.profeditortabwidgets["savefin"].setChecked(True)
-            self.profeditortabwidgets["savejjvv"] = QCheckBox('JJVV File')  # 9
-            if self.savejjvv == 1:
-                self.profeditortabwidgets["savejjvv"].setChecked(True)
-            self.profeditortabwidgets["saveprof"] = QCheckBox('Profile PNG')  # 10
-            if self.saveprof == 1:
-                self.profeditortabwidgets["saveprof"].setChecked(True)
-            self.profeditortabwidgets["saveloc"] = QCheckBox('Location PNG')  # 11
-            if self.saveloc == 1:
-                self.profeditortabwidgets["saveloc"].setChecked(True)
+            self.profeditortabwidgets["filesavetypes"] = QLabel('Filetypes to save:     ')  # 5
+            self.profeditortabwidgets["savefin"] = QCheckBox('FIN File')  # 6
+            self.profeditortabwidgets["savefin"].setChecked(self.savefin)
+            self.profeditortabwidgets["savejjvv"] = QCheckBox('JJVV File')  # 7
+            self.profeditortabwidgets["savejjvv"].setChecked(self.savejjvv)
+            self.profeditortabwidgets["savebufr"] = QCheckBox('BUFR File')  # 8
+            self.profeditortabwidgets["savebufr"].setChecked(self.savebufr)
+            self.profeditortabwidgets["saveprof"] = QCheckBox('Profile PNG')  # 9
+            self.profeditortabwidgets["saveprof"].setChecked(self.saveprof)
+            self.profeditortabwidgets["saveloc"] = QCheckBox('Location PNG')  # 10
+            self.profeditortabwidgets["saveloc"].setChecked(self.saveloc)
 
             self.profeditortabwidgets["useoceanbottom"] = QCheckBox(
-                'ID bottom strikes with NOAA ETOPO1 bathymetry data')  # 12
-            if self.useoceanbottom == 1:
-                self.profeditortabwidgets["useoceanbottom"].setChecked(True)
-            self.profeditortabwidgets["checkforgaps"] = QCheckBox('ID false starts due to VHF interference')  # 13
-            if self.checkforgaps == 1:
-                self.profeditortabwidgets["checkforgaps"].setChecked(True)
+                'ID bottom strikes with NOAA ETOPO1 bathymetry data')  # 11
+            self.profeditortabwidgets["useoceanbottom"].setChecked(self.useoceanbottom)
+            self.profeditortabwidgets["checkforgaps"] = QCheckBox('ID false starts due to VHF interference')  # 12
+            self.profeditortabwidgets["checkforgaps"].setChecked(self.checkforgaps)
 
             self.profres = float(self.profres)
             self.profeditortabwidgets["profreslabel"] = QLabel(
-                'Minimum Profile Resolution (m): ' + str(float(self.profres)).ljust(4,'0'))  # 15
-            self.profeditortabwidgets["profres"] = QSlider(Qt.Horizontal)  # 16
+                'Minimum Profile Resolution (m): ' + str(float(self.profres)).ljust(4,'0'))  # 13
+            self.profeditortabwidgets["profres"] = QSlider(Qt.Horizontal)  # 14
             self.profeditortabwidgets["profres"].setValue(int(self.profres * 10))
             self.profeditortabwidgets["profres"].setMinimum(0)
             self.profeditortabwidgets["profres"].setMaximum(500)
             self.profeditortabwidgets["profres"].valueChanged[int].connect(self.changeprofres)
 
             self.profeditortabwidgets["maxderivlabel"] = QLabel(
-                'Inflection Point Threshold (C/m<sup>2</sup>): ' + str(self.maxderiv).ljust(4,'0'))  # 17
-            self.profeditortabwidgets["maxderiv"] = QSlider(Qt.Horizontal)  # 18
+                'Inflection Point Threshold (C/m<sup>2</sup>): ' + str(self.maxderiv).ljust(4,'0'))  # 15
+            self.profeditortabwidgets["maxderiv"] = QSlider(Qt.Horizontal)  # 16
             self.profeditortabwidgets["maxderiv"].setMinimum(0)
             self.profeditortabwidgets["maxderiv"].setMaximum(400)
             self.profeditortabwidgets["maxderiv"].setValue(int(self.maxderiv * 100))
@@ -492,15 +530,13 @@ class RunSettings(QMainWindow):
 
             # should be 19 entries
             widgetorder = ["climotitle", "useclimobottom", "comparetoclimo", "overlayclimo", "filesavetypes", "savefin",
-                           "savejjvv",
-                           "saveprof", "saveloc", "useoceanbottom", "checkforgaps", "profreslabel", "profres",
-                           "maxderivlabel", "maxderiv"]
+                           "savejjvv", "savebufr", "saveprof", "saveloc", "useoceanbottom", "checkforgaps", "profreslabel",
+                           "profres", "maxderivlabel", "maxderiv"]
 
-            wcols = [1, 1, 1, 1, 4, 4, 4, 4, 4, 1, 1, 5, 5, 5, 5]
-            wrows = [1, 2, 3, 4, 1, 2, 3, 4, 5, 7, 8, 2, 3, 5, 6]
-
-            wrext = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-            wcolext = [2, 2, 2, 2, 1, 1, 1, 1, 1, 4, 4, 1, 1, 1, 1]
+            wcols = [1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 1, 1, 5, 5, 5, 5]
+            wrows = [1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 8, 9, 2, 3, 5, 6]
+            wrext = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            wcolext = [2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 4, 4, 1, 1, 1, 1]
 
             # adding user inputs
             for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
@@ -514,7 +550,7 @@ class RunSettings(QMainWindow):
             self.profeditortablayout.setColumnStretch(4, 3)
             for i in range(0, 12):
                 self.profeditortablayout.setRowStretch(i, 1)
-            self.profeditortablayout.setRowStretch(11, 4)
+            self.profeditortablayout.setRowStretch(12, 4)
 
             # making the current layout for the tab
             self.profeditortab.setLayout(self.profeditortablayout)
@@ -524,6 +560,8 @@ class RunSettings(QMainWindow):
             self.posterror("Failed to build profile editor tab!")
         finally:
             QApplication.restoreOverrideCursor()
+
+
 
     # =============================================================================
     #         SLIDER CHANGE FUNCTION CALLS
@@ -568,62 +606,25 @@ class RunSettings(QMainWindow):
         self.signals.exported.emit(self.autodtg, self.autolocation, self.autoid, self.platformID, self.savelog,
                                    self.saveedf, self.savewav, self.savesig, self.dtgwarn, self.renametabstodtg,
                                    self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.triggerfftratio, self.triggersiglev, self.useclimobottom,
-                                   self.overlayclimo, self.comparetoclimo, self.savefin, self.savejjvv, self.saveprof,
-                                   self.saveloc, self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres)
+                                   self.overlayclimo, self.comparetoclimo, self.savefin, self.savejjvv, self.savebufr, self.saveprof,
+                                   self.saveloc, self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres, self.comport)
 
 
     def resetdefaults(self):
         self.setdefaultsettings()
 
-        if self.autodtg == 1:
-            self.processortabwidgets["autodtg"].setChecked(True)
-        else:
-            self.processortabwidgets["autodtg"].setChecked(False)
+        self.processortabwidgets["autodtg"].setChecked(self.autodtg)
+        self.processortabwidgets["autolocation"].setChecked(self.autolocation)
+        self.processortabwidgets["autoID"].setChecked(self.autoid)
 
-        if self.autolocation == 1:
-            self.processortabwidgets["autolocation"].setChecked(True)
-        else:
-            self.processortabwidgets["autolocation"].setChecked(False)
+        self.processortabwidgets["savelog"].setChecked(self.savelog)
+        self.processortabwidgets["saveedf"].setChecked(self.saveedf)
+        self.processortabwidgets["savewav"].setChecked(self.savewav)
+        self.processortabwidgets["savesig"].setChecked(self.savesig)
 
-        if self.autoid == 1:
-            self.processortabwidgets["autoID"].setChecked(True)
-        else:
-            self.processortabwidgets["autoID"].setChecked(False)
-
-        if self.savelog == 1:
-            self.processortabwidgets["savelog"].setChecked(True)
-        else:
-            self.processortabwidgets["savelog"].setChecked(False)
-
-        if self.saveedf == 1:
-            self.processortabwidgets["saveedf"].setChecked(True)
-        else:
-            self.processortabwidgets["saveedf"].setChecked(False)
-
-        if self.savewav == 1:
-            self.processortabwidgets["savewav"].setChecked(True)
-        else:
-            self.processortabwidgets["savewav"].setChecked(False)
-
-        if self.savesig == 1:
-            self.processortabwidgets["savesig"].setChecked(True)
-        else:
-            self.processortabwidgets["savesig"].setChecked(False)
-
-        if self.dtgwarn == 1:
-            self.processortabwidgets["dtgwarn"].setChecked(True)
-        else:
-            self.processortabwidgets["dtgwarn"].setChecked(False)
-
-        if self.renametabstodtg == 1:
-            self.processortabwidgets["renametab"].setChecked(True)
-        else:
-            self.processortabwidgets["renametab"].setChecked(False)
-
-        if self.autosave == 1:
-            self.processortabwidgets["autosave"].setChecked(True)
-        else:
-            self.processortabwidgets["autosave"].setChecked(False)
+        self.processortabwidgets["dtgwarn"].setChecked(self.dtgwarn)
+        self.processortabwidgets["renametab"].setChecked(self.renametabstodtg)
+        self.processortabwidgets["autosave"].setChecked(self.autosave)
 
         self.processortabwidgets["fftwindowlabel"].setText('FFT Window (s): ' + str(self.fftwindow))  # 15
         self.processortabwidgets["fftwindow"].setValue(int(self.fftwindow * 100))
@@ -644,57 +645,24 @@ class RunSettings(QMainWindow):
             'Trigger Signal Ratio (%): ' + str(np.round(self.triggerfftratio * 100)))  # 19
         self.processortabwidgets["triggerratio"].setValue(int(self.triggerfftratio * 100))
 
-        if self.useclimobottom == 1:
-            self.profeditortabwidgets["useclimobottom"].setChecked(True)
-        else:
-            self.profeditortabwidgets["useclimobottom"].setChecked(False)
+        self.profeditortabwidgets["useclimobottom"].setChecked(self.useclimobottom)
+        self.profeditortabwidgets["comparetoclimo"].setChecked(self.comparetoclimo)
+        self.profeditortabwidgets["overlayclimo"].setChecked(self.overlayclimo)
 
-        if self.comparetoclimo == 1:
-            self.profeditortabwidgets["comparetoclimo"].setChecked(True)
-        else:
-            self.profeditortabwidgets["comparetoclimo"].setChecked(False)
+        self.profeditortabwidgets["savefin"].setChecked(self.savefin)
+        self.profeditortabwidgets["savejjvv"].setChecked(self.savejjvv)
+        self.profeditortabwidgets["savebufr"].setChecked(self.savebufr)
+        self.profeditortabwidgets["saveprof"].setChecked(self.saveprof)
+        self.profeditortabwidgets["saveloc"].setChecked(self.saveloc)
 
-        if self.overlayclimo == 1:
-            self.profeditortabwidgets["overlayclimo"].setChecked(True)
-        else:
-            self.profeditortabwidgets["overlayclimo"].setChecked(False)
-
-        if self.savefin == 1:
-            self.profeditortabwidgets["savefin"].setChecked(True)
-        else:
-            self.profeditortabwidgets["savefin"].setChecked(False)
-
-        if self.savejjvv == 1:
-            self.profeditortabwidgets["savejjvv"].setChecked(True)
-        else:
-            self.profeditortabwidgets["savejjvv"].setChecked(False)
-
-        if self.saveprof == 1:
-            self.profeditortabwidgets["saveprof"].setChecked(True)
-        else:
-            self.profeditortabwidgets["saveprof"].setChecked(False)
-
-        if self.saveloc == 1:
-            self.profeditortabwidgets["saveloc"].setChecked(True)
-        else:
-            self.profeditortabwidgets["saveloc"].setChecked(False)
-
-        if self.useoceanbottom == 1:
-            self.profeditortabwidgets["useoceanbottom"].setChecked(True)
-        else:
-            self.profeditortabwidgets["useoceanbottom"].setChecked(False)
-
-        if self.checkforgaps == 1:
-            self.profeditortabwidgets["checkforgaps"].setChecked(True)
-        else:
-            self.profeditortabwidgets["checkforgaps"].setChecked(False)
+        self.profeditortabwidgets["useoceanbottom"].setChecked(self.useoceanbottom)
+        self.profeditortabwidgets["checkforgaps"].setChecked(self.checkforgaps)
 
         self.profeditortabwidgets["profreslabel"].setText('Minimum Profile Resolution (m): ' + str(self.profres).ljust(4, '0'))  # 15
         self.profeditortabwidgets["profres"].setValue(int(self.profres * 10))
 
         self.profeditortabwidgets["maxderivlabel"].setText('Inflection Point Threshold (C/m<sup>2</sup>): ' + str(self.maxderiv).ljust(4, '0'))  # 17
         self.profeditortabwidgets["maxderiv"].setValue(int(self.maxderiv * 100))
-
 
 
     # =============================================================================
@@ -729,8 +697,16 @@ class RunSettings(QMainWindow):
         event.accept()
         self.signals.closed.emit(True)
 
+    def posterror(self,errortext):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Critical)
+        msg.setText(errortext)
+        msg.setWindowTitle("Error")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+
 
 # SIGNAL SETUP HERE
 class SettingsSignals(QObject):
-    exported = pyqtSignal(int,int,int,str,int,int,int,int,int,int,int,float,float,float,float,float,int,int,int,int,int,int,int,int,int,float,float)
+    exported = pyqtSignal(bool,bool,bool,str,bool,bool,bool,bool,bool,bool,bool,float,float,float,float,float,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,float,float,str)
     closed = pyqtSignal(bool)
