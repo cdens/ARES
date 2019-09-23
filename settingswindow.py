@@ -39,7 +39,7 @@ class RunSettings(QMainWindow):
     # =============================================================================
     def __init__(self,autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig, dtgwarn,
                  renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
-                 comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps, maxderiv, profres, comport):
+                 comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps, maxderiv, profres, originatingcenter, comport):
         super().__init__()
 
         try:
@@ -50,9 +50,10 @@ class RunSettings(QMainWindow):
             self.saveinputsettings(autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig,
                                    dtgwarn, renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,
                                    useclimobottom, overlayclimo, comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc,
-                                   useoceanbottom, checkforgaps, maxderiv, profres, comport)
+                                   useoceanbottom, checkforgaps, maxderiv, profres, originatingcenter, comport)
             # self.setdefaultsettings()  # Default autoQC preferences
 
+            self.buildcentertable()
             self.makeprocessorsettingstab()  # processor settings
             self.makeprofileeditorsettingstab() #profile editor tab
             self.makegpssettingstab() #add GPS settings
@@ -108,7 +109,7 @@ class RunSettings(QMainWindow):
     def saveinputsettings(self, autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig, dtgwarn,
                            renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
                            comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps, maxderiv,
-                           profres, comport):
+                           profres, originatingcenter, comport):
 
         # processor preferences
         self.autodtg = autodtg  # auto determine profile date/time as system date/time on clicking "START"
@@ -141,6 +142,7 @@ class RunSettings(QMainWindow):
         self.checkforgaps = checkforgaps  # look for/correct gaps in profile due to false starts from VHF interference
         self.maxderiv = maxderiv  # d2Tdz2 threshold to call a point an inflection point
         self.profres = profres  # profile minimum vertical resolution (m)
+        self.originatingcenter = originatingcenter #originating center for BUFR message
 
         self.comport = comport # COM port for GPS feed
 
@@ -181,7 +183,8 @@ class RunSettings(QMainWindow):
         self.useoceanbottom = True  # use NTOPO1 bathymetry data to ID bottom strikes
         self.checkforgaps = True  # look for/correct gaps in profile due to false starts from VHF interference
         self.maxderiv = 1.5  # d2Tdz2 threshold to call a point an inflection point
-        self.profres = 8 #profile minimum vertical resolution (m)
+        self.profres = 8.0 #profile minimum vertical resolution (m)
+        self.originatingcenter #BUFR table code for NAVO
 
 
     def updatepreferences(self):
@@ -223,6 +226,8 @@ class RunSettings(QMainWindow):
 
         self.profres = float(self.profeditortabwidgets["profres"].value())/10
         self.maxderiv = float(self.profeditortabwidgets["maxderiv"].value())/100
+
+        self.updateoriginatingcenter()
 
         self.updatecomport()
 
@@ -398,26 +403,16 @@ class RunSettings(QMainWindow):
             wrext = [1, 1, 1, 1, 1, 1, 1]
             wcolext = [1, 1, 1, 1, 1, 1, 2]
 
-            # wcols = [1, 2, 4, 4, 4, 1, 1]
-            # wrows = [1, 1, 1, 2, 3, 2, 3]
-            # wrext = [1, 1, 1, 1, 1, 1, 1]
-            # wcolext = [1, 1, 1, 1, 1, 1, 2]
-
             # adding user inputs
             for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
                 self.gpstablayout.addWidget(self.gpstabwidgets[i], r, c, re, ce)
 
             # Applying other preferences to grid layout
-            # cursize = self.frameGeometry()
-            # minwidthedge = int(0.15*cursize.width())
-            # minwidth4 = int(0.5*cursize.width())
-            # # self.gpstablayout.setColumnMinimumWidth(0, minwidthedge)
-            # # self.gpstablayout.setColumnMinimumWidth(3, minwidthedge)
-            # # self.gpstablayout.setColumnMinimumWidth(5, minwidthedge)
-            # self.gpstablayout.setColumnMinimumWidth(4, minwidth4)
             self.gpstablayout.setRowStretch(0,4)
             self.gpstablayout.setRowStretch(4,4)
             self.gpstablayout.setRowStretch(8,4)
+            self.gpstablayout.setColumnStretch(0,4)
+            self.gpstablayout.setColumnStretch(3,4)
 
             # making the current layout for the tab
             self.gpstab.setLayout(self.gpstablayout)
@@ -528,15 +523,29 @@ class RunSettings(QMainWindow):
             self.profeditortabwidgets["maxderiv"].setValue(int(self.maxderiv * 100))
             self.profeditortabwidgets["maxderiv"].valueChanged[int].connect(self.changemaxderiv)
 
+
+            self.profeditortabwidgets["originatingcentername"] = QLabel("")  # 15
+            self.profeditortabwidgets["originatingcenter"] = QSpinBox()  # 16
+            self.profeditortabwidgets["originatingcenter"].setMinimum(0)
+            self.profeditortabwidgets["originatingcenter"].setMaximum(255)
+            self.profeditortabwidgets["originatingcenter"].setSingleStep(1)
+            self.profeditortabwidgets["originatingcenter"].setValue(self.originatingcenter)
+            self.profeditortabwidgets["originatingcenter"].valueChanged[int].connect(self.updateoriginatingcenter)
+            try:
+                curcentername = self.allcenters[str(self.originatingcenter).zfill(3)]
+            except:
+                curcentername = "Center ID not recognized!"
+            self.profeditortabwidgets["originatingcentername"].setText("Center "+str(self.originatingcenter).zfill(3)+": "+curcentername)
+
             # should be 19 entries
             widgetorder = ["climotitle", "useclimobottom", "comparetoclimo", "overlayclimo", "filesavetypes", "savefin",
                            "savejjvv", "savebufr", "saveprof", "saveloc", "useoceanbottom", "checkforgaps", "profreslabel",
-                           "profres", "maxderivlabel", "maxderiv"]
+                           "profres", "maxderivlabel", "maxderiv","originatingcentername","originatingcenter"]
 
-            wcols = [1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 1, 1, 5, 5, 5, 5]
-            wrows = [1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 8, 9, 2, 3, 5, 6]
-            wrext = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-            wcolext = [2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 4, 4, 1, 1, 1, 1]
+            wcols = [1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 1, 1, 5, 5, 5, 5, 5, 5]
+            wrows = [1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 8, 9, 2, 3, 5, 6, 9, 10]
+            wrext = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            wcolext = [2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 4, 4, 1, 1, 1, 1, 1, 1]
 
             # adding user inputs
             for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
@@ -560,6 +569,38 @@ class RunSettings(QMainWindow):
             self.posterror("Failed to build profile editor tab!")
         finally:
             QApplication.restoreOverrideCursor()
+
+    # =============================================================================
+    #         UPDATE BUFR FORMAT ORIGINATING CENTER ACCORDING TO TABLE
+    # =============================================================================
+    def updateoriginatingcenter(self):
+        self.originatingcenter = int(self.profeditortabwidgets["originatingcenter"].value())
+        try:
+            curcentername = self.allcenters[str(self.originatingcenter).zfill(3)]
+        except:
+            curcentername = self.allcenters["xxx"]
+        self.profeditortabwidgets["originatingcentername"].setText("Center "+str(self.originatingcenter).zfill(3)+": "+curcentername)
+
+    def buildcentertable(self):
+        self.allcenters = {"000":"       WMO Secretariat               ",
+                           "007":"       US NWS: NCEP                  ",
+                           "008":"       US NWS: NWSTG                 ",
+                           "009":"       US NWS: Other                 ",
+                           "051":"       Miami (RSMC)                  ",
+                           "052":"       Miami (RSMC) NHC              ",
+                           "052":"       MSC Monitoring                ",
+                           "054":"       Montreal (RSMC)               ",
+                           "055":"       San Francisco                 ",
+                           "056":"       ARINC Center                  ",
+                           "057":"       USAF: Global Weather Central  ",
+                           "058":"       USN: FNMOC                    ",
+                           "059":"       NOAA FSL                      ",
+                           "060":"       NCAR                          ",
+                           "061":"       Service ARGOS- Landover       ",
+                           "062":"       USN: NAVO                     ",
+                           "063":"       IRI: Climate and Society      ",
+                           "xxx":"       Center ID not recognized!     "}
+
 
 
 
@@ -607,7 +648,7 @@ class RunSettings(QMainWindow):
                                    self.saveedf, self.savewav, self.savesig, self.dtgwarn, self.renametabstodtg,
                                    self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.triggerfftratio, self.triggersiglev, self.useclimobottom,
                                    self.overlayclimo, self.comparetoclimo, self.savefin, self.savejjvv, self.savebufr, self.saveprof,
-                                   self.saveloc, self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres, self.comport)
+                                   self.saveloc, self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres, self.originatingcenter, self.comport)
 
 
     def resetdefaults(self):
@@ -664,6 +705,7 @@ class RunSettings(QMainWindow):
         self.profeditortabwidgets["maxderivlabel"].setText('Inflection Point Threshold (C/m<sup>2</sup>): ' + str(self.maxderiv).ljust(4, '0'))  # 17
         self.profeditortabwidgets["maxderiv"].setValue(int(self.maxderiv * 100))
 
+        self.profeditortabwidgets["originatingcenter"].setText(str(self.originatingcenter).zfill(3))
 
     # =============================================================================
     #     TAB MANIPULATION OPTIONS, OTHER GENERAL FUNCTIONS
@@ -708,5 +750,6 @@ class RunSettings(QMainWindow):
 
 # SIGNAL SETUP HERE
 class SettingsSignals(QObject):
-    exported = pyqtSignal(bool,bool,bool,str,bool,bool,bool,bool,bool,bool,bool,float,float,float,float,float,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,float,float,str)
+    exported = pyqtSignal(bool,bool,bool,str,bool,bool,bool,bool,bool,bool,bool,float,float,float,float,float,bool,bool,
+                          bool,bool,bool,bool,bool,bool,bool,bool,float,float,int,str)
     closed = pyqtSignal(bool)

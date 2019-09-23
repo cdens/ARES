@@ -10,7 +10,8 @@ def listcomports():
     ports = serial.tools.list_ports.comports()
     for port, desc, hwid in sorted(ports):
         portnums.append(port)
-        portinfo.append("{}: {} [{}]".format(port, desc, hwid))
+        portinfo.append("{}: {}".format(port, desc))
+        # portinfo.append("{}: {} [{}]".format(port, desc, hwid))
     return portnums,portinfo
 
 

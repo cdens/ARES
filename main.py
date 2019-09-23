@@ -164,7 +164,8 @@ class RunProgram(QMainWindow):
         self.useoceanbottom = True  # use NTOPO1 bathymetry data to ID bottom strikes
         self.checkforgaps = True  # look for/correct gaps in profile due to false starts from VHF interference
         self.maxderiv = 1.5  # d2Tdz2 threshold to call a point an inflection point
-        self.profres = 8  # profile minimum vertical resolution (m)
+        self.profres = 8.0  # profile minimum vertical resolution (m)
+        self.originatingcenter = 62 #default center for BUFR message: NAVO
 
         self.comport = 'n'
         
@@ -257,7 +258,7 @@ class RunProgram(QMainWindow):
                                                                 self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.triggerfftratio, self.triggersiglev,
                                                                 self.useclimobottom, self.overlayclimo, self.comparetoclimo,
                                                                 self.savefin, self.savejjvv, self.savebufr, self.saveprof, self.saveloc,
-                                                                self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres, self.comport)
+                                                                self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres, self.originatingcenter, self.comport)
             self.settingsthread.signals.exported.connect(self.updatesettings)
             self.settingsthread.signals.closed.connect(self.settingsclosed)
         else:
@@ -265,10 +266,10 @@ class RunProgram(QMainWindow):
             self.settingsthread.raise_()
             self.settingsthread.activateWindow()
 
-    @pyqtSlot(bool,bool,bool,str,bool,bool,bool,bool,bool,bool,bool,float,float,float,float,float,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,float,float,str)
+    @pyqtSlot(bool,bool,bool,str,bool,bool,bool,bool,bool,bool,bool,float,float,float,float,float,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,float,float,int,str)
     def updatesettings(self,autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn,
                        renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
-                       comparetoclimo,savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, comport):
+                       comparetoclimo,savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport):
 
         # processor preferences
         self.autodtg = autodtg  # auto determine profile date/time as system date/time on clicking "START"
@@ -304,6 +305,7 @@ class RunProgram(QMainWindow):
         self.checkforgaps = checkforgaps  # look for/correct gaps in profile due to false starts from VHF interference
         self.maxderiv = maxderiv  # d2Tdz2 threshold to call a point an inflection point
         self.profres = profres  # profile minimum vertical resolution (m)
+        self.originatingcenter = originatingcenter #originating center for BUFR message
 
         self.comport = comport
 
@@ -1762,7 +1764,7 @@ class RunProgram(QMainWindow):
                         self.posterror("Failed to save JJVV file")
                 if self.savebufr:
                     try:
-                        tfio.writebufrfile(outdir + slash + filename + '.bufr',temperature,depth,year,month,day,time,lon,lat,identifier,False,b'\0')
+                        tfio.writebufrfile(outdir + slash + filename + '.bufr',temperature,depth,year,month,day,time,lon,lat,identifier,self.originatingcenter,False,b'\0')
                     except Exception:
                         traceback.print_exc()
                         self.posterror("Failed to save BUFR file")

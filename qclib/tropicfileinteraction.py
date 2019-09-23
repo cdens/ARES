@@ -479,7 +479,7 @@ def writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
 
 
 
-def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identifier,hasoptionalsection,optionalinfo):
+def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identifier,originatingcenter,hasoptionalsection,optionalinfo):
 
     # things to look up:
     #  o master table
@@ -502,8 +502,7 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
 
     # section 1 info
     sxn1len = 18
-    mastertable = 0  # For standard WMO FM 94-IX BUFR table for Oceanography by IOC of UNESCO
-    originatingcenter = 57
+    mastertable = 0  # For standard WMO FM 94-IX BUFR table
     originatingsubcenter = 0
     updatesequencenum = 0  # first iteration
     if hasoptionalsection:
@@ -511,7 +510,7 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
     else:
         hasoptionalsectionnum = int('10000000', 2)
     datacategory = 31  # oceanographic data (Table A)
-    datasubcategory = 0
+    datasubcategory = 3 #bathy (JJVV) message
     versionofmaster = 32
     versionoflocal = 0
     yearofcentury = int(year - 100 * np.floor(year / 100))  # year of the current century
@@ -527,9 +526,9 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
     sxn3len = 9  # 3 length + 1 reserved + 2 numsubsets + 1 flag + 2 FXY = 9 octets
     numdatasubsets = 1
     # whether data is observed, compressed (bits 1/2), bits 3-8 reserved (=0)
-    s3oct7 = int('10000000', 2)  # !!!!!!FIX THIS!!!!!!!!!!
+    s3oct7 = int('10000000', 2)
     # FXY = 3,15,001 (base 10) = 11, 001101, 00000001 (binary) corresponds to underwater sounding w/t optional fields
-    fxy = int('1100110100000001', 2)  # !!!!!!FIX THIS!!!!!!!!!!
+    fxy = int('1100110100000001', 2)
 
     # Section 4 info (data)
     # padding and encoding station identifier !!!!!CHECK THIS!!!!!!!
@@ -556,23 +555,15 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
     bufrarray = bufrarray + format(int(lon * 100 + 18000), '016b')  # lon (0,06,002)
 
     # temperature-depth profile (3,06,001)
-    bufrarray = bufrarray + '00'  # indicator for digitization (0,02,032) !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    bufrarray = bufrarray + '00'  # delayed replication- 2 descripters (1,02,000) !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    bufrarray = bufrarray + '00'  # indicator for digitization (0,02,032): 'values at selected depths' = 0
     bufrarray = bufrarray + format(len(temperature),'08b')  # delayed descripter replication factor(0,31,001) = length
 
     #converting temperature and depth and writing
-    #WRITE ALTERNATING OR ONE AFER THE OTHER?????
     for t,d in zip(temperature,depth):
-        t = int(10 * (t + 273.15))  # temperature (0,22,042)
-        bufrarray = bufrarray + format(t,'012b')
         d = int(d*10) # depth (0,07,062)
         bufrarray = bufrarray + format(d,'017b')
-    # for t in temperature:
-    #     t = int(10 * (t + 273.15))  # temperature (0,22,042)
-    #     bufrarray = bufrarray + format(t,'012b')
-    # for d in depth:
-    #     d = int(d*10) # depth (0,07,062)
-    #     bufrarray = bufrarray + format(d,'017b')
+        t = int(10 * (t + 273.15))  # temperature (0,22,042)
+        bufrarray = bufrarray + format(t,'012b')
 
     #padding zeroes to get even octet number, determining total length
     bufrrem = len(bufrarray)%8
