@@ -621,7 +621,5 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
         bufr.write(int(bufrarray,2).to_bytes(bufrarraylen,byteorder=binarytype,signed=False)) #writing profile data
 
         # Section 5 (End)
-        endval = 7
-        for i in range(0, 4):
-            bufr.write(endval.to_bytes(1, byteorder=binarytype, signed=False))
+        bufr.write(b'7777')
 
