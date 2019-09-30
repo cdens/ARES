@@ -113,23 +113,20 @@
 
 import numpy as np
 from scipy.io import wavfile #for wav file reading
-import wave
+import wave #WAV file writing
 
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject
 from PyQt5.Qt import QRunnable
 
-import qclib.tropicfileinteraction as tfio
-
 import time as timemodule
 import datetime as dt
 
-import traceback
+from traceback import print_exc as trace_error
 
-import shutil
+from shutil import copy as shcopy
 from sys import getsizeof
-from os import remove
-from ctypes import (Structure, pointer, c_int, c_ulong, c_ulonglong, c_char, c_uint32,
-                    c_char_p, c_void_p, POINTER, c_int16, cast, WINFUNCTYPE, CFUNCTYPE)
+from ctypes import (Structure, pointer, c_int, c_ulong, c_char, c_uint32,
+                    c_char_p, c_void_p, POINTER, c_int16, cast, CFUNCTYPE)
 
 #convert time(s) into depth (m)
 def timetodepth(time):
@@ -267,7 +264,7 @@ class ThreadProcessor(QRunnable):
             self.disconnectcount = 0
             self.bufferlen = 0
 
-            # initialize audio data variables
+            # initialize audio stream data variables
             self.f_s = 64000  # default value
             self.audiostream = [0] * 64000
 
@@ -341,7 +338,7 @@ class ThreadProcessor(QRunnable):
                 traceback.print_exc()
 
         else:
-            shutil.copy(self.audiofile, self.wavfilename) #copying audio file if datasource = Test or Audio
+            shcopy(self.audiofile, self.wavfilename) #copying audio file if datasource = Test or Audio
 
 
     @pyqtSlot()
