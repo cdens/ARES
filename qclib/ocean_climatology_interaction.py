@@ -1,3 +1,41 @@
+# =============================================================================
+#     Code: ocean_climatology_interaction.py
+#     Author: ENS Casey R. Densmore, 20JUN2019
+#     
+#     Purpose: Interaction with ocean climatology data
+#
+#   Functions:
+#       o smoothdata = runningsmooth(data,halfwindow): Computes running mean
+#           of length 2*"halfwindow" + 1 on "data", returns "smoothdata"
+#       o climotemps,depth,tempfill,depthfill = getclimatologyprofile(lat,
+#           lon,month,climodata): Returns climatology temperature/depth profile
+#           from climodata dict for lat,lon,month combination.
+#           Returns:
+#               > climotemps, depth: Climatology temperature-depth profile
+#               > tempfill, depthfill: Vectors corresponding to filled shape for
+#                   climatological profile +/- a given buffer. Currently that 
+#                   buffer is set within the function, however this could easily
+#                   be modified to depend on external data if a climatology 
+#                   dataset with standard deviations becomes available
+#       o matchclimo,climobottomcutoff = comparetoclimo(temperature,depth,
+#           climotemps,climodepths,climotempfill,climodepthfill)
+#           Takes data from getclimatologyprofile() and compares to the actual
+#           QC'ed profile to determine if the two roughly match. 
+#           Returns:
+#               > matchclimo: 1 if match, 0 if not a match
+#               > climobottomcutoff: climo-indicated profile cutoff depth due
+#                   to a profile bottom strike
+#       o maxoceandepth,exportlat,exportlon,exportrelief = getoceandepth(lat,
+#           lon,dcoord,bathydata): Determines ocean depth and pulls bathymetry
+#           data within certain region (of size 2*dcoord deg lon x 2*dcoord deg
+#           lat) of the point lat/lon. 
+#           Returns:
+#               > maxoceandepth: depth of ocean at point
+#               > exportlat, exportlon, exportrelief: lat/lon vectors, 2D bathy
+#                   data used in makeAXBTplots.makelocationplot()
+#
+# =============================================================================
+
 import numpy as np
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
@@ -27,25 +65,13 @@ def runningsmooth(data,halfwindow):
 #pulling climatology profile, creating polygon for shaded "climo match" region
 def getclimatologyprofile(lat,lon,month,climodata):
 
-    # climodata = Dataset('qcdata/climo/Levitus_monthlyoceanclimo.nc', mode='r')
-    # clon = climodata.variables['X'][:]
-    # clat = climodata.variables['Y'][:]
-    # depth = climodata.variables['Z'][:]
-    # temp_climo_gridded = climodata.variables['temp'][:]
-
-    # climodata = sio.loadmat('qcdata/climo/LevitusClimo.mat')
-    # clon = climodata['X'][:,0]
-    # clat = climodata['Y'][:,0]
-    # depth = climodata['Z'][:,0]
-    # temp_climo_gridded = climodata['temp']
-
+    #pulling climatology data
     clon = climodata["lon"]
     clat = climodata["lat"]
     depth = climodata["depth"]
     temp_climo_gridded = climodata["temp_climo_gridded"]
 
     #get current month of climo
-    # temp_climo_curmonth = temp_climo_gridded[month-1,:,:,:]
     temp_climo_curmonth = temp_climo_gridded[:,:,:,month-1]
 
     #convert profile longitude from degW<0 to degW>180 to match climo arrangement
@@ -63,12 +89,12 @@ def getclimatologyprofile(lat,lon,month,climodata):
         lat = 89.5
 
     #interpolate to current latitude/longitude
-    # climotemps = sint.interpn((clon,clat,depth),temp_climo_curmonth,(lon,lat,depth))
     climotemps = sint.interpn((depth,clat, clon), temp_climo_curmonth, (depth,lat, lon))
 
     #introduce error range for fill- should be +/- 1 standard deviation when standard deviation data is available
     climotemperrors = np.array([3.,3.,3.,3.,3.,3.,3.,3.,3.,3.,2.,2.,2.,2.,1.,1.,1.,1.,1.])
     
+    #generating fill vectors
     tempfill = np.append(climotemps-climotemperrors,np.flip(climotemps+climotemperrors))
     depthfill = np.append(depth,np.flip(depth))
     
@@ -108,6 +134,12 @@ def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climod
             depth = depth[isabovecutoff == 1]
         else:
             climobottomcutoff = np.nan
+
+        #max depth for climo comparison (if a bottom strike is detected, consider that when comparing profile to climatology)
+        if np.isnan(climobottomcutoff):
+            maxd = 1E10
+        else:
+            maxd = climobottomcutoff
         
         #check to see if climatology generally matches profile (is 90% of profile within climatology fill window?)
         isinclimo = []
@@ -118,9 +150,10 @@ def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climod
         
         depth[0] = 0.1
         for i in range(len(temperature)):
-            curpoint = Point(temperature[i], depth[i])
-            isinclimo.append(int(climopolygon.contains(curpoint)))
-        if sum(isinclimo)/len(isinclimo) >= 0.9:
+            if depth[i] <= maxd:
+                curpoint = Point(temperature[i], depth[i])
+                isinclimo.append(int(climopolygon.contains(curpoint)))
+        if sum(isinclimo)/len(isinclimo) >= 0.9: #this is where the 90% statistic is set
             matchclimo = 1
         else:
             matchclimo = 0
@@ -137,16 +170,7 @@ def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climod
 #Data source: NOAA-NGDC: https://www.ngdc.noaa.gov/mgg/global/global.html
 def getoceandepth(lat,lon,dcoord,bathydata):
 
-    # bathydata = sio.loadmat('qcdata/bathy/ETOPO1_bathymetry.mat')
-
-    # clon = np.array(bathydata.variables['x'][:])
-    # clat = np.array(bathydata.variables['y'][:])
-    # z = np.array(bathydata.variables['z'][:])
-
-    # clon = bathydata['x'][:,0]
-    # clat = bathydata['y'][:,0]
-    # z = bathydata['z']
-
+    #pulling bathymetry data
     clon = bathydata['x']
     clat = bathydata['y']
     z = bathydata['z']
@@ -155,9 +179,9 @@ def getoceandepth(lat,lon,dcoord,bathydata):
     maxoceandepth = -sint.interpn((clon,clat),z,(lon,lat))
     maxoceandepth = maxoceandepth[0]
     
+    #setting indices/pulling data within the wanted region
     isnearlatind = np.less_equal(clat,lat+dcoord+3)*np.greater_equal(clat,lat-dcoord-3)
     isnearlonind = np.less_equal(clon,lon+dcoord+3)*np.greater_equal(clon,lon-dcoord-3)
-    
     exportlat = clat[isnearlatind]
     exportlon = clon[isnearlonind]
     exportrelief = z[:,isnearlatind]
