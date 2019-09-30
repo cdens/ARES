@@ -1,3 +1,25 @@
+# =============================================================================
+#     Code: GPS_COM_interaction.py
+#     Author: ENS Casey R. Densmore, 24SEP2019
+#    
+#     Purpose: Provides code necessary to detect/list COM ports, attempt to connect
+#           to COM port and listen to GPS NMEA feed, if one exists
+#
+#   Functions:
+#       o portnums,portinfo = listcomports(): detects all available COM ports,
+#           Returns: "portnums": list of port numbers
+#                    "portinfo": list of descriptors for each COM port
+#       o streamgpsdata(port)- attempts to connect to specified port and print
+#           live stream of GPS time/lat/lon to command line
+#       o lat,lon,dt,flag = getcurrentposition(port,numattempts)- attempts to
+#           connect to COM port specified by "port" and get GPS lat/lon/time data,
+#           stops after attempting "numattempts" times.
+#           Returns: "lat", "lon": current coordinates, 0 if unsuccessful
+#                    "dt" python datetime corresponding to lat/lon fix
+#                    "flag": 0 if successful, 1 if timeout, 2 if unable to connect
+# =============================================================================
+
+
 import sys
 import serial.tools.list_ports
 import pynmea2
@@ -8,10 +30,10 @@ def listcomports():
     portnums = []
     portinfo = []
     ports = serial.tools.list_ports.comports()
-    for port, desc, hwid in sorted(ports):
-        portnums.append(port)
-        portinfo.append("{}: {}".format(port, desc))
-        # portinfo.append("{}: {} [{}]".format(port, desc, hwid))
+    for pnum, sdesc, details in sorted(ports):
+        portnums.append(pnum)
+        portinfo.append("{}: {}".format(pnum, sdesc)) #short description
+        # portinfo.append("{}: {} [{}]".format(port, desc, details)) #long description
     return portnums,portinfo
 
 
@@ -68,7 +90,7 @@ def getcurrentposition(port,numattempts):
         with serial.Serial(port, 4800, timeout=1) as ser:
 
             ii = 0
-            while True:
+            while True: #infinite loop
 
                 ii += 1
                 try:
@@ -80,16 +102,19 @@ def getcurrentposition(port,numattempts):
                         lon = round(nmeaobj.longitude,3)
                         dt = nmeaobj.datetime
 
-                        if lon != 0 or lat != 0:
+                        if lon != 0 or lat != 0: #success
                             return lat,lon,dt,0
-                    except:
-                        pass
 
-                    if ii > numattempts:
-                        return 0, 0, 0, 1
-                except:
+                    except: #no lat/lon
+                        pass
+                except: #failed to parse line (partial line or non-NMEA feed)
                     pass
 
-    except Exception:
+                if ii > numattempts: #timeout
+                    return 0, 0, 0, 1
+
+        return 0,0,0,2 #somehow exits loop successfully and ends "with" statement w/t getting position
+
+    except Exception: #fails to connect to serial port
         traceback.print_exc()
         return 0,0,0,2

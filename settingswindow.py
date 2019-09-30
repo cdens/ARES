@@ -1,12 +1,32 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-main.py
-Author: ENS Casey R. Densmore
+# =============================================================================
+#     Code: settingswindow.py
+#     Author: ENS Casey R. Densmore, 25AUG2019
+#     
+#     Purpose: Creates window for advanced ARES settings, handles signals/slots
+#       with main event loop in order to update settings.
+#
+#   Settings Tabs:
+#       o Signal Processor Settings: Contains all settings for the signal processor
+#           style tabs in the main GUI, including FFT thresholds and auto population
+#           preferences. Initialized with makeprocessorsettingstab()
+#       o Profile Editor Tab: Contains all settings for the profile editor tab
+#           including profile resolution/inflection point threshold, considerations
+#           for climatology, NOAA bathymetry data and VHF interference auto-detection.
+#           Initialized with makeprofileeditorsettingstab()
+#       o GPS Communication: Allows the user to select a COM port to listen for GPS
+#           data and auto-populate lat/lon data if a valid port is selected. Also
+#           allows the user to test COM port connection/get current position.
+#
+#   Signals:
+#       o exported(all,of,the,settings): Passes the updated settings back to the main loop
+#       o closed(True): Notifies the main loop that the settings window was closed,
+#           so it will open a new window (vice bringing the current window to front)
+#           if the "Preferences" option is selected again
+#       
+# =============================================================================
 
-Purpose: Builds user interface for AXBT data processing and quality-control
-with PyQT5.
-"""
+
+
 # =============================================================================
 #   CALL NECESSARY MODULES HERE
 # =============================================================================
@@ -47,12 +67,13 @@ class RunSettings(QMainWindow):
 
             self.signals = SettingsSignals()
 
+            #records current settings received from main loop
             self.saveinputsettings(autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig,
                                    dtgwarn, renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,
                                    useclimobottom, overlayclimo, comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc,
                                    useoceanbottom, checkforgaps, maxderiv, profres, originatingcenter, comport)
-            # self.setdefaultsettings()  # Default autoQC preferences
 
+            #building window/tabs
             self.buildcentertable()
             self.makeprocessorsettingstab()  # processor settings
             self.makeprofileeditorsettingstab() #profile editor tab
@@ -63,10 +84,6 @@ class RunSettings(QMainWindow):
             self.posterror("Failed to initialize the settings menu.")
 
     def initUI(self):
-
-        # setting window size
-        # cursize = QDesktopWidget().availableGeometry(self).size()
-        # self.resize(int(cursize.width()/3), int(cursize.height()/2))
 
         # setting title/icon, background color
         self.setWindowTitle('AXBT Realtime Editing System Settings')
@@ -187,7 +204,7 @@ class RunSettings(QMainWindow):
         self.originatingcenter #BUFR table code for NAVO
 
 
-    def updatepreferences(self):
+    def updatepreferences(self): #records current configuration before exporting to main loop
 
         self.autodtg = self.processortabwidgets["autodtg"].isChecked()
         self.autolocation = self.processortabwidgets["autolocation"].isChecked()
@@ -337,7 +354,7 @@ class RunSettings(QMainWindow):
             for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
                 self.processortablayout.addWidget(self.processortabwidgets[i], r, c, re, ce)
 
-            # Applying other preferences to grid layout
+            # Applying spacing preferences to grid layout
             self.processortablayout.setColumnStretch(0, 0)
             self.processortablayout.setColumnStretch(1, 1)
             self.processortablayout.setColumnStretch(2, 1)
@@ -347,7 +364,7 @@ class RunSettings(QMainWindow):
                 self.processortablayout.setRowStretch(i, 1)
             self.processortablayout.setRowStretch(11, 4)
 
-            # making the current layout for the tab
+            # applying the current layout for the tab
             self.processortab.setLayout(self.processortablayout)
 
         except Exception:
@@ -395,7 +412,7 @@ class RunSettings(QMainWindow):
             self.updategpslist()
             self.updatecomport()
 
-            # should be 24 entries
+            # should be 7 entries
             widgetorder = ["updateports", "refreshgpsdata", "gpsdate", "gpslat", "gpslon","comporttitle","comport"]
 
             wcols = [1, 2, 1, 1, 1, 1, 1]
@@ -407,7 +424,7 @@ class RunSettings(QMainWindow):
             for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
                 self.gpstablayout.addWidget(self.gpstabwidgets[i], r, c, re, ce)
 
-            # Applying other preferences to grid layout
+            # Applying spacing preferences to grid layout
             self.gpstablayout.setRowStretch(0,4)
             self.gpstablayout.setRowStretch(4,4)
             self.gpstablayout.setRowStretch(8,4)
@@ -421,6 +438,7 @@ class RunSettings(QMainWindow):
             traceback.print_exc()
             self.posterror("Failed to build new GPS tab")
 
+    #updating the selected COM port from the menu
     def updatecomport(self):
         curcomnum = self.gpstabwidgets["comport"].currentIndex()
         if curcomnum > 0:
@@ -429,6 +447,7 @@ class RunSettings(QMainWindow):
             self.comport = 'n'
         self.refreshgpsdata()
 
+    #refreshing the list of available COM ports
     def updategpslist(self):
         self.gpstabwidgets["comport"].clear()
         self.gpstabwidgets["comport"].addItem('No COM Port Selected')
@@ -436,6 +455,7 @@ class RunSettings(QMainWindow):
         for curport in comportoptions:
             self.gpstabwidgets["comport"].addItem(curport)
 
+    #attempt to refresh GPS data with currently selected COM port
     def refreshgpsdata(self):
         if self.comport != 'n':
             lat,lon,curdate,flag = gps.getcurrentposition(self.comport,20)
@@ -551,7 +571,7 @@ class RunSettings(QMainWindow):
             for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
                 self.profeditortablayout.addWidget(self.profeditortabwidgets[i], r, c, re, ce)
 
-            # Applying other preferences to grid layout
+            # Applying spacing preferences to grid layout
             self.profeditortablayout.setColumnStretch(0, 0)
             self.profeditortablayout.setColumnStretch(1, 1)
             self.profeditortablayout.setColumnStretch(2, 1)
@@ -581,6 +601,7 @@ class RunSettings(QMainWindow):
             curcentername = self.allcenters["xxx"]
         self.profeditortabwidgets["originatingcentername"].setText("Center "+str(self.originatingcenter).zfill(3)+": "+curcentername)
 
+    #lookup table for originating centers
     def buildcentertable(self):
         self.allcenters = {"000":"       WMO Secretariat               ",
                            "007":"       US NWS: NCEP                  ",

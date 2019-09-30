@@ -1,12 +1,86 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-main.py
-Author: ENS Casey R. Densmore
+# =============================================================================
+#     Code: main.py
+#     Author: ENS Casey R. Densmore, 25JUN2019
+#     
+#     Purpose: Main script for AXBT Realtime Editing System (ARES). See README 
+#       for program overview, external dependencies and additional information. 
+#
+#   File Description: This function contains the PyQt5 QMainWindow class which
+#       which houses the primary GUI and event loop for ARES. This file also
+#       calls functions from the following necessary files:
+#           o autoqc.py: autoQC algorithm for temperature-depth profiles
+#           o tropicfileinteraction.py: file reading/writing functions
+#           o makeAXBTplots.py: Profile/location plot generation
+#           o geoplotfunctions.py: Location plot special functions
+#           o ocean_climatology_interaction.py: Interaction with climatology
+#               and bathymetry datasets
+#           o GPS_COM_interaction.py: Interaction with COM ports and NMEA feeds
+#               to autopopulate drop location after each launch
+#           o VHFsignalprocessor.py: Signal processing and temperature/depth
+#               conversion equation functions, interface for interaction with
+#               C++ based DLL file for WiNRADIO receivers, QRunnable thread
+#               class to process AXBT data from radio receivers or audio files
+#           o settingswindow.py: Separate settings GUI and slots necessary to
+#               export updated settings to the main GUI
+#   Individual functions within the RunProgram class are listed below (grouped by general purpose, then
+#       in order of occurence) with brief descriptions.
+#
+#   General functions within main.py "RunProgram" class of QMainWindow:
+#           (start of file)
+#       o __init__: Calls functions to initialize GUI
+#       o initUI: Builds basic window, loads WiNRADIO DLL, configures thread handling
+#       o setdefaults: Sets default settings for program (could be reconfigured to read from/write to file)
+#       o loaddata: Loads ocean climatology, bathymetry data once on initialization for use during quality control checks
+#       o buildmenu: Builds file menu for main GUI
+#       o openpreferencesthread: Opens advanced settings window (or reopens if a window is already open)
+#       o updatesettings: pyqtSlot to receive updated settings exported from advanced settings window
+#       o settingsclosed: pyqtSlot to receive notice when the advanced settings window is closed
+#
+#           (end of file)
+#       o whatTab: gets identifier for open tab
+#       o renametab: renames open tab
+#       o setnewtabcolor: sets the background color pattern for new tabs
+#       o closecurrenttab: closes open tab
+#       o savedataincurtab: saves data in open tab (saved file types depend on tab type and user preferences)
+#       o postwarning: posts a warning box specified message
+#       o posterror: posts an error box with a specified message
+#       o postwarning_option: posts a warning box with Okay/Cancel options
+#       o closeEvent: pre-existing function that closes the GUI- function modified to prompt user with an "are you sure" box
+#
+#   Signal Processor functions within main.py "RunProgram" class of QMainWindow:
+#       o makenewprocessortab: builds signal processing tab
+#       o datasourcerefresh: refreshes list of connected receivers
+#       o datasourcechange: update function when a different receiver is selected
+#       o checkwinradiooptions: interacts with WiNRADIO DLL to get a list of serial numbers for connected receivers
+#       o changefrequencytomatchchannel: uses VHF channel/frequency lookup to ensure the two fields match (pyqtSignal)
+#       o changechanneltomatchfrequency: uses VHF channel/frequency lookup to ensure the two fields match (pyqtSignal)
+#       o updatefftsettings: updates minimum thresholds, window size for FFT in thread for open tab (pyqtSignal)
+#       o startprocessor: starts a signal processor thread (pyqtSignal)
+#       o stopprocessor: stops/aborts a signal processor thread (pyqtSignal)
+#       o gettabstrfromnum: gets the alltabdata key for the current tab to access that tab's information
+#       o triggerUI: updates tab information when that tab is triggered with signal from an AXBT (pyqtSlot)
+#       o updateUIinfo: updates user interface/tab data with information from connected thread (pyqtSlot)
+#       o updateUIfinal: updates user interface for the final time after signal processing thread is terminated (pyqtSlot)
+#       o failedWRmessage: posts a message in the GUI if the signal processor thread encounters an error (pyqtSlot)
+#       o updateaudioprogressbar: updates progress bar with progress of signal processing thread using an audio file source (pyqtSlot)
+#
+#   Profile Editor functions within main.py "RunProgram" class of QMainWindow:
+#       o processprofile: handles initial transition from signal processor to profile editor tab
+#       o makenewproftab: populates tab to read data from AXBT ASCII raw data file (e.g. LOG, EDF)
+#       o selectdatafile: enables user to browse/select a source data file
+#       o checkdatainputs_editorinput: checks validity of user inputs
+#       o continuetoqc: populates profile editor tab from either new file or signal processor tab
+#       o addpoint: lets user add a point to the profile
+#       o removepoint: lets user remove a point from the profile
+#       o on_release: adds or removes user-selected point from profile
+#       o applychanges: updates profile preferences for surface correction, cutoff, and depth delay features
+#       o rerunqc: Reruns the autoQC algorithm with current advanced preferences
+#       o toggleclimooverlay: toggles visibility of climatology profile on plot
+#       o parsestringinputs: checks validity of user inputs
+#
+# =============================================================================
 
-Purpose: Builds user interface for AXBT data processing and quality-control
-with PyQT5. 
-"""
+
 # =============================================================================
 #   CALL NECESSARY MODULES HERE
 # =============================================================================
@@ -59,7 +133,7 @@ class RunProgram(QMainWindow):
         super().__init__()
         
         try:
-            self.initUI()
+            self.initUI() #creates GUI window
             self.setdefaults() #Default autoQC preferences
             self.buildmenu() #Creates interactive menu, options to create tabs and start autoQC
             self.loaddata() #loads climo and bathy data into program
@@ -119,15 +193,19 @@ class RunProgram(QMainWindow):
                 elif cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt':
                     os.remove(cfile)
 
-        # loading DLL
-        try:
-            # self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI.dll")
-            # self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI.dll")
-            self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI_64.dll")
-        except:
-            self.postwarning("WiNRADIO driver NOT FOUND! Please ensure a WiNRADIO Receiver is connected and powered on and then restart the program!")
+        # loading WiNRADIO DLL API
+        if platform.system() == 'Windows':
+            try:
+                # self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI.dll") #32-bit
+                self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI_64.dll") #64-bit
+            except:
+                self.postwarning("WiNRADIO driver NOT FOUND! Please ensure a WiNRADIO Receiver is connected and powered on and then restart the program!")
+                self.wrdll = 0
+                traceback.print_exc()
+        else:
+            self.postwarning("WiNRADIO communications only supported with Windows! Processing from audio/ASCII files is still available.")
             self.wrdll = 0
-            traceback.print_exc()
+
 
         
 # =============================================================================
@@ -187,6 +265,7 @@ class RunProgram(QMainWindow):
 #    LOAD DATA, BUILD MENU, GENERAL SETTINGS
 # =============================================================================
 
+    #loads climatology and bathymetry data 
     def loaddata(self):
         climodata = sio.loadmat('qcdata/climo/LevitusClimo.mat')
         self.climodata = {}
@@ -201,8 +280,8 @@ class RunProgram(QMainWindow):
         self.bathymetrydata['y'] = bathydata['y'][:,0]
         self.bathymetrydata['z'] = bathydata['z']
 
+    #builds file menu for GUI
     def buildmenu(self):
-        
         #setting up primary menu bar
         menubar = self.menuBar()
         FileMenu = menubar.addMenu('Options')
@@ -249,23 +328,22 @@ class RunProgram(QMainWindow):
 #     PREFERENCES THREAD CONNECTION AND SLOT
 # =============================================================================
 
+    #opening advanced preferences window
     def openpreferencesthread(self):
-        if not self.preferencesopened:
+        if not self.preferencesopened: #if the window isn't opened in background- create a new window
             self.preferencesopened = True
-            self.settingsthread = swin.RunSettings(self.autodtg, self.autolocation, self.autoid,
-                                                                self.platformID, self.savelog, self.saveedf, self.savewav,
-                                                                self.savesig, self.dtgwarn, self.renametabstodtg,
-                                                                self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.triggerfftratio, self.triggersiglev,
-                                                                self.useclimobottom, self.overlayclimo, self.comparetoclimo,
-                                                                self.savefin, self.savejjvv, self.savebufr, self.saveprof, self.saveloc,
-                                                                self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres, self.originatingcenter, self.comport)
+            self.settingsthread = swin.RunSettings(self.autodtg, self.autolocation, self.autoid, self.platformID, self.savelog, self.saveedf, self.savewav, 
+                self.savesig, self.dtgwarn, self.renametabstodtg,self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.triggerfftratio, 
+                self.triggersiglev,self.useclimobottom, self.overlayclimo, self.comparetoclimo, self.savefin, self.savejjvv, self.savebufr, self.saveprof, 
+                self.saveloc,self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres, self.originatingcenter, self.comport)
             self.settingsthread.signals.exported.connect(self.updatesettings)
             self.settingsthread.signals.closed.connect(self.settingsclosed)
-        else:
+        else: #window is opened in background- bring to front
             self.settingsthread.show()
             self.settingsthread.raise_()
             self.settingsthread.activateWindow()
 
+    #slot to receive/update changed settings from advanced preferences window
     @pyqtSlot(bool,bool,bool,str,bool,bool,bool,bool,bool,bool,bool,float,float,float,float,float,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,float,float,int,str)
     def updatesettings(self,autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn,
                        renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
@@ -309,11 +387,14 @@ class RunProgram(QMainWindow):
 
         self.comport = comport
 
+    #slot to update main GUI loop if the preferences window has been closed
     @pyqtSlot(bool)
     def settingsclosed(self,isclosed):
         if isclosed:
             self.preferencesopened = False
         
+
+
 # =============================================================================
 #     SIGNAL PROCESSOR TAB AND INPUTS HERE
 # =============================================================================
@@ -323,7 +404,6 @@ class RunProgram(QMainWindow):
             newtabnum = self.tabWidget.count()
             curtabstr = "Tab "+str(newtabnum) #pointable string for alltabdata dict
     
-            #self.currenttab = QWidget() #tablayout = QGridLayout() #self.figure = plt.figure() 
             #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal processor to profile editor
             alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),
                       "ProcessorFig":plt.figure(),"ProfFig":plt.figure(),"LocFig":plt.figure(),
@@ -338,17 +418,17 @@ class RunProgram(QMainWindow):
             
             alltabdata[curtabstr]["tablayout"].setSpacing(10)
     
-            self.tabWidget.addTab(alltabdata[curtabstr]["tab"],'New Tab') #self.tabWidget.addTab(self.currenttab,'New Tab')
+            #creating new tab, assigning basic info
+            self.tabWidget.addTab(alltabdata[curtabstr]["tab"],'New Tab') 
             self.tabWidget.setCurrentIndex(newtabnum)
             self.totaltabs += 1
             self.tabWidget.setTabText(newtabnum, "New Drop #" + str(self.totaltabs))
             alltabdata[curtabstr]["tabnum"] = self.totaltabs #assigning unique, unchanging number to current tab
-            
             alltabdata[curtabstr]["tablayout"].setSpacing(10)
             
             #ADDING FIGURE TO GRID LAYOUT
-            alltabdata[curtabstr]["ProcessorCanvas"] = FigureCanvas(alltabdata[curtabstr]["ProcessorFig"]) #self.canvas = FigureCanvas(self.figure)
-            alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["ProcessorCanvas"],0,0,10,1) #tablayout.addWidget(self.canvas)
+            alltabdata[curtabstr]["ProcessorCanvas"] = FigureCanvas(alltabdata[curtabstr]["ProcessorFig"]) 
+            alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["ProcessorCanvas"],0,0,10,1)
     
             #making profile processing result plots
             alltabdata[curtabstr]["ProcessorAx"] = alltabdata[curtabstr]["ProcessorFig"].add_axes([0.1, 0.05, 0.85, 0.9])
@@ -428,30 +508,22 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["idtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             
             #should be 19 entries 
-            widgetorder = ["datasourcetitle","refreshdataoptions","datasource","channeltitle","freqtitle","vhfchannel","vhffreq","startprocessing","stopprocessing","processprofile","datetitle","dateedit","timetitle","timeedit","lattitle","latedit","lontitle","lonedit","idtitle","idedit"]
+            widgetorder = ["datasourcetitle","refreshdataoptions","datasource","channeltitle","freqtitle","vhfchannel","vhffreq",
+            "startprocessing","stopprocessing","processprofile","datetitle","dateedit","timetitle","timeedit","lattitle","latedit",
+            "lontitle","lonedit","idtitle","idedit"]
             wrows     = [1,1,2,3,4,3,4,5,5,6,1,1,2,2,3,3,4,4,5,5]
             wcols     = [2,3,2,2,2,3,3,2,3,3,4,5,4,5,4,5,4,5,4,5]
-            
             wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
             wcolext   = [1,1,2,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1]
-            
-            twid = 155
-            twid2 = 2*twid
-            thgt = 30
-            wfixwidth = [twid,twid,twid2,twid,twid,twid,twid,twid,twid,twid2,twid,twid,twid,twid,twid,twid,twid,twid,twid,twid]
-            wfixhght  = [thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt]
     
             #adding user inputs
-            for i,r,c,re,ce,ww,hh in zip(widgetorder,wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
+            for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
                 alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
-                alltabdata[curtabstr]["tabwidgets"][i].setFixedWidth(ww)
-                alltabdata[curtabstr]["tabwidgets"][i].setFixedHeight(hh)
                     
             #adding table widget after all other buttons populated
             alltabdata[curtabstr]["tabwidgets"]["table"] = QTableWidget() #19
             alltabdata[curtabstr]["tabwidgets"]["table"].setColumnCount(5)
             alltabdata[curtabstr]["tabwidgets"]["table"].setRowCount(0) 
-            # alltabdata[curtabstr]["tabwidgets"]["table"].setItem(2, 3, QTableWidgetItem(23.45))
             alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalHeaderLabels(('Time (s)', 'Frequency (Hz)', 'Signal Strength (dBm)', 'Depth (m)','Temperature (C)'))
             alltabdata[curtabstr]["tabwidgets"]["table"].verticalHeader().setVisible(False)
             alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) #removes scroll bars
@@ -462,21 +534,20 @@ class RunProgram(QMainWindow):
             header.setSectionResizeMode(3, QHeaderView.Stretch)
             header.setSectionResizeMode(4, QHeaderView.Stretch)
             alltabdata[curtabstr]["tabwidgets"]["table"].setEditTriggers(QTableWidget.NoEditTriggers)
-
             alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"]["table"],8,2,2,4)
-               
-            #Applying other preferences to grid layout
-            Wsize = app.desktop().screenGeometry()
-            alltabdata[curtabstr]["ProcessorCanvas"].setFixedWidth(int(Wsize.width()*0.4))
-            alltabdata[curtabstr]["tabwidgets"]["table"].setFixedHeight(int(Wsize.height()*0.55))
-            alltabdata[curtabstr]["tablayout"].setColumnStretch(1,1)
-            alltabdata[curtabstr]["tablayout"].setColumnStretch(6,1)
-            alltabdata[curtabstr]["tablayout"].setRowStretch(7,1)
-            alltabdata[curtabstr]["tablayout"].setRowStretch(0,1)
-                                      
+
+            #adjusting stretch factors for all rows/columns
+            colstretch = [5,1,1,1,1,1,1]
+            for col,cstr in zip(range(0,len(colstretch)),colstretch):
+                alltabdata[curtabstr]["tablayout"].setColumnStretch(col,cstr)
+            rowstretch = [1,1,1,1,1,1,1,1,10]
+            for row,rstr in zip(range(0,len(rowstretch)),rowstretch):
+                alltabdata[curtabstr]["tablayout"].setRowStretch(row,rstr)
+
             #making the current layout for the tab
             alltabdata[curtabstr]["tab"].setLayout(alltabdata[curtabstr]["tablayout"])
-        except Exception:
+
+        except Exception: #if something breaks
             traceback.print_exc()
             self.posterror("Failed to build new processor tab")
         
@@ -485,7 +556,8 @@ class RunProgram(QMainWindow):
 # =============================================================================
 #         BUTTONS FOR PROCESSOR TAB
 # =============================================================================
-    def datasourcerefresh(self):
+    #refresh list of available receivers
+    def datasourcerefresh(self): 
         try:
             curtabstr = "Tab " + str(self.whatTab())
             # only lets you change the WINRADIO if the current tab isn't already processing
@@ -569,6 +641,7 @@ class RunProgram(QMainWindow):
             traceback.print_exc()
             self.posterror("Frequency/channel mismatch!")
             
+    #these options use a lookup table for VHF channel vs frequency
     def changechanneltomatchfrequency(self,newfrequency):
         try:
             curtabstr = "Tab " + str(self.whatTab())
@@ -598,6 +671,7 @@ class RunProgram(QMainWindow):
             traceback.print_exc()
             self.posterror("Frequency/channel mismatch!")
 
+    #update FFT thresholds/window setting
     def updatefftsettings(self):
         try:
             curtabstr = "Tab " + str(self.whatTab())
@@ -606,11 +680,11 @@ class RunProgram(QMainWindow):
                 if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
                     if alltabdata[ctab]["isprocessing"]: # and alltabdata[ctab]["datasource"] != 'Test' and alltabdata[ctab]["datasource"] != 'Audio':
                         alltabdata[curtabstr]["processor"].changethresholds(self.fftwindow,self.minfftratio,self.minsiglev,self.triggerfftratio,self.triggersiglev)
-
         except Exception:
             traceback.print_exc()
             self.posterror("Error updating FFT settings!")
             
+    #starting signal processing thread
     def startprocessor(self):
         try:
             curtabstr = "Tab " + str(self.whatTab())
@@ -619,11 +693,11 @@ class RunProgram(QMainWindow):
                 datasource = alltabdata[curtabstr]["datasource"]
                 #running processor here
 
+                #if too many signal processor threads are already running
                 if self.threadpool.activeThreadCount() + 1 > self.threadpool.maxThreadCount():
                     self.postwarning("The maximum number of simultaneous processing threads has been exceeded. This processor will automatically begin collecting data when STOP is selected on another tab.")
 
-                if datasource == 'Audio':
-                    #gets audio file to process
+                if datasource == 'Audio': #gets audio file to process
                     try:
                         # getting filename
                         fname, ok = QFileDialog.getOpenFileName(self, 'Open file','',"Source Data Files (*.WAV *.Wav *.wav *PCM *Pcm *pcm *MP3 *Mp3 *mp3)")
@@ -654,13 +728,16 @@ class RunProgram(QMainWindow):
                                 self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
                                 return
 
+                #finds current tab, gets rid of scroll bar on table
                 curtabnum = alltabdata[curtabstr]["tabnum"]
                 alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
+                #saving start time for current drop
                 if alltabdata[curtabstr]["rawdata"]["starttime"] == 0:
                     starttime = dt.datetime.utcnow()
                     alltabdata[curtabstr]["rawdata"]["starttime"] = starttime
 
+                    #autopopulating selected fields if possible
                     if datasource[:5] != 'Audio':
                         if self.autodtg:#populates date and time if requested
                             curdatestr = str(starttime.year) + str(starttime.month).zfill(2) + str(starttime.day).zfill(2)
@@ -677,33 +754,38 @@ class RunProgram(QMainWindow):
                 else:
                     starttime = alltabdata[curtabstr]["rawdata"]["starttime"]
 
+                #this should never happen (if there is no DLL loaded there shouldn't be any receivers detected), but just in case
                 if self.wrdll == 0 and datasource != 'Test' and datasource[:5] != 'Audio':
                     self.postwarning("The WiNRADIO driver was not successfully loaded! Please restart the program in order to initiate a processing tab with a connected WiNRADIO")
                     return
-                else:
-                   vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
-                   alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
-                             alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],self.fftwindow,self.minfftratio,self.minsiglev,self.triggerfftratio,self.triggersiglev)
-                   alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
+
+                #initializing thread, connecting signals/slots
+                vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
+                alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
+                         alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],self.fftwindow,
+                         self.minfftratio,self.minsiglev,self.triggerfftratio,self.triggersiglev)
+                alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
 
                 alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
                 alltabdata[curtabstr]["processor"].signals.triggered.connect(self.triggerUI)
                 alltabdata[curtabstr]["processor"].signals.terminated.connect(self.updateUIfinal)
 
+                #connecting audio file-specific signal (to update progress bar on GUI)
                 if datasource[:5] == 'Audio':
                     alltabdata[curtabstr]["processor"].signals.updateprogress.connect(self.updateaudioprogressbar)
 
+                #starting thread
                 self.threadpool.start(alltabdata[curtabstr]["processor"])
                 alltabdata[curtabstr]["isprocessing"] = True
 
-                #the code is still running but data collection has at least been initialized. This allows self.savecurrenttab() to save LOG/EDF files
+                #the code is still running but data collection has at least been initialized. This allows self.savecurrenttab() to save raw data files
                 alltabdata[curtabstr]["tabtype"] = "SignalProcessor_completed"
 
         except Exception:
             traceback.print_exc()
             self.posterror("Failed to start processor!")
             
-            
+    #aborting processor
     def stopprocessor(self):
         try:
             curtabstr = "Tab " + str(self.whatTab())
@@ -733,12 +815,13 @@ class RunProgram(QMainWindow):
 # =============================================================================
 #        SIGNAL PROCESSOR SLOTS AND OTHER CODE
 # =============================================================================
-
+    #getting tab string (alltabdata key for specified tab) from tab number
     def gettabstrfromnum(self,tabnum):
         for tabname in alltabdata:
             if alltabdata[tabname]["tabnum"] == tabnum:
                 return tabname
     
+    #slot to notify main GUI that the thread has been triggered with AXBT data
     @pyqtSlot(int,float)
     def triggerUI(self,plottabnum,firstpointtime):
         try:
@@ -749,6 +832,7 @@ class RunProgram(QMainWindow):
             self.posterror("Failed to trigger temperature/depth profile in GUI!")
             traceback.print_exc()
 
+    #slot to pass AXBT data from thread to main GUI
     @pyqtSlot(int,float,float,float,float,float,int)
     def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,ctime,i):
         try:
@@ -769,6 +853,7 @@ class RunProgram(QMainWindow):
                 alltabdata[plottabstr]["ProcessorAx"].plot(alltabdata[plottabstr]["rawdata"]["temperature"],alltabdata[plottabstr]["rawdata"]["depth"],color='k')
                 alltabdata[plottabstr]["ProcessorCanvas"].draw()
 
+            #coloring new cell based on whether or not it has good data
             if np.isnan(ctemp):
                 ctemp = '*****'
                 cdepth = '*****'
@@ -776,7 +861,7 @@ class RunProgram(QMainWindow):
             else:
                 curcolor = QColor(204, 255, 220) #light green
 
-
+            #updating table
             tabletime = QTableWidgetItem(str(ctime))
             tabletime.setBackground(curcolor)
             tabledepth = QTableWidgetItem(str(cdepth))
@@ -800,11 +885,12 @@ class RunProgram(QMainWindow):
             table.setItem(crow, 3, tabledepth)
             table.setItem(crow, 4, tabletemp)
             table.scrollToBottom()
-    #        if crow > 20:
+    #        if crow > 20: #uncomment to remove old rows
     #            table.removeRow(0)
         except Exception:
             traceback.print_exc()
         
+    #final update from thread after being aborted- restoring scroll bar, other info
     @pyqtSlot(int)
     def updateUIfinal(self,plottabnum):
         try:
@@ -825,6 +911,7 @@ class RunProgram(QMainWindow):
             self.posterror("Failed to complete final UI update!")
             traceback.print_exc()
 
+    #posts message in main GUI if thread processor fails for some reason
     @pyqtSlot(int)
     def failedWRmessage(self,messagenum):
         if messagenum == 0:
@@ -844,31 +931,7 @@ class RunProgram(QMainWindow):
         elif messagenum == 7:
             self.posterror("Contact lost with WiNRADIO receiver! Please ensure device is connected and powered on!")
 
-
-    def processfromaudio(self,curtabstr):
-        try:
-            #getting filename
-            fname,ok = QFileDialog.getOpenFileName(self, 'Open file',
-                        '',"Source Data Files (*.WAV *.Wav *.wav *PCM *Pcm *pcm *MP3 *Mp3 *mp3)")
-            if not ok:
-                alltabdata[curtabstr]["isprocessing"] = False
-                return
-
-            #building progress bar
-            alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"] = QProgressBar()
-            alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"],7,2,1,4)
-            alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"].setValue(0)
-            QApplication.processEvents()
-
-            alltabdata[curtabstr]["processor"].signals.updateprogress.connect(self.updateaudioprogressbar)
-            self.threadpool.start(alltabdata[curtabstr]["processor"])
-            alltabdata[curtabstr]["isprocessing"] = True
-
-        except Exception:
-            self.posterror("Failed to execute audio processor!")
-            traceback.print_exc()
-
-
+    #updates on screen progress bar if thread is processing audio data
     @pyqtSlot(int,int)
     def updateaudioprogressbar(self,plottabnum,newprogress):
         try:
@@ -959,7 +1022,6 @@ class RunProgram(QMainWindow):
             newtabnum = self.tabWidget.count()
             curtabstr = "Tab "+str(newtabnum) #pointable string for alltabdata dict
     
-            #self.currenttab = QWidget() #tablayout = QGridLayout() #self.figure = plt.figure() 
             alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),
                       "ProfFig":plt.figure(),"LocFig":plt.figure(),
                       "tabtype":"ProfileEditorInput"}
@@ -1008,29 +1070,26 @@ class RunProgram(QMainWindow):
                            "timeedit","idtitle","idedit","logtitle","logedit","logbutton","submitbutton"]
             wrows     = [1,2,2,3,3,4,4,5,5,6,6,7,7,8,9]
             wcols     = [1,1,2,1,2,1,2,1,2,1,2,1,2,1,1]
-            
             wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-            wcolext   = [2,1,1,1,1,1,1,1,1,1,1,1,1,2,2]
-            twid = 150
-            thgt = 30
-            wfixwidth = [2*twid,twid,twid,twid,twid,twid,twid,twid,twid,twid,twid,twid,twid,2*twid,2*twid]
-            wfixhght  = [15,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt]    
+            wcolext   = [2,1,1,1,1,1,1,1,1,1,1,1,1,2,2]    
             
             #adding user inputs
-            for i,r,c,re,ce,ww,hh in zip(widgetorder,wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
+            for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
                 alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
-                alltabdata[curtabstr]["tabwidgets"][i].setFixedWidth(ww) 
             
             #forces grid info to top/center of window
             alltabdata[curtabstr]["tablayout"].setRowStretch(10,1)
             alltabdata[curtabstr]["tablayout"].setColumnStretch(0,1)
             alltabdata[curtabstr]["tablayout"].setColumnStretch(3,1)
-            alltabdata[curtabstr]["tab"].setLayout(alltabdata[curtabstr]["tablayout"]) #self.currenttab.setLayout(tablayout)
+
+            #applying layout
+            alltabdata[curtabstr]["tab"].setLayout(alltabdata[curtabstr]["tablayout"]) 
+
         except Exception:
             traceback.print_exc()
             self.posterror("Failed to build editor input tab!")
 
-
+    #browse for raw data file to QC
     def selectdatafile(self):
         try:
             fname,ok = QFileDialog.getOpenFileName(self, 'Open file', 
@@ -1191,7 +1250,7 @@ class RunProgram(QMainWindow):
             #adding toolbar
             alltabdata[curtabstr]["ProfToolbar"] = NavigationToolbar(alltabdata[curtabstr]["ProfCanvas"], self)
             alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["ProfToolbar"],1,2,1,2)
-            alltabdata[curtabstr]["ProfToolbar"].setFixedWidth(300)
+            # alltabdata[curtabstr]["ProfToolbar"].setFixedWidth(300)
             
             #plot data
             alltabdata[curtabstr]["climohandle"] = tplot.makeprofileplot(alltabdata[curtabstr]["ProfAx"],rawtemperature,
@@ -1305,32 +1364,20 @@ class RunProgram(QMainWindow):
             
             wrows     = [2,3,3,4,4,5,5,6,6,9,1,6,6,7]
             wcols     = [2,2,3,2,3,2,3,2,3,2,5,6,5,6]
-            
             wrext     = [1,1,1,1,1,1,1,1,1,1,4,1,1,1]
             wcolext   = [2,1,1,1,1,1,1,1,1,2,2,1,1,1]
             
-            twid = 155
-            twid2 = 2*twid
-            thgt = 30
-            thgt = int(Wsize.height()/30)
-            thgt2 = 4*thgt
-            wfixwidth = [twid2,twid,twid,twid,twid,twid,twid,twid,twid,twid2,twid2,twid,twid,twid]
-            wfixhght  = [thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt,thgt2,thgt,thgt,thgt]
-            
             #adding user inputs
-            for i,r,c,re,ce,ww,hh in zip(widgetorder,wrows,wcols,wrext,wcolext,wfixwidth,wfixhght):
+            for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
                 alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
-                alltabdata[curtabstr]["tabwidgets"][i].setFixedWidth(ww)
-                alltabdata[curtabstr]["tabwidgets"][i].setFixedHeight(hh)
-                    
-            #Applying other preferences to grid layout
-            alltabdata[curtabstr]["tablayout2"].setColumnMinimumWidth(0,int(0.4*Wsize.width())) #Space between left and first entry 
-            alltabdata[curtabstr]["tablayout2"].setColumnStretch(1,2)
-            alltabdata[curtabstr]["tablayout2"].setColumnStretch(4,1)
-            alltabdata[curtabstr]["tablayout2"].setColumnStretch(7,1)
-            alltabdata[curtabstr]["tablayout2"].setColumnStretch(8,3)
-            alltabdata[curtabstr]["tablayout2"].setRowStretch(0,1)
-            alltabdata[curtabstr]["tablayout2"].setRowStretch(10,1)
+
+            #adjusting stretch factors for all rows/columns
+            colstretch = [7,1,1,1,1,1,1,1,1]
+            for col,cstr in zip(range(0,len(colstretch)),colstretch):
+                alltabdata[curtabstr]["tablayout2"].setColumnStretch(col,cstr)
+            rowstretch = [1,1,1,1,1,1,1,1,0,1,1,8]
+            for row,rstr in zip(range(0,len(rowstretch)),rowstretch):
+                alltabdata[curtabstr]["tablayout2"].setRowStretch(row,rstr)
             
             alltabdata[curtabstr]["tabtype"] = "ProfileEditor"
         except Exception:
@@ -1344,12 +1391,8 @@ class RunProgram(QMainWindow):
 # =============================================================================
 #         PROFILE EDITING FUNCTION CALLS
 # =============================================================================
-        
-    def changeMDvalue(self,value):
-        curtabstr = "Tab " + str(self.whatTab())
-        alltabdata[curtabstr]["maxderiv"] = float(value)/100
-        alltabdata[curtabstr]["tabwidgets"]["mdslidetitle"].setText('Inflection Point Threshold (C/m<sup>2</sup>): ' + str(alltabdata[curtabstr]["maxderiv"]))
-        
+
+    #add point on profile
     def addpoint(self):
         try:
             QApplication.setOverrideCursor(Qt.CrossCursor)
@@ -1360,6 +1403,7 @@ class RunProgram(QMainWindow):
             traceback.print_exc()
             self.posterror("Failed to add point")
             
+    #remove point on profile
     def removepoint(self):
         try:
             QApplication.setOverrideCursor(Qt.CrossCursor)
@@ -1370,7 +1414,7 @@ class RunProgram(QMainWindow):
             traceback.print_exc()
             self.posterror("Failed to remove point")
             
-            
+    #update profile with selected point to add or remove
     def on_release(self,event):
         try:
             curtabstr = "Tab " + str(self.whatTab())
@@ -1478,6 +1522,7 @@ class RunProgram(QMainWindow):
             #restore cursor type
             QApplication.restoreOverrideCursor()
         
+    #apply changes from sfc correction/max depth/depth delay spin boxes
     def applychanges(self):
         try:
             curtabstr = "Tab " + str(self.whatTab())
@@ -1626,6 +1671,7 @@ class RunProgram(QMainWindow):
             traceback.print_exc()
             self.posterror("Failed to Re-QC the profile")
 
+    #toggle visibility of climatology profile
     def toggleclimooverlay(self,pressed):
         try:
             curtabstr = "Tab " + str(self.whatTab())
@@ -1644,10 +1690,13 @@ class RunProgram(QMainWindow):
 # =============================================================================
 #     TAB MANIPULATION OPTIONS, OTHER GENERAL FUNCTIONS
 # =============================================================================
+
+    #gets index of open tab in GUI
     def whatTab(self):
         currentIndex = self.tabWidget.currentIndex()
         return currentIndex
     
+    #renames tab (only user-visible name, not alltabdata dict key)
     def renametab(self):
         try:
             curtab = int(self.whatTab())
@@ -1658,6 +1707,7 @@ class RunProgram(QMainWindow):
             traceback.print_exc()
             self.posterror("Failed to rename the current tab")
     
+    #sets default color scheme for tabs
     def setnewtabcolor(self,tab):
         p = QPalette()
         gradient = QLinearGradient(0, 0, 0, 400)
@@ -1667,6 +1717,7 @@ class RunProgram(QMainWindow):
         tab.setAutoFillBackground(True)
         tab.setPalette(p)
             
+    #closes a tab
     def closecurrenttab(self):
         try:
             reply = QMessageBox.question(self, 'Message',
@@ -1698,7 +1749,8 @@ class RunProgram(QMainWindow):
         except Exception:
             traceback.print_exc()
             self.posterror("Failed to close the current tab")
-                        
+                
+    #save data in open tab        
     def savedataincurtab(self):
         try:
             #getting directory to save files from QFileDialog
@@ -1897,6 +1949,7 @@ class RunProgram(QMainWindow):
             QApplication.restoreOverrideCursor()
             return True
         
+    #warning message
     def postwarning(self,warningtext):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
@@ -1905,6 +1958,7 @@ class RunProgram(QMainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
         
+    #error message
     def posterror(self,errortext):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
@@ -1913,6 +1967,7 @@ class RunProgram(QMainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
     
+    #warning message with options (Okay or Cancel)
     def postwarning_option(self,warningtext):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
@@ -1927,7 +1982,7 @@ class RunProgram(QMainWindow):
             option = 'cancel'
         return option
     
-    #add warning message on exit
+    #add warning message before closing GUI
     def closeEvent(self, event):
         reply = QMessageBox.question(self, 'Message',
             "Are you sure to close the application? \n All unsaved work will be lost!", QMessageBox.Yes | 
@@ -1960,6 +2015,7 @@ class RunProgram(QMainWindow):
             #parsing and checking data
             if checkcoords:
                 try:
+                    #checking latitude validity
                     latstr = latstr.split(',')
                     latsign = np.sign(float(latstr[0]))
                     if len(latstr) == 3:
@@ -1973,6 +2029,7 @@ class RunProgram(QMainWindow):
                     return
 
                 try:
+                    #checking longitude validity
                     lonstr = lonstr.split(',')
                     lonsign = np.sign(float(lonstr[0]))
                     if len(lonstr) == 3:
@@ -1998,7 +2055,7 @@ class RunProgram(QMainWindow):
                 lat = np.NaN
 
 
-            if checktime:
+            if checktime: #checking time
                 if len(timestr) != 4:
                     self.postwarning('Invalid Time Format!')
                     return
@@ -2006,7 +2063,7 @@ class RunProgram(QMainWindow):
                     self.postwarning('Invalid Date Format!')
                     return
 
-                try:
+                try: #checking date
                     year = int(profdatestr[:4])
                     month = int(profdatestr[4:6])
                     day = int(profdatestr[6:])
@@ -2025,6 +2082,7 @@ class RunProgram(QMainWindow):
                     self.postwarning('Invalid Year Entered (< 1000 AD)!')
                     return
 
+                #making sure the profile is within 12 hours and not in the future, warning if otherwise
                 curtime = timemodule.gmtime()
                 deltat = dt.datetime(curtime[0],curtime[1],curtime[2],curtime[3],curtime[4],curtime[5]) - dt.datetime(year,month,day,hour,minute,0)
                 option = ''

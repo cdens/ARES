@@ -1,15 +1,53 @@
+# =============================================================================
+#     Code: makeAXBTplots.py
+#     Author: ENS Casey R. Densmore, 20JUN2019
+#     
+#     Purpose: Create profile and location plots for AXBT drops
+#
+#   Functions:
+#       o climohandle = makeprofileplot(ax,rawtemperature,rawdepth,temperature,
+#           depth,climotempfill,climodepthfill,dtg,matchclimo): Plots the overlaid
+#           raw and QC'ed temperature-depth profiles, along with the shaded 
+#           climatology at the given location/month
+#           Inputs:
+#               > ax: current plot axes
+#               > rawtemperature, rawdepth: Unedited T-D profile
+#               > temperature, depth: QC'ed T-D profile
+#               > dtg: date/time (string) for title
+#               > climotempfill, climodepthfill: Vectors corresponding to shape of
+#                   filled climatology region to shade
+#               > matchclimo: 1/0 or T/F corresponding to whether or not QC'ed 
+#                   profile matches climo (plot is annotated if matchclimo = 0)
+#           Returns: "climohandle": handle to climatology shading which can be
+#               set to invisible, depending on user preference
+#       o makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord):
+#           Creates location plot for current drop with contoured bathymetry.
+#           Uses code in geoplotfunctions.py to customize plot. 
+#           Inputs:
+#               > fig, ax: current plot figure and axes
+#               > lat, lon: AXBT position for plot
+#               > dtg: date/time (string) for title
+#               > exportlon,exportlat,exportrelief: lon/lat vectors, 2D bathymetry
+#                   field to be overlaid in plot
+#               > dcoord: lon/lat range for plot (longitude and latitude limits
+#                   on plot are set to position-dcoord:position+dcoord)
+#           Returns: "climohandle": handle to climatology shading which can be       
+#       
+# =============================================================================
+
 import qclib.geoplotfunctions as gplt
 import numpy as np
-import cmocean.cm as cmo
 from matplotlib.colors import ListedColormap
 
 def makeprofileplot(ax,rawtemperature,rawdepth,temperature,depth,climotempfill,climodepthfill,dtg,matchclimo):
-    climohandle = ax.fill(climotempfill,climodepthfill,color='b',alpha=0.3,label='Climo')
+    climohandle = ax.fill(climotempfill,climodepthfill,color='b',alpha=0.3,label='Climo') #fill climo, save handle
     climohandle = climohandle[0]
-    ax.plot(rawtemperature,rawdepth,'k',linewidth=2,label='Raw')
-    ax.plot(temperature,depth,'r',linewidth=2,label='QC')
+    ax.plot(rawtemperature,rawdepth,'k',linewidth=2,label='Raw') #plot raw profile
+    ax.plot(temperature,depth,'r',linewidth=2,label='QC') #plot QC profile
     if matchclimo == 0:
-        ax.text(np.max(temperature)-10,900,'Climatology Mismatch!',color = 'r')
+        ax.text(np.max(temperature)-10,900,'Climatology Mismatch!',color = 'r') #noting climo mismatch if necessary
+
+    #plot labels/ranges
     ax.set_xlabel('Temperature ($^\circ$C)')
     ax.set_ylabel('Depth (m)')
     ax.set_title('Drop: ' + dtg,fontweight="bold")
@@ -31,15 +69,16 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     lonrange = [round(lon)-dcoord,round(lon)+dcoord]
     latrange = [round(lat)-dcoord,round(lat)+dcoord]
 
+    #read/generate topography colormap
     topo = np.genfromtxt('qclib/topocolors.txt',delimiter=',')
     alphavals = np.ones((np.shape(topo)[0], 1))
     topo = np.append(topo, alphavals, axis=1)
     topomap = ListedColormap(topo)
 
+    #contour bathymetry
     c = ax.pcolormesh(exportlon,exportlat,exportrelief,vmin=-4000,vmax=4000,cmap = topomap)
     cbar = fig.colorbar(c,ax=ax)
     cbar.set_label('Elevation (m)')
-#    gplt.addcoastdata(ax,latrange,lonrange,'k')
     
     #scatter AXBT location
     ax.scatter(lon,lat,color='r',marker='x',linewidth=2) 
@@ -50,7 +89,6 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     
     #plot formatting
     gplt.setgeoaxes(fig,ax,lonrange,latrange,'x')
-    
     gplt.setgeotick(ax)
     ax.grid()
     ax.set_title(' Region: ' + region,fontweight="bold")

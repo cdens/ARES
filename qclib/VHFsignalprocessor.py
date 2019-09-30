@@ -1,8 +1,118 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# ==================================================================================================================
+#     Code: VHFsignalprocessor.py
+#     Author: ENS Casey R. Densmore, DDMMYYYY
+#     
+#     Purpose: Handles all signal processing functions related to receiving and
+#       converting AXBT data into temperature/depth information, either in real-
+#       time with WiNRADIO receivers, or reprocessing raw audio data from WAV files
+#
+#       **NOTE 1**: This module handles all communication with the WiNRADIO receivers
+#       through the WiNRADIO DLL/API, directly in Python using the Ctypes module.
+#       Due to platform limitations for the WiNRADIO, several of the functions/
+#       thread options are only compatible with Windows machines that have the 
+#       WiNRADIO driver installed and DLL file loaded with the ctypes.windll module.
+#       This compatibility is checked in main.py, and if any of the above criteria
+#       are not met, the loaded WiNRADIO DLL variable wrdll (often seen as self.wrdll) 
+#       is set equal to zero. The ARES program main file (main.py) is configured
+#       to check these criteria, and only start signal processor threads that use
+#       WiNRADIO receiver data if the criteria are met.
+#
+#       **NOTE 2**: This module works with both WiNRADIOs and audio data. The "test"
+#       option that may be selected simply reads an audio file and reprocesses that
+#       data with a normal time delay, configured to replicate the datastream one
+#       would receive from the WiNRADIO. The same functions are used to process data
+#       from both WiNRADIOs and audio files, with occasional if/else statements to 
+#       handle differences betwen the two.
+#
+#       **NOTE 3** All of the functions in this file are called from the ThreadProcessor
+#       class of type QRunnable. ThreadProcessor is a class for the threads that are called
+#       from main.py to process AXBT signal data either from a WiNRADIO or audio file. Threads
+#       are handled (started, stopped, and modified) in main.py, but this file contains all of
+#       the functions necessary for the thread to run, as well as all slots and signals by which
+#       data is passed back/forth between the thread and the main event loop.
+#
+#   General Functions:
+#       o depth = timetodepth(time): Calculates profile depths using probe fall rate equation
+#       o temp = freqtotemp(frequency): General frequency-temperature conversion for AXBTs
+#       o freq,maxf,ratio = dofft(pcmdata,fs,minratio,minlev): Determines frequency with max
+#           power using an FFT on raw audio data array "pcmdata" collected at sampling
+#           frequency "fs". If the ratio between the peak frequency in the AXBT temperature
+#           band (1300 Hz - 2800 Hz) normalized by the maximum total power is greater than
+#           "minratio" and the maximum total power is greater than "minlev", then the peak frequency
+#           is returned as "freq". Otherwise, 0 Hz is returned. "maxf" and "ratio" are the actual
+#           maximum total power and normalized max power within the AXBT band. This function is
+#           used to process both WiNRADIO signal and reprocessed audio file data.
+#       o outval, correctedval = channelandfrequencylookup(value,direction): VHF channel/frequency
+#           lookup table. "value" is the input value to be converted to either frequency or channel
+#           and "direction" specifies which conversion is occuring. "outval" is the converted value
+#           (so if "value" is a VHF frequency, "outval" is the corresponding channel and vice versa).
+#           If an invalid channel/frequency is entered, the nearest option ("correctedval") is selected,
+#           and the corresponding channel/frequency is returned.
+#
+#   C++ Interactivity Functions/Variables:
+#       o RADIO_INFO2 and Features Structures: C++ style structures declared to allow the
+#           WiNRADIO to populate them with important information (e.g. fs, serial numbers)
+#           when using the WRDLL.GetRadioList() command in listwinradios()
+#       o winradioserials = listwinradios(wrdll): Returns a Python list of serial numbers
+#           for all connected receivers using the WiNRADIO programmer's API/DLL.
+#
+#   ThreadProcessor Functions:
+#       o __init__(wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, 
+#           fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev): This is where necessary
+#           information is passed to the thread to initialize it. If the data source is an audio file, 
+#           the audio file is read into a list here. If the datasource is a receiver, the receiver is 
+#           initialized and set to the correct frequency here (but the audio stream is not configured).
+#           Inputs are:
+#               > wrdll: Variable containing the loaded WiNRADIO DLL/API, or "0" if the criteria
+#                   in Note 1 are not satisfied.
+#               > datasource: Either a WiNRADIO serial number or concatenation of "Audio" and the 
+#                   file to be read, depending on data source type. "Test" reads the default WAV file
+#                   but causes the Thread to handle all signals/slots as if it is receiving data
+#                   from a receiver.
+#               > vhffreq: VHF radio frequency that the WiNRADIO receiver will demodulate and sample
+#                   for AXBT data. Only relevant if an actual WiNRADIO is selected
+#               > curtabnum: Unique tab number (doesn't change if tabs are opened and closed) corresponding
+#                   to the current thread that enables the GUI to update data sent back via a pyqtSignal in
+#                   the appropriate tab
+#               > starttime: The start date/time of processing (DTG, UTC) which is used to calculate a dT (and 
+#                   depth) for all data in that thread
+#               > istriggered: Logical value indicating whether or not AXBT data has been detected and the fall
+#                   rate equations are being applied
+#               > firstpointtime: Time at which the first AXBT data was collected: data collected at this time
+#                   is assumed to be at the surface (0m) and the depth of all future data is determined with the
+#                   fall rate equation in timetodepth()
+#               > fftwindow: Window (seconds) over which the FFT is conducted and peak frequency is calculated
+#               > minfftratio, minsiglev: Minimum signal ratio and level necessary for a datapoint to be 
+#                   considered valid
+#               > triggerfftratio, triggersiglev: As with minfftratio, minsiglev, but higher thresholds necessary 
+#                   for the first data point, in order to 'trigger' data collection
+#       o Run(): A separate function called from main.py immediately after initializing the thread to start data 
+#           collection. Here, the callback function which updates the audio stream for WiNRADIO threads is declared
+#           and the stream is directed to this callback function. This also contains the primary thread loop which 
+#           updates data from either the WiNRADIO or audio file continuously using dofft() and the conversion eqns.
+#       o abort(): Aborts the thread, sends final data to the event loop and notifies the event loop that the
+#           thread has been terminated
+#       o changecurrentfrequency(newfreq): Updates the VHF frequency being demodulated (affects WiNRADIO threads only)
+#       o changethresholds(fftwindow,minfftratio,minsiglev,triggerfftratio,triggersiglev): Changes the thresholds
+#           described for __init__() required for data to be considered valid.
+#
+#   ThreadProcessorSignals:
+#       o iterated(ctabnum,ctemp, cdepth, cfreq, sigstrength, ctime, i): Passes information collected on the current
+#           iteration of the thread loop back to the main program, in order to update the corresponding tab. "i" is
+#           the iteration number- plots and tables are updated in the main loop every N iterations, with N specified
+#           independently for plots/tables in main.py
+#       o terminated(ctabnum): Notifies the main loop that the thread has been terminated/aborted
+#       o triggered(ctabnum, time): Notifies the main loop that the current thread has detected data in order
+#           to record the trigger time for that tab (enables stopping/restarting processing in a tab)
+#       o failed(flag): Notifies the main loop that an error (corresponding to the value of flag) occured, causing an
+#           error message to be posted in the GUI
+#       o updateprogress(ctabnum, progress): **For audio files only** updates the main loop with the progress 
+#           (displayed in progress bar) for the current thread
+#
+# ==================================================================================================================
 
 import numpy as np
-from scipy.io import wavfile #for wav
+from scipy.io import wavfile #for wav file reading
 import wave
 
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject
@@ -44,13 +154,13 @@ def dofft(pcmdata,fs,minratio,minsiglev):
     df = 1 / T
     f = np.array([df * n if n < N / 2 else df * (n - N) for n in range(N)])
 
-    #limiting frequencies, converting to ratio
+    #limiting frequencies, converting data to ratio form
     maxf = np.max(fftdata)
     ind = np.all((np.greater_equal(f,1300),np.less_equal(f,2800)),axis=0)
     f = f[ind]
     fftdata = fftdata[ind]/maxf
 
-    # pulls max frequency if criteria are met
+    # pulls max frequency if criteria are met, otherwise sets equal to 0
     if np.max(fftdata) >= minratio and maxf >= minsiglev:
         freq = f[np.argmax(fftdata)]
     else:
@@ -61,10 +171,12 @@ def dofft(pcmdata,fs,minratio,minsiglev):
 #table lookup for VHF channels and frequencies
 def channelandfrequencylookup(value,direction):
     
+    #list of frequencies
     allfreqs = np.arange(136,173.51,0.375)
     allfreqs = np.delete(allfreqs,np.where(allfreqs == 161.5)[0][0])
     allfreqs = np.delete(allfreqs,np.where(allfreqs == 161.875)[0][0])
     
+    #liwst of corresponding channels
     allchannels = np.arange(32,99.1,1)
     cha = np.arange(1,16.1,1)
     chb = np.arange(17,31.1,1)
@@ -73,7 +185,7 @@ def channelandfrequencylookup(value,direction):
         allchannels = np.append(allchannels,chb[i])
     allchannels = np.append(allchannels,cha[15])
 
-    if direction == 'findfrequency':
+    if direction == 'findfrequency': #find frequency given channel
         try:
             outval = allfreqs[np.where(allchannels == value)[0][0]]
             correctedval = value
@@ -81,7 +193,7 @@ def channelandfrequencylookup(value,direction):
             correctedval = allchannels[np.argmin(abs(allchannels-value))]
             outval = allfreqs[np.where(allchannels == correctedval)[0][0]]
             
-    elif direction == 'findchannel':
+    elif direction == 'findchannel': #find channel given frequency
         try:
             outval = allchannels[np.where(allfreqs == value)[0][0]]
             correctedval = value
@@ -104,7 +216,9 @@ def channelandfrequencylookup(value,direction):
 
 class ThreadProcessor(QRunnable):
 
-    def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, *args,**kwargs):
+    #initializing current thread (saving variables, reading audio data or contacting/configuring receiver)
+    def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, 
+        fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, *args,**kwargs):
         super(ThreadProcessor, self).__init__()
 
 
@@ -117,12 +231,14 @@ class ThreadProcessor(QRunnable):
         self.keepgoing = True  # signal connections
         self.signals = ThreadProcessorSignals()
 
+        #FFT thresholds
         self.fftwindow = fftwindow
         self.minfftratio = minfftratio
         self.minsiglev = minsiglev
         self.triggerfftratio = triggerfftratio
         self.triggersiglev = triggersiglev
 
+        #output file names
         self.txtfilename = "sigdata_" + str(self.curtabnum) + '.txt'
         self.txtfile = open(self.txtfilename, 'w')
         self.wavfilename = "tempwav_" + str(self.curtabnum) + '.WAV'
@@ -133,7 +249,7 @@ class ThreadProcessor(QRunnable):
         if datasource[:5] == 'Audio':
             self.audiofile = datasource[6:]
             self.isfromaudio = True
-            self.f_s, snd = wavfile.read(self.audiofile)
+            self.f_s, snd = wavfile.read(self.audiofile) #reading file
             try: #if left/right stereo
                 self.audiostream = snd[:, 0]
             except:
@@ -144,9 +260,10 @@ class ThreadProcessor(QRunnable):
             self.f_s, snd = wavfile.read(self.audiofile)
             self.audiostream = snd[:, 0]
 
-
+        #if thread is to be connected to a WiNRADIO
         if not self.isfromaudio and not self.isfromtest:
 
+            #initializing variables to check if WiNRADIO remains connected
             self.disconnectcount = 0
             self.bufferlen = 0
 
@@ -154,20 +271,21 @@ class ThreadProcessor(QRunnable):
             self.f_s = 64000  # default value
             self.audiostream = [0] * 64000
 
-            # saves library
+            # saves WiNRADIO DLL/API library
             self.wrdll = wrdll
 
             # initialize winradio
             self.serial = datasource  # translate winradio identifier
             self.serialnum_2WR = c_char_p(self.serial.encode('utf-8'))
 
-            #setup wave file
+            #setup WAV file to write (if audio or test, source file is copied instead)
             self.wavfile = wave.open(self.wavfilename,'wb')
             wave.Wave_write.setnchannels(self.wavfile,1)
             wave.Wave_write.setsampwidth(self.wavfile,2)
             wave.Wave_write.setframerate(self.wavfile,self.f_s)
             wave.Wave_write.writeframes(self.wavfile,bytearray(self.audiostream))
 
+            #opening current WiNRADIO/establishing contact
             self.hradio = self.wrdll.Open(self.serialnum_2WR)
             if self.hradio == 0:
                 self.keepgoing = False
@@ -212,7 +330,7 @@ class ThreadProcessor(QRunnable):
                 if self.wrdll.SetVolume(self.hradio, 31) == 0:
                     self.signals.failed.emit(5)
 
-            except Exception:
+            except Exception: #if any WiNRADIO comms/initialization attempts failed, terminate thread
                 self.keepgoing = False
                 self.signals.failed.emit(4)
                 self.signals.terminated.emit(curtabnum)
@@ -223,13 +341,13 @@ class ThreadProcessor(QRunnable):
                 traceback.print_exc()
 
         else:
-            shutil.copy(self.audiofile, self.wavfilename)
+            shutil.copy(self.audiofile, self.wavfilename) #copying audio file if datasource = Test or Audio
 
 
     @pyqtSlot()
     def run(self):
 
-        if not self.isfromaudio and not self.isfromtest:
+        if not self.isfromaudio and not self.isfromtest: #if source is a receiver
             #Declaring the callbuck function to update the audio buffer
             @CFUNCTYPE(None, c_void_p, c_void_p, c_ulong, c_ulong)
             def updateaudiobuffer(streampointer_int, bufferpointer_int, size, samplerate):
@@ -254,14 +372,15 @@ class ThreadProcessor(QRunnable):
 
             self.audiostream.extend([0] * 64000)
 
-        else:
+        else: #if source is an audio file
+            #configuring sample times for the audio file
             self.alltimes = np.arange(0, len(self.audiostream), 1) / self.f_s
             self.maxtime = np.max(self.alltimes)
             self.sampletimes = np.arange(0,self.maxtime,0.1)
 
 
         try:
-            # setting up while loop- terminates when user clicks "STOP"
+            # setting up thread while loop- terminates when user clicks "STOP" or audio file finishes processing
             i = -1
 
             while self.keepgoing:
@@ -275,11 +394,13 @@ class ThreadProcessor(QRunnable):
                 if not self.isfromaudio and not self.isfromtest:
 
                     #protocal to kill thread if connection with WiNRADIO is lost
-                    if len(self.audiostream) == self.bufferlen:
+                    if len(self.audiostream) == self.bufferlen: #checks if the audio stream is receiving new data
                         self.disconnectcount += 1
                     else:
                         self.disconnectcount = 0
                         self.bufferlen = len(self.audiostream)
+
+                    #if the audio stream hasn't received new data for several iterations and checking device connection fails
                     if self.disconnectcount >= 30 and not self.wrdll.IsDeviceConnected(self.hradio):
                         self.wrdll.SetupStreams(self.hradio, None, None, None, None)
                         self.wrdll.CloseRadioDevice(self.hradio)
@@ -307,7 +428,7 @@ class ThreadProcessor(QRunnable):
                         self.signals.terminated.emit(self.curtabnum)
                         return
 
-
+                    #getting current data to sample from audio file
                     ind = np.all([np.greater_equal(self.alltimes,ctime-self.fftwindow/2),np.less_equal(self.alltimes,ctime + self.fftwindow/2)],axis=0)
                     currentdata = self.audiostream[ind]
                     sigstrength = 0
@@ -324,13 +445,12 @@ class ThreadProcessor(QRunnable):
                     actmax = 0
                     ratiomax = 0
 
-
+                #writing raw data to sigdata file (ASCII) for current thread
                 cline = str(ctime) + ',' + str(cfreq) + ',' + str(actmax) + ',' + str(ratiomax) + '\n'
-
                 if self.keepgoing:
                     self.txtfile.write(cline)
 
-                # if statement to trigger reciever after first frequency arrives
+                # if statement to trigger reciever after first valid frequency arrives
                 if not self.istriggered and cfreq != 0 and ratiomax >= self.triggerfftratio and actmax >= self.triggersiglev:
                     self.istriggered = True
                     self.firstpointtime = ctime
@@ -338,10 +458,10 @@ class ThreadProcessor(QRunnable):
                 elif not self.istriggered:
                     cfreq = 0
 
+                #determining temperature/depth using fall rate/frequency conversion functions
                 if self.istriggered:
                     timefromtrigger = ctime - self.firstpointtime
                     cdepth = timetodepth(timefromtrigger)
-
                     if cfreq != 0:
                         ctemp = freqtotemp(cfreq)
                     else:
@@ -362,7 +482,7 @@ class ThreadProcessor(QRunnable):
                 if not self.isfromaudio and not self.isfromtest:
                     timemodule.sleep(0.1)  # pauses before getting next point
 
-        except Exception:
+        except Exception: #if the thread encounters an error, terminate
             self.keepgoing = False
             self.txtfile.close()
 
@@ -376,7 +496,7 @@ class ThreadProcessor(QRunnable):
             self.signals.terminated.emit(self.curtabnum)
 
     @pyqtSlot()
-    def abort(self):
+    def abort(self): #executed when user selects "Stop" button
         curtabnum = self.curtabnum
         self.keepgoing = False  # kills while loop
 
@@ -389,7 +509,7 @@ class ThreadProcessor(QRunnable):
         return
 
     @pyqtSlot(float)
-    def changecurrentfrequency(self, newfreq):
+    def changecurrentfrequency(self, newfreq): #update VHF frequency for WiNRADIO
         # change frequency- kill if failed
         self.vhffreq_2WR = c_ulong(int(newfreq * 1E6))
         if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
@@ -401,7 +521,7 @@ class ThreadProcessor(QRunnable):
             return
 
     @pyqtSlot(float,float,int,float,int)
-    def changethresholds(self,fftwindow,minfftratio,minsiglev,triggerfftratio,triggersiglev):
+    def changethresholds(self,fftwindow,minfftratio,minsiglev,triggerfftratio,triggersiglev): #update data thresholds for FFT
         if fftwindow <= 1:
             self.fftwindow = fftwindow
         else:
@@ -409,11 +529,10 @@ class ThreadProcessor(QRunnable):
         self.minfftratio = minfftratio
         self.minsiglev = minsiglev
         self.triggerfftratio = triggerfftratio
-        self.triggersiglev = triggersiglev
-        print("Update in thread: trigsig=" + str(triggersiglev) + ", trigratio=" + str(triggerfftratio) + ", minsig=" + str(minsiglev) + ", minratio=" +str(minfftratio) )
-        
+        self.triggersiglev = triggersiglev        
 
-class ThreadProcessorSignals(QObject):
+#initializing signals for data to be passed back to main loop
+class ThreadProcessorSignals(QObject): 
     iterated = pyqtSignal(int,float,float,float,float,float,int) #signal to add another entry to raw data arrays
     triggered = pyqtSignal(int,float) #signal that the first tone has been detected
     terminated = pyqtSignal(int) #signal that the loop has been terminated (by user input or program error)

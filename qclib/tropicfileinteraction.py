@@ -1,3 +1,54 @@
+# =============================================================================
+#     Code: tropicfileinteraction.py
+#     Author: ENS Casey R. Densmore, 20JUN2019
+#    
+#     Purpose: Provides functions to write/read various AXBT data file formats
+#
+#	General Variable Definitions:
+#		o xxxfile (e.g. logfile, finfile): filename to read or write
+#		o temperature, depth: temperature-profile from file (raw or QC-ed 
+#			depending on filetype)
+#		o frequency, time: frequency/time from start used to generate raw profile
+#		o lat, lon, year, day, month, hour, minute, time: all position/time
+#			variables corresponding to AXBT drop. All values are formatted as
+#			int, float, or float64 (no strings!). Time information is 24-hr UTC
+#		o identifier: identifier for platform that launched AXBT (e.g. tail number,
+#			such as AF309 for aircraft)
+#
+#   Functions:
+#       o temperature,depth = readlogfile(logfile): read only T-D profile from
+#			raw LOG file
+#		o temperature,depth = readlogfile_alldata(logfile): read T-D profile, 
+#			raw frequency, and corresponding time from raw Mk21-style LOG file
+#		o rawtemperature,rawdepth,year,month,day,hour,minute,second,lat,lon = ...
+#			readedffile(edffile): reads raw data from EDF file
+#		o writeedffile(edffile,rawtemperature,rawdepth,year,month,day,hour,...
+#			minute,second,lat,lon): writes raw data to EDF file *no sound speed
+#		o temperature,depth,day,month,year,time,lat,lon,identifier = ...
+#			readjjvvfile(jjvvfile,decade): read data from JJVV file
+#		o writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,...
+#			identifier,isbtmstrike): read data from JJVV file
+#		o temperature,depth,day,month,year,time,lat,lon,num = readfinfile(finfile):
+#			reads QC'ed profile data from a FIN (1-m resolution) file
+#			NOTE: "num" is the drop number for the current mission (FIN file only)
+#		o writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
+#			writes QC'ed profile data to a FIN (1-m resolution) file
+#			NOTE: ARES does not record drop number, and specifies "num"=99 for all drops
+#		o writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,...
+#			identifier,originatingcenter,hasoptionalsection,optionalinfo):
+#			Writes BUFR files following WMO format. Configured to use FXY option 
+#			3,15,001 (ocean temperature sounding w/ coarse lat/lon) to write data
+#			Additional Inputs:
+#				> originatingcenter: Center via which data is transmitted to GTS (WMO  
+#					Table C). With ARES this selection is made in the settings window
+#				> hasoptionalsection, optionalinfo: Optional additional binary data
+#					(either bytes or UTF-8 encoded string) to be included in the optional
+#					section 2 in the BUFR message
+#			NOTE: BUFR format version is adjusted within the function, but either BUFR 
+#				versions 3 or 4 may be used.
+#		
+# =============================================================================
+
 import numpy as np
 from datetime import date
 
@@ -21,6 +72,7 @@ def readlogfile(logfile):
                 depth.append(np.double(line[1]))
                 temperature.append(np.double(line[3]))
     
+    #convert to numpy arrays
     depth = np.asarray(depth)
     temperature = np.asarray(temperature)
     
@@ -36,11 +88,12 @@ def readlogfile_alldata(logfile):
         frequency = []
         temperature = []
 
+        #read in header lines
         for i in range(6):
             f_in.readline()
 
+        #read data lines
         for line in f_in:
-
             line = line.strip().split() #get rid of \n character, split by spaces
 
             try:
@@ -58,6 +111,7 @@ def readlogfile_alldata(logfile):
             time.append(np.double(line[0]))
             frequency.append(np.double(line[2]))
     
+    #convert to numpy arrays
     time = np.asarray(time)
     depth = np.asarray(depth)
     frequency = np.asarray(frequency)
@@ -68,13 +122,17 @@ def readlogfile_alldata(logfile):
     
 def writelogfile(logfile,initdatestr,inittimestr,timefromstart,depth,frequency,tempc):
     with open(logfile,'w') as f_out:
+
+    	#write header
         f_out.write('     Probe Type = AXBT\n')
         f_out.write('       Date = ' + initdatestr + '\n')
         f_out.write('       Time = ' + inittimestr + '\n\n')
         f_out.write('    Time     Depth    Frequency    (C)       (F) \n\n')
 
+        #temperature (degF) conversion
         tempf = tempc*1.8+32
 
+        #writing data
         for t,d,f,tc,tf in zip(timefromstart,depth,frequency,tempc,tempf):
 
             #formatting strings
@@ -102,7 +160,7 @@ def writelogfile(logfile,initdatestr,inittimestr,timefromstart,depth,frequency,t
 def readedffile(edffile):
     with open(edffile,'rb') as f_in:
     
-        #trash lines
+        #misc. header lines
         line = f_in.readline()
         line = f_in.readline()
 
@@ -120,7 +178,7 @@ def readedffile(edffile):
         minute = int(line[20:22])
         second = int(line[23:42])
 
-        #trash line
+        #misc. header line
         line = f_in.readline()
 
         #latitude
@@ -137,11 +195,11 @@ def readedffile(edffile):
         if line[-3].lower() == 'w':
             lon = -1.*lon
 
-        #lots of trash lines
+        #lots of misc. header lines
         for i in range(25):
             line = f_in.readline()
 
-        #reading temperature-depth profile
+        #reading temperature-depth profile (ignoring sound speed if present)
         rawtemperature = []
         rawdepth = []
         for line in f_in:
@@ -216,7 +274,7 @@ Depth Coeff. 3   :  0.0
 Depth Coeff. 4   :  0.0
 Pressure Pt Correction:  N/A
 //
-Raw Data Filename:  23
+Raw Data Filename:  N/A
 //
 Display Units    :  Metric
 //
@@ -305,6 +363,7 @@ def readjjvvfile(jjvvfile,decade):
 
                 except: identifier = curentry
     
+    #converting to numpy arrays
     depth = np.asarray(depth)
     temperature = np.asarray(temperature)
     
@@ -342,6 +401,7 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
         i = 0
         lastdepth = -1
 
+        #appending data to list, adding hundreds increment counters where necessary
         while i < len(depth):
             curdepth = int(depth[i])
             if curdepth-hundreds > 99:
@@ -361,9 +421,11 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
             if i == 0: #first line has six columns
                 line = (filestrings[i] + ' ' + filestrings[i+1] + ' ' + filestrings[i+2] + ' ' + filestrings[i+3]
                          + ' ' + filestrings[i+4] + ' ' + filestrings[i+5] + '\n')
+                i = i + 6
             elif i+5 < len(filestrings): #remaining full lines have five columns
                 line = (filestrings[i] + ' ' + filestrings[i+1] + ' ' + filestrings[i+2] + ' '
                          + filestrings[i+3] + ' ' + filestrings[i+4] + ' ' + '\n')
+                i = i + 5
             else: #remaining data on last line
                 line = ''
                 while i < len(filestrings):
@@ -374,7 +436,7 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
                         line = line + ' '
                     i = i + 1
             f_out.write(line)
-            i = i + 5
+            
 
 
 
@@ -413,6 +475,7 @@ def readfinfile(finfile):
                 temperature.append(np.double(line[2*i]))
                 i = i + 1
 
+    #converting data to arrays
     depth = np.asarray(depth)
     temperature = np.asarray(temperature)
     
@@ -450,12 +513,12 @@ def writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
         lonrem = np.round((lon - lonfloor)*1000)
         lonstr = signstr + str(int(lonfloor)).zfill(3) + '.' + str(int(lonrem)).rjust(3,'0')
 
-
+        #writing header data
         line = (str(year).zfill(4) + '   ' + str(dayofyear).zfill(3) + '   ' + str(time).zfill(4) + '   ' + latstr + '   ' +
                 lonstr + '   ' + str(num).zfill(2) + '   6   ' + str(len(depth)) + '   0   0   \n')
         f_out.write(line)
 
-
+        #writing profile data
         i = 0
         while i < len(depth):
 
@@ -481,40 +544,32 @@ def writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
 
 def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identifier,originatingcenter,hasoptionalsection,optionalinfo):
 
-    # things to look up:
-    #  o master table
-    #  o originating center
-    #  o originating subcenter
-    #  o data category
-    #  o data sub category
-    #  o version of master table
-    #  o version of local table
-    #  o indicator for digitization (0,02,032)
-    #  o delayed replication- 2 descripters (1,02,000)
-
     #convert time into hours and minutes
     hour = int(np.floor(time / 100))
     minute = int(time - hour * 100)
 
     binarytype = 'big'  # big-endian
     reserved = 0
-    version = 4  # BUFR version number
+    version = 4  # BUFR version number (3 or 4 supported)
 
     # section 1 info
-    sxn1len = 18
+    if version == 3:
+        sxn1len = 18
+    elif version == 4:
+        sxn1len = 22
+
     mastertable = 0  # For standard WMO FM 94-IX BUFR table
     originatingsubcenter = 0
     updatesequencenum = 0  # first iteration
     if hasoptionalsection:
-        hasoptionalsectionnum = int('00000000', 2)
-    else:
         hasoptionalsectionnum = int('10000000', 2)
+    else:
+        hasoptionalsectionnum = int('00000000', 2)
     datacategory = 31  # oceanographic data (Table A)
     datasubcategory = 3 #bathy (JJVV) message
     versionofmaster = 32
     versionoflocal = 0
     yearofcentury = int(year - 100 * np.floor(year / 100))  # year of the current century
-    s1oct18 = 0  # octet 18 not required
 
     # section 2 info
     if hasoptionalsection:
@@ -527,16 +582,14 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
     numdatasubsets = 1
     # whether data is observed, compressed (bits 1/2), bits 3-8 reserved (=0)
     s3oct7 = int('10000000', 2)
-    # FXY = 3,15,001 (base 10) = 11, 001101, 00000001 (binary) corresponds to underwater sounding w/t optional fields
-    fxy = int('1100110100000001', 2)
+    # FXY = 3,15,001 (base 10) = 11, 001111, 00000001 (binary) corresponds to underwater sounding w/t optional fields
+    fxy = int('1100111100000001', 2)
 
     # Section 4 info (data)
-    # padding and encoding station identifier !!!!!CHECK THIS!!!!!!!
-    idtobuffer = 9 - len(identifier)
-    id_utf = b''
+    idtobuffer = 9 - len(identifier) # padding and encoding station identifier
+    id_utf = identifier.encode('utf-8')
     for i in range(0, idtobuffer):
-        id_utf = id_utf + b'\0'
-    id_utf = id_utf + identifier.encode('utf-8')
+        id_utf = id_utf + b'\0' #pads with null character (\0 in python)
 
     # setting up data array
     bufrarray = ''
@@ -551,8 +604,8 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
     bufrarray = bufrarray + format(minute, '06b')  # min (0,04,005)
 
     # lat/lon (3,01,023)
-    bufrarray = bufrarray + format(int(lat * 100 + 9000), '015b')  # lat (0,05,002)
-    bufrarray = bufrarray + format(int(lon * 100 + 18000), '016b')  # lon (0,06,002)
+    bufrarray = bufrarray + format(int(np.round((lat * 100)) + 9000), '015b')  # lat (0,05,002)
+    bufrarray = bufrarray + format(int(np.round((lon * 100)) + 18000), '016b')  # lon (0,06,002)
 
     # temperature-depth profile (3,06,001)
     bufrarray = bufrarray + '00'  # indicator for digitization (0,02,032): 'values at selected depths' = 0
@@ -560,9 +613,9 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
 
     #converting temperature and depth and writing
     for t,d in zip(temperature,depth):
-        d = int(d*10) # depth (0,07,062)
+        d = int(np.round(d*10)) # depth (0,07,062)
         bufrarray = bufrarray + format(d,'017b')
-        t = int(10 * (t + 273.15))  # temperature (0,22,042)
+        t = int(np.round(10 * (t + 273.15)))  # temperature (0,22,042)
         bufrarray = bufrarray + format(t,'012b')
 
     #padding zeroes to get even octet number, determining total length
@@ -583,23 +636,32 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
         bufr.write(num_octets.to_bytes(3, byteorder=binarytype, signed=False))  # length (in octets)
         bufr.write(version.to_bytes(1, byteorder=binarytype, signed=False))
 
-        # Section 1 (identifier)
+        # Section 1 (identifier) ***BUFR version 3 or 4 ****
         bufr.write(sxn1len.to_bytes(3, byteorder=binarytype, signed=False))
         bufr.write(mastertable.to_bytes(1, byteorder=binarytype, signed=False))
-        bufr.write(originatingsubcenter.to_bytes(1, byteorder=binarytype, signed=False))
-        bufr.write(originatingcenter.to_bytes(1, byteorder=binarytype, signed=False))
+        if version == 3:
+            bufr.write(originatingsubcenter.to_bytes(1, byteorder=binarytype, signed=False))
+            bufr.write(originatingcenter.to_bytes(1, byteorder=binarytype, signed=False))
+        elif version == 4:
+            bufr.write(originatingcenter.to_bytes(2, byteorder=binarytype, signed=False))
+            bufr.write(originatingsubcenter.to_bytes(2, byteorder=binarytype, signed=False))
         bufr.write(updatesequencenum.to_bytes(1, byteorder=binarytype, signed=False))
         bufr.write(hasoptionalsectionnum.to_bytes(1, byteorder=binarytype, signed=False))
         bufr.write(datacategory.to_bytes(1, byteorder=binarytype, signed=False))
         bufr.write(datasubcategory.to_bytes(1, byteorder=binarytype, signed=False))
+        if version == 4:
+            bufr.write(datasubcategory.to_bytes(1, byteorder=binarytype, signed=False)) #write again for local data subcategory in version 4
         bufr.write(versionofmaster.to_bytes(1, byteorder=binarytype, signed=False))
         bufr.write(versionoflocal.to_bytes(1, byteorder=binarytype, signed=False))
-        bufr.write(yearofcentury.to_bytes(1, byteorder=binarytype, signed=False))
+        if version == 3:
+            bufr.write(yearofcentury.to_bytes(1, byteorder=binarytype, signed=False))
+        elif version == 4:
+            bufr.write(year.to_bytes(2, byteorder=binarytype, signed=False))
         bufr.write(month.to_bytes(1, byteorder=binarytype, signed=False))
         bufr.write(day.to_bytes(1, byteorder=binarytype, signed=False))
         bufr.write(hour.to_bytes(1, byteorder=binarytype, signed=False))
         bufr.write(minute.to_bytes(1, byteorder=binarytype, signed=False))
-        bufr.write(s1oct18.to_bytes(1, byteorder=binarytype, signed=False))
+        bufr.write(int(0).to_bytes(1, byteorder=binarytype, signed=False)) #seconds for v4, oct18 = 0 (reserved) for v3
 
         # Section 2 (optional)
         if hasoptionalsection:
@@ -618,7 +680,13 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
         bufr.write(sxn4len.to_bytes(3, byteorder=binarytype, signed=False))
         bufr.write(reserved.to_bytes(1, byteorder=binarytype, signed=False))
         bufr.write(id_utf)
-        bufr.write(int(bufrarray,2).to_bytes(bufrarraylen,byteorder=binarytype,signed=False)) #writing profile data
+
+        #writing profile data- bad option as the base 10 integer for the bufrarray may be huge if the profile is long enought
+        # bufr.write(int(bufrarray,2).to_bytes(bufrarraylen,byteorder=binarytype,signed=False)) 
+
+        #writing profile data- better option- converts and writes 1 byte at a time
+        for cbit in np.arange(0,len(bufrarray),8):
+	        bufr.write(int(bufrarray[cbit:cbit+8],2).to_bytes(1,byteorder=binarytype,signed=False)) #writing profile data
 
         # Section 5 (End)
         bufr.write(b'7777')
