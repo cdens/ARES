@@ -25,7 +25,7 @@
 import numpy as np
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
-import shapefile
+from shapefile import Reader as shread
 
 def setgeoaxes(fig,ax,xrange,yrange,changeaxis):
     
@@ -105,7 +105,7 @@ def getoceanregion(lon,lat):
     region = 'Region Unassigned'
     
     #load shape file data
-    regioninput = shapefile.Reader("qcdata/regions/World_Seas_IHO_v3.shp")
+    regioninput = shread("qcdata/regions/World_Seas_IHO_v3.shp")
     shapes = regioninput.shapes()
     
     #reading in list of first NANs

@@ -413,6 +413,8 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
             i = i + 1
         if isbtmstrike: #note if the profile struck the bottom
             filestrings.append('00000')
+
+        identifier = identifier[:5] #concatenates if larger than 5 digits
         filestrings.append(identifier) #tack identifier onto end of file entries
 
         #writing all data to file
@@ -586,6 +588,7 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
     fxy = int('1100111100000001', 2)
 
     # Section 4 info (data)
+    identifier = identifer[:9] #concatenates identifier if necessary
     idtobuffer = 9 - len(identifier) # padding and encoding station identifier
     id_utf = identifier.encode('utf-8')
     for i in range(0, idtobuffer):

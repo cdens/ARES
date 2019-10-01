@@ -40,7 +40,6 @@ import numpy as np
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 import scipy.interpolate as sint
-import scipy.io as sio
 
 def runningsmooth(data,halfwindow):
     

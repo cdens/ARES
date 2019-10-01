@@ -6,12 +6,12 @@
 #       for program overview, external dependencies and additional information. 
 #
 #   File Description: This function contains the PyQt5 QMainWindow class which
-#       which houses the primary GUI and event loop for ARES. This file also
+#       which builds/controls the primary GUI for ARES. This file also
 #       calls functions from the following necessary files:
 #           o autoqc.py: autoQC algorithm for temperature-depth profiles
 #           o tropicfileinteraction.py: file reading/writing functions
 #           o makeAXBTplots.py: Profile/location plot generation
-#           o geoplotfunctions.py: Location plot special functions
+#           o geoplotfunctions.py: Location plot formatting
 #           o ocean_climatology_interaction.py: Interaction with climatology
 #               and bathymetry datasets
 #           o GPS_COM_interaction.py: Interaction with COM ports and NMEA feeds
@@ -84,18 +84,18 @@
 # =============================================================================
 #   CALL NECESSARY MODULES HERE
 # =============================================================================
-import sys
-import platform
-import os
-import traceback
+from sys import argv, exit
+from platform import system as cursys
+from os import remove, path, listdir
+from traceback import print_exc as trace_error
 from ctypes import windll
 
-import shutil
+from shutil import copy as shcopy
 
 from PyQt5.QtWidgets import (QMainWindow, QAction, QApplication, QMenu, QLineEdit, QLabel, QSpinBox, QCheckBox,
-                             QPushButton, QMessageBox, QActionGroup, QWidget, QFileDialog, QComboBox, QTextEdit,
-                             QTabWidget, QVBoxLayout, QInputDialog, QGridLayout, QSlider, QDoubleSpinBox, 
-                             QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QDesktopWidget, QStyle, QStyleOptionTitleBar)
+    QPushButton, QMessageBox, QWidget, QFileDialog, QComboBox, QTextEdit, QTabWidget, QVBoxLayout, QInputDialog, 
+    QGridLayout, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QDesktopWidget, 
+    QStyle, QStyleOptionTitleBar)
 from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot
 from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
 from PyQt5.Qt import QThreadPool
@@ -108,7 +108,6 @@ import time as timemodule
 import datetime as dt
 import numpy as np
 
-from scipy.io import wavfile #for wav
 import scipy.io as sio
 
 #autoQC-specific modules
@@ -140,7 +139,7 @@ class RunProgram(QMainWindow):
             self.makenewprocessortab() #Opens first tab
 
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to initialize the program.")
         
     def initUI(self):
@@ -176,32 +175,35 @@ class RunProgram(QMainWindow):
         self.myBoxLayout = QVBoxLayout()
         self.tabWidget.setLayout(self.myBoxLayout)
         self.show()
+
+        #tab tracking
         self.totaltabs = 0
+        self.tabnumbers = []
 
         # creating threadpool
         self.threadpool = QThreadPool()
         self.threadpool.setMaxThreadCount(6)
 
         # delete all temporary files
-        allfilesanddirs = os.listdir()
+        allfilesanddirs = listdir()
         for cfile in allfilesanddirs:
             if len(cfile) >= 5:
                 cfilestart = cfile[:4]
                 cfileext = cfile[-3:]
                 if cfilestart.lower() == 'temp' and cfileext.lower() == 'wav':
-                    os.remove(cfile)
+                    remove(cfile)
                 elif cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt':
-                    os.remove(cfile)
+                    remove(cfile)
 
         # loading WiNRADIO DLL API
-        if platform.system() == 'Windows':
+        if cursys() == 'Windows':
             try:
                 # self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI.dll") #32-bit
                 self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI_64.dll") #64-bit
             except:
                 self.postwarning("WiNRADIO driver NOT FOUND! Please ensure a WiNRADIO Receiver is connected and powered on and then restart the program!")
                 self.wrdll = 0
-                traceback.print_exc()
+                trace_error()
         else:
             self.postwarning("WiNRADIO communications only supported with Windows! Processing from audio/ASCII files is still available.")
             self.wrdll = 0
@@ -249,7 +251,7 @@ class RunProgram(QMainWindow):
         
         #setting slash dependent on OS
         global slash
-        if platform.system() == 'Windows':
+        if cursys() == 'Windows':
             slash = '\\'
         else:
             slash = '/'
@@ -400,13 +402,11 @@ class RunProgram(QMainWindow):
 # =============================================================================
     def makenewprocessortab(self):     
         try:
-            #number of the new tab will be equal to the number of previous tabs (offset by 1 removed b/c of Python indexing)
-            newtabnum = self.tabWidget.count()
-            curtabstr = "Tab "+str(newtabnum) #pointable string for alltabdata dict
+
+            newtabnum,curtabstr = self.addnewtab()
     
             #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal processor to profile editor
-            alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),
-                      "ProcessorFig":plt.figure(),"ProfFig":plt.figure(),"LocFig":plt.figure(),
+            alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"ProcessorFig":plt.figure(),
                       "tabtype":"SignalProcessor_incomplete","isprocessing":False}
 
             self.setnewtabcolor(alltabdata[curtabstr]["tab"])
@@ -421,7 +421,6 @@ class RunProgram(QMainWindow):
             #creating new tab, assigning basic info
             self.tabWidget.addTab(alltabdata[curtabstr]["tab"],'New Tab') 
             self.tabWidget.setCurrentIndex(newtabnum)
-            self.totaltabs += 1
             self.tabWidget.setTabText(newtabnum, "New Drop #" + str(self.totaltabs))
             alltabdata[curtabstr]["tabnum"] = self.totaltabs #assigning unique, unchanging number to current tab
             alltabdata[curtabstr]["tablayout"].setSpacing(10)
@@ -548,7 +547,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tab"].setLayout(alltabdata[curtabstr]["tablayout"])
 
         except Exception: #if something breaks
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to build new processor tab")
         
         
@@ -577,7 +576,7 @@ class RunProgram(QMainWindow):
             else:
                 self.postwarning("You cannot refresh input devices while processing. Please click STOP to discontinue processing before refreshing device list")
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to refresh available receivers")
 
     def datasourcechange(self):
@@ -606,7 +605,7 @@ class RunProgram(QMainWindow):
                      alltabdata[curtabstr]["tabwidgets"]["datasource"].setCurrentIndex(index)
                 self.postwarning("You cannot change input devices while processing. Please click STOP to discontinue processing before switching devices")
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to change selected WiNRADIO receiver for current tab.")
         
     def checkwinradiooptions(self,winradiooptions):
@@ -638,7 +637,7 @@ class RunProgram(QMainWindow):
             if alltabdata[curtabstr]["isprocessing"] and alltabdata[curtabstr]["datasource"] != 'Audio' and alltabdata[curtabstr]["datasource"] != 'Test':
                 alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Frequency/channel mismatch!")
             
     #these options use a lookup table for VHF channel vs frequency
@@ -668,7 +667,7 @@ class RunProgram(QMainWindow):
             if alltabdata[curtabstr]["isprocessing"] and alltabdata[curtabstr]["datasource"] != 'Audio' and alltabdata[curtabstr]["datasource"] != 'Test':
                 alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Frequency/channel mismatch!")
 
     #update FFT thresholds/window setting
@@ -681,7 +680,7 @@ class RunProgram(QMainWindow):
                     if alltabdata[ctab]["isprocessing"]: # and alltabdata[ctab]["datasource"] != 'Test' and alltabdata[ctab]["datasource"] != 'Audio':
                         alltabdata[curtabstr]["processor"].changethresholds(self.fftwindow,self.minfftratio,self.minsiglev,self.triggerfftratio,self.triggersiglev)
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Error updating FFT settings!")
             
     #starting signal processing thread
@@ -716,7 +715,7 @@ class RunProgram(QMainWindow):
 
                     except Exception:
                         self.posterror("Failed to execute audio processor!")
-                        traceback.print_exc()
+                        trace_error()
 
                 elif datasource != "Test":
 
@@ -782,7 +781,7 @@ class RunProgram(QMainWindow):
                 alltabdata[curtabstr]["tabtype"] = "SignalProcessor_completed"
 
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to start processor!")
             
     #aborting processor
@@ -807,7 +806,7 @@ class RunProgram(QMainWindow):
                                 alltabdata[ctab]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
                     
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to stop processor!")
                 
                 
@@ -830,7 +829,7 @@ class RunProgram(QMainWindow):
             alltabdata[plottabstr]["rawdata"]["istriggered"] = True
         except Exception:
             self.posterror("Failed to trigger temperature/depth profile in GUI!")
-            traceback.print_exc()
+            trace_error()
 
     #slot to pass AXBT data from thread to main GUI
     @pyqtSlot(int,float,float,float,float,float,int)
@@ -888,7 +887,7 @@ class RunProgram(QMainWindow):
     #        if crow > 20: #uncomment to remove old rows
     #            table.removeRow(0)
         except Exception:
-            traceback.print_exc()
+            trace_error()
         
     #final update from thread after being aborted- restoring scroll bar, other info
     @pyqtSlot(int)
@@ -904,12 +903,12 @@ class RunProgram(QMainWindow):
             alltabdata[plottabstr]["isprocessing"] = False
             alltabdata[plottabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 
-            if alltabdata[plottabstr]["tabwidgets"].__contains__("audioprogressbar"):
+            if "audioprogressbar" in alltabdata[plottabstr]["tabwidgets"]:
                 alltabdata[plottabstr]["tabwidgets"]["audioprogressbar"].deleteLater()
 
         except Exception:
             self.posterror("Failed to complete final UI update!")
-            traceback.print_exc()
+            trace_error()
 
     #posts message in main GUI if thread processor fails for some reason
     @pyqtSlot(int)
@@ -938,7 +937,7 @@ class RunProgram(QMainWindow):
             plottabstr = self.gettabstrfromnum(plottabnum)
             alltabdata[plottabstr]["tabwidgets"]["audioprogressbar"].setValue(newprogress)
         except Exception:
-            traceback.print_exc()
+            trace_error()
 
 
         
@@ -959,7 +958,7 @@ class RunProgram(QMainWindow):
                 
             #check and correct inputs
             try:
-                lat,lon,year,month,day,time,hour,minute = self.parsestringinputs(latstr,lonstr,profdatestr,timestr,True,True)
+                lat,lon,year,month,day,time,hour,minute,identifier = self.parsestringinputs(latstr,lonstr,profdatestr,timestr,identifier,True,True,True)
             except:
                 return
             
@@ -1002,7 +1001,7 @@ class RunProgram(QMainWindow):
             rawdepth = rawdepth[ind]
             rawtemperature = rawtemperature[ind]
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to read profile data")
             return
         
@@ -1018,13 +1017,10 @@ class RunProgram(QMainWindow):
 # =============================================================================
     def makenewproftab(self):
         try:
-            #number of the new tab will be equal to the number of previous tabs (offset by 1 removed b/c of Python indexing)
-            newtabnum = self.tabWidget.count()
-            curtabstr = "Tab "+str(newtabnum) #pointable string for alltabdata dict
+            #tab indexing update
+            newtabnum,curtabstr = self.addnewtab()
     
-            alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),
-                      "ProfFig":plt.figure(),"LocFig":plt.figure(),
-                      "tabtype":"ProfileEditorInput"}
+            alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"tabtype":"ProfileEditorInput"}
             alltabdata[curtabstr]["tablayout"].setSpacing(10)
             
             self.setnewtabcolor(alltabdata[curtabstr]["tab"])
@@ -1032,7 +1028,6 @@ class RunProgram(QMainWindow):
             self.tabWidget.addTab(alltabdata[curtabstr]["tab"],'New Tab') #self.tabWidget.addTab(self.currenttab,'New Tab')
             self.tabWidget.setCurrentIndex(newtabnum)
             self.tabWidget.setTabText(newtabnum,"Tab #" + str(newtabnum+1))
-            self.totaltabs += 1
             alltabdata[curtabstr]["tabnum"] = self.totaltabs #assigning unique, unchanging number to current tab
             
             #Create widgets for UI
@@ -1086,7 +1081,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tab"].setLayout(alltabdata[curtabstr]["tablayout"]) 
 
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to build editor input tab!")
 
     #browse for raw data file to QC
@@ -1098,7 +1093,7 @@ class RunProgram(QMainWindow):
                 curtabstr = "Tab " + str(self.whatTab())
                 alltabdata[curtabstr]["tabwidgets"]["logedit"].setText(fname)
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to select file- please try again or manually enter full path to file in box below.")
 
     #Pull data, check to make sure it is valid before proceeding
@@ -1115,7 +1110,7 @@ class RunProgram(QMainWindow):
             logfile = alltabdata[curtabstr]["tabwidgets"]["logedit"].toPlainText()
             
             #check that logfile exists
-            if not os.path.isfile(logfile):
+            if not path.isfile(logfile):
                 self.postwarning('Selected Data File Does Not Exist!')
                 return
     
@@ -1123,7 +1118,7 @@ class RunProgram(QMainWindow):
                 
                 #check and correct inputs
                 try:
-                    lat,lon,year,month,day,time,_,_ = self.parsestringinputs(latstr,lonstr,profdatestr,timestr,True,True)
+                    lat,lon,year,month,day,time,_,_,identifier = self.parsestringinputs(latstr,lonstr,profdatestr,timestr,identifier,True,True,True)
                 except:
                     return
                 
@@ -1154,12 +1149,12 @@ class RunProgram(QMainWindow):
                     self.postwarning('Invalid Data File Format (must be .dta,.edf,.fin, or .jjvv)!')
                     return
             except Exception:
-                traceback.print_exc()
+                trace_error()
                 QApplication.restoreOverrideCursor()
                 self.posterror('Failed to read selected data file!')
                 return
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to read profile input data")
             QApplication.restoreOverrideCursor()
             return
@@ -1238,6 +1233,8 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tablayout2"].setSpacing(10)
             
             #ADDING FIGURES TO GRID LAYOUT (row column rowext colext)
+            alltabdata[curtabstr]["ProfFig"] = plt.figure()
+            alltabdata[curtabstr]["LocFig"] = plt.figure()
             alltabdata[curtabstr]["ProfCanvas"] = FigureCanvas(alltabdata[curtabstr]["ProfFig"]) #self.canvas = FigureCanvas(self.figure)
             alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["ProfCanvas"],0,0,12,1) #tablayout.addWidget(self.canvas)
             alltabdata[curtabstr]["LocCanvas"] = FigureCanvas(alltabdata[curtabstr]["LocFig"]) #self.canvas = FigureCanvas(self.figure)
@@ -1381,7 +1378,7 @@ class RunProgram(QMainWindow):
             
             alltabdata[curtabstr]["tabtype"] = "ProfileEditor"
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to build profile editor tab!")
         finally:
             QApplication.restoreOverrideCursor()
@@ -1400,7 +1397,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["pt_type"] = 1
             alltabdata[curtabstr]["pt"] = alltabdata[curtabstr]["ProfCanvas"].mpl_connect('button_release_event', self.on_release)
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to add point")
             
     #remove point on profile
@@ -1411,7 +1408,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["pt_type"] = 2
             alltabdata[curtabstr]["pt"] = alltabdata[curtabstr]["ProfCanvas"].mpl_connect('button_release_event', self.on_release)
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to remove point")
             
     #update profile with selected point to add or remove
@@ -1515,8 +1512,9 @@ class RunProgram(QMainWindow):
             
             #delete current indices
             del alltabdata[curtabstr]["pt"], alltabdata[curtabstr]["pt_type"]
+
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to select profile point!")
         finally:
             #restore cursor type
@@ -1581,7 +1579,7 @@ class RunProgram(QMainWindow):
                        + '# Datapoints: ' + str(len(tempplot)) )
             alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to update profile!")
         
     def rerunqc(self):
@@ -1608,7 +1606,7 @@ class RunProgram(QMainWindow):
                 matchclimo,climobottomcutoff = oci.comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climodepthfill)
             except Exception:
                 temperature = depth = matchclimo = climobottomcutoff = 0
-                traceback.print_exc()
+                trace_error()
                 self.posterror("Error raised in automatic profile QC")
                 
             #limit profile depth by climatology cutoff, ocean depth cutoff
@@ -1668,7 +1666,7 @@ class RunProgram(QMainWindow):
                        + '# Datapoints: ' + str(len(temperature)) )
             alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to Re-QC the profile")
 
     #toggle visibility of climatology profile
@@ -1681,7 +1679,7 @@ class RunProgram(QMainWindow):
                 alltabdata[curtabstr]["climohandle"].set_visible(False)
             alltabdata[curtabstr]["ProfCanvas"].draw()
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to toggle climatology overlay")
         
         
@@ -1691,10 +1689,18 @@ class RunProgram(QMainWindow):
 #     TAB MANIPULATION OPTIONS, OTHER GENERAL FUNCTIONS
 # =============================================================================
 
+    #handles tab indexing
+    def addnewtab(self):
+        #creating numeric ID for newly opened tab
+        self.totaltabs += 1
+        self.tabnumbers.append(self.totaltabs)
+        newtabnum = self.tabWidget.count()
+        curtabstr = "Tab "+str(self.totaltabs) #pointable string for alltabdata dict
+        return newtabnum,curtabstr
+
     #gets index of open tab in GUI
     def whatTab(self):
-        currentIndex = self.tabWidget.currentIndex()
-        return currentIndex
+        return self.tabnumbers[self.tabWidget.currentIndex()]
     
     #renames tab (only user-visible name, not alltabdata dict key)
     def renametab(self):
@@ -1704,7 +1710,7 @@ class RunProgram(QMainWindow):
             if ok:
                 self.tabWidget.setTabText(curtab,name)
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to rename the current tab")
     
     #sets default color scheme for tabs
@@ -1723,9 +1729,13 @@ class RunProgram(QMainWindow):
             reply = QMessageBox.question(self, 'Message',
                 "Are you sure to close the current tab?", QMessageBox.Yes | 
                 QMessageBox.No, QMessageBox.No)
+
             if reply == QMessageBox.Yes:
+
+                #getting tab to close
                 curtab = int(self.whatTab())
                 curtabstr = "Tab " + str(curtab)
+                indextoclose = self.tabWidget.currentIndex()
                 
                 #check to make sure there isn't a corresponding processor thread, close if there is
                 if alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_incomplete' or alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_completed':
@@ -1737,17 +1747,26 @@ class RunProgram(QMainWindow):
                             return
                         else:
                             alltabdata[curtabstr]["processor"].abort()
-                
-                self.tabWidget.removeTab(curtab)
-                
-                #removing current tab data from the alltabdata dict, renaming all higher# tabs
+
+                #closing open figures in tab to prevent memory leak
+                if alltabdata[curtabstr]["tabtype"] == "ProfileEditor":
+                    plt.close(alltabdata[curtabstr]["ProfFig"])
+                    plt.close(alltabdata[curtabstr]["LocFig"])
+
+                elif alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_incomplete' or alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_completed':
+                    plt.close(alltabdata[curtabstr]["ProcessorFig"])
+
+
+
+                #closing tab
+                self.tabWidget.removeTab(indextoclose)
+
+                #removing current tab data from the alltabdata dict, correcting tabnumbers variable
                 alltabdata.pop("Tab "+str(curtab))
-                for i in alltabdata:
-                    if int(i[-1]) > curtab:
-                        ctab = int(i[-1])
-                        alltabdata["Tab "+str(ctab-1)] = alltabdata.pop("Tab "+str(ctab))
+                self.tabnumbers.pop(indextoclose)
+
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to close the current tab")
                 
     #save data in open tab        
@@ -1805,20 +1824,20 @@ class RunProgram(QMainWindow):
                         temperature1m = np.interp(depth1m,depth,temperature)
                         tfio.writefinfile(outdir + slash + filename + '.fin',temperature1m,depth1m,day,month,year,time,lat,lon,num)
                     except Exception:
-                        traceback.print_exc()
+                        trace_error()
                         self.posterror("Failed to save FIN file")
                 if self.savejjvv:
                     isbtmstrike = alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].isChecked()
                     try:
                         tfio.writejjvvfile(outdir + slash + filename + '.jjvv',temperature,depth,day,month,year,time,lat,lon,identifier,isbtmstrike)
                     except Exception:
-                        traceback.print_exc()
+                        trace_error()
                         self.posterror("Failed to save JJVV file")
                 if self.savebufr:
                     try:
                         tfio.writebufrfile(outdir + slash + filename + '.bufr',temperature,depth,year,month,day,time,lon,lat,identifier,self.originatingcenter,False,b'\0')
                     except Exception:
-                        traceback.print_exc()
+                        trace_error()
                         self.posterror("Failed to save BUFR file")
                 if self.saveprof:
                     try:
@@ -1830,7 +1849,7 @@ class RunProgram(QMainWindow):
                             climohandle.set_visible(False)
                         fig1.savefig(outdir + slash + filename + '_prof.png',format='png')
                     except Exception:
-                        traceback.print_exc()
+                        trace_error()
                         self.posterror("Failed to save profile image")
                     finally:
                         plt.close('fig1')
@@ -1844,7 +1863,7 @@ class RunProgram(QMainWindow):
                         tplot.makelocationplot(fig2,ax2,lat,lon,dtg,exportlon,exportlat,exportrelief,6)
                         fig2.savefig(outdir + slash + filename + '_loc.png',format='png')
                     except Exception:
-                        traceback.print_exc()
+                        trace_error()
                         self.posterror("Failed to save location image")
                     finally:
                         plt.close('fig2')
@@ -1852,96 +1871,101 @@ class RunProgram(QMainWindow):
                     
             elif alltabdata[curtabstr]["tabtype"] == "SignalProcessor_completed":
                 
-                try:
-                    #pulling prof data
-                    rawtemperature = alltabdata[curtabstr]["rawdata"]["temperature"]
-                    rawdepth = alltabdata[curtabstr]["rawdata"]["depth"]
-                    frequency = alltabdata[curtabstr]["rawdata"]["frequency"]
-                    timefromstart = alltabdata[curtabstr]["rawdata"]["time"]
+                if alltabdata[curtabstr]["rawdata"]["isprocessing"]:
+                    self.postwarning('You must stop processing the current tab before saving data!')
 
-                    #pulling profile metadata if necessary
+                else:
+
                     try:
-                        lat = alltabdata[curtabstr]["rawdata"]["lat"]
-                        lon = alltabdata[curtabstr]["rawdata"]["lon"]
-                        year = alltabdata[curtabstr]["rawdata"]["year"]
-                        month = alltabdata[curtabstr]["rawdata"]["month"]
-                        day = alltabdata[curtabstr]["rawdata"]["day"]
-                        time = alltabdata[curtabstr]["rawdata"]["droptime"]
-                        hour = alltabdata[curtabstr]["rawdata"]["hour"]
-                        minute = alltabdata[curtabstr]["rawdata"]["minute"]
-                    except:
-                        # pulling data from inputs
-                        latstr = alltabdata[curtabstr]["tabwidgets"]["latedit"].text()
-                        lonstr = alltabdata[curtabstr]["tabwidgets"]["lonedit"].text()
-                        profdatestr = alltabdata[curtabstr]["tabwidgets"]["dateedit"].text()
-                        timestr = alltabdata[curtabstr]["tabwidgets"]["timeedit"].text()
+                        #pulling prof data
+                        rawtemperature = alltabdata[curtabstr]["rawdata"]["temperature"]
+                        rawdepth = alltabdata[curtabstr]["rawdata"]["depth"]
+                        frequency = alltabdata[curtabstr]["rawdata"]["frequency"]
+                        timefromstart = alltabdata[curtabstr]["rawdata"]["time"]
 
-                        #only checks validity of necessary data
+                        #pulling profile metadata if necessary
                         try:
-                            if self.saveedf:
-                                lat, lon, year, month, day, time, hour, minute = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, True, True)
-                            else:
-                                _, _, year, month, day, time, hour, minute = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, False, True)
+                            lat = alltabdata[curtabstr]["rawdata"]["lat"]
+                            lon = alltabdata[curtabstr]["rawdata"]["lon"]
+                            year = alltabdata[curtabstr]["rawdata"]["year"]
+                            month = alltabdata[curtabstr]["rawdata"]["month"]
+                            day = alltabdata[curtabstr]["rawdata"]["day"]
+                            time = alltabdata[curtabstr]["rawdata"]["droptime"]
+                            hour = alltabdata[curtabstr]["rawdata"]["hour"]
+                            minute = alltabdata[curtabstr]["rawdata"]["minute"]
                         except:
-                            self.postwarning("Failed to save raw data files!")
-                            QApplication.restoreOverrideCursor()
-                            return False
+                            # pulling data from inputs
+                            latstr = alltabdata[curtabstr]["tabwidgets"]["latedit"].text()
+                            lonstr = alltabdata[curtabstr]["tabwidgets"]["lonedit"].text()
+                            profdatestr = alltabdata[curtabstr]["tabwidgets"]["dateedit"].text()
+                            timestr = alltabdata[curtabstr]["tabwidgets"]["timeedit"].text()
 
-                    #date and time strings for LOG file
-                    initdatestr = str(year) + '/' + str(month).zfill(2) + '/' + str(day).zfill(2)
-                    inittimestr = str(hour).zfill(2) + ':' + str(minute).zfill(2) + ':00'
+                            #only checks validity of necessary data
+                            try:
+                                if self.saveedf:
+                                    lat, lon, year, month, day, time, hour, minute, _ = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, 'omit', True, True, False)
+                                else:
+                                    _, _, year, month, day, time, hour, minute, _ = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, 'omit', False, True, False)
+                            except:
+                                self.postwarning("Failed to save raw data files!")
+                                QApplication.restoreOverrideCursor()
+                                return False
+
+                        #date and time strings for LOG file
+                        initdatestr = str(year) + '/' + str(month).zfill(2) + '/' + str(day).zfill(2)
+                        inittimestr = str(hour).zfill(2) + ':' + str(minute).zfill(2) + ':00'
+                        
+                        filename = str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4)
+
+                    except Exception:
+                        trace_error()
+                        self.posterror("Failed to pull raw profile data")
+                        QApplication.restoreOverrideCursor()
+                        return False
                     
-                    filename = str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4)
+                    if self.savelog:
+                        try:
+                            tfio.writelogfile(outdir + slash + filename + '.DTA',initdatestr,inittimestr,timefromstart,rawdepth,frequency,rawtemperature)
+                        except Exception:
+                            trace_error()
+                            self.posterror("Failed to save LOG file")
+                    if self.saveedf:
+                        try:
+                            tfio.writeedffile(outdir + slash + filename + '.edf',rawtemperature,rawdepth,year,month,day,hour,minute,0,lat,lon)
+                        except Exception:
+                            trace_error()
+                            self.posterror("Failed to save EDF file")
 
-                except Exception:
-                    traceback.print_exc()
-                    self.posterror("Failed to pull raw profile data")
-                    QApplication.restoreOverrideCursor()
-                    return False
-                
-                if self.savelog:
-                    try:
-                        tfio.writelogfile(outdir + slash + filename + '.DTA',initdatestr,inittimestr,timefromstart,rawdepth,frequency,rawtemperature)
-                    except Exception:
-                        traceback.print_exc()
-                        self.posterror("Failed to save LOG file")
-                if self.saveedf:
-                    try:
-                        tfio.writeedffile(outdir + slash + filename + '.edf',rawtemperature,rawdepth,year,month,day,hour,minute,0,lat,lon)
-                    except Exception:
-                        traceback.print_exc()
-                        self.posterror("Failed to save EDF file")
+                    if self.savewav:
+                        try:
+                            oldfile = 'tempwav_' + str(alltabdata[curtabstr]["tabnum"]) + '.WAV'
+                            newfile = outdir + slash + filename + '.WAV'
 
-                if self.savewav:
-                    try:
-                        oldfile = 'tempwav_' + str(alltabdata[curtabstr]["tabnum"]) + '.WAV'
-                        newfile = outdir + slash + filename + '.WAV'
+                            if path.exists(newfile):
+                                remove(newfile)
 
-                        if os.path.exists(newfile):
-                            os.remove(newfile)
+                            shcopy(oldfile,newfile)
+                        except Exception:
+                            trace_error()
+                            self.posterror("Failed to save WAV file")
 
-                        shutil.copy(oldfile,newfile)
-                    except Exception:
-                        traceback.print_exc()
-                        self.posterror("Failed to save WAV file")
+                    if self.savesig:
+                        try:
+                            oldfile = 'sigdata_' + str(alltabdata[curtabstr]["tabnum"]) + '.txt'
+                            newfile = outdir + slash + filename + '.sigdata'
 
-                if self.savesig:
-                    try:
-                        oldfile = 'sigdata_' + str(alltabdata[curtabstr]["tabnum"]) + '.txt'
-                        newfile = outdir + slash + filename + '.sigdata'
+                            if path.exists(newfile):
+                                remove(newfile)
 
-                        if os.path.exists(newfile):
-                            os.remove(newfile)
-
-                        shutil.copy(oldfile, newfile)
-                    except Exception:
-                        traceback.print_exc()
+                            shcopy(oldfile, newfile)
+                        except Exception:
+                            trace_error()
 
             else:
-                self.postwarning('You must process the profile before attempting to save data!')
+                self.postwarning('You must process a profile before attempting to save data!')
                 
         except Exception:
-            traceback.print_exc() #if something else in the file save code broke
+            trace_error() #if something else in the file save code broke
             self.posterror("Filed to save files")
             QApplication.restoreOverrideCursor()
             return False
@@ -1992,17 +2016,26 @@ class RunProgram(QMainWindow):
             if self.preferencesopened:
                 self.settingsthread.close()
 
+            #explicitly closing figures to clean up memory (should be redundant here but just in case)
+            for curtabstr in alltabdata:
+                if alltabdata[curtabstr]["tabtype"] == "ProfileEditor":
+                    plt.close(alltabdata[curtabstr]["ProfFig"])
+                    plt.close(alltabdata[curtabstr]["LocFig"])
+
+                elif alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_incomplete' or alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_completed':
+                    plt.close(alltabdata[curtabstr]["ProcessorFig"])
+
             event.accept()
             #delete all temporary wav files
-            allfilesanddirs = os.listdir()
+            allfilesanddirs = listdir()
             for cfile in allfilesanddirs:
                 if len(cfile) >= 5:
                     cfilestart = cfile[:4]
                     cfileext = cfile[-3:]
                     if cfilestart.lower() == 'temp' and cfileext.lower() == 'wav':
-                        os.remove(cfile)
+                        remove(cfile)
                     elif cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt':
-                        os.remove(cfile)
+                        remove(cfile)
         else:
             event.ignore() 
     
@@ -2010,7 +2043,7 @@ class RunProgram(QMainWindow):
 # =============================================================================
 #    PARSE STRING INPUTS/CHECK VALIDITY WHEN TRANSITIONING TO PROFILE EDITOR
 # =============================================================================
-    def parsestringinputs(self,latstr,lonstr,profdatestr,timestr,checkcoords,checktime):
+    def parsestringinputs(self,latstr,lonstr,profdatestr,timestr,identifier,checkcoords,checktime, checkid):
         try:
             #parsing and checking data
             if checkcoords:
@@ -2100,10 +2133,16 @@ class RunProgram(QMainWindow):
                 time = np.NaN
                 hour = np.NaN
                 minute = np.NaN
-                
-            return lat,lon,year,month,day,time,hour,minute
+
+            #check length of identifier
+            if checkid and len(identifier) != 5:
+                option = self.postwarning_option("Identifier is not 5 characters! Continue anyways?")
+                if option == 'cancel':
+                    return
+
+            return lat,lon,year,month,day,time,hour,minute,identifier
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Unspecified error in reading profile information!")
             return
 
@@ -2112,8 +2151,8 @@ class RunProgram(QMainWindow):
 # EXECUTE PROGRAM
 # =============================================================================
 if __name__ == '__main__':  
-    app = QApplication(sys.argv)
+    app = QApplication(argv)
     ex = RunProgram()
-    sys.exit(app.exec_())
+    exit(app.exec_())
     
     

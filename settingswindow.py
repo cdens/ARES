@@ -30,20 +30,13 @@
 # =============================================================================
 #   CALL NECESSARY MODULES HERE
 # =============================================================================
-import sys
-import platform
-import os
-import traceback
+from traceback import print_exc as trace_error
 import numpy as np
 
-from PyQt5.QtWidgets import (QMainWindow, QAction, QApplication, QMenu, QLineEdit, QLabel, QSpinBox, QCheckBox,
-                             QPushButton, QMessageBox, QActionGroup, QWidget, QFileDialog, QComboBox, QTextEdit,
-                             QTabWidget, QVBoxLayout, QInputDialog, QGridLayout, QSlider, QDoubleSpinBox,
-                             QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QDesktopWidget, QStyle,
-                             QStyleOptionTitleBar)
-from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot, pyqtSignal, QObject
+from PyQt5.QtWidgets import (QMainWindow, QLabel, QSpinBox, QCheckBox, QPushButton, 
+    QMessageBox, QWidget, QTabWidget, QGridLayout, QSlider, QComboBox, QLineEdit)
+from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QObject
 from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
-from PyQt5.Qt import QRunnable
 
 import qclib.GPS_COM_interaction as gps
 
@@ -80,7 +73,7 @@ class RunSettings(QMainWindow):
             self.makegpssettingstab() #add GPS settings
 
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to initialize the settings menu.")
 
     def initUI(self):
@@ -368,7 +361,7 @@ class RunSettings(QMainWindow):
             self.processortab.setLayout(self.processortablayout)
 
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to build new processor tab")
 
 
@@ -435,7 +428,7 @@ class RunSettings(QMainWindow):
             self.gpstab.setLayout(self.gpstablayout)
 
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to build new GPS tab")
 
     #updating the selected COM port from the menu
@@ -458,7 +451,7 @@ class RunSettings(QMainWindow):
     #attempt to refresh GPS data with currently selected COM port
     def refreshgpsdata(self):
         if self.comport != 'n':
-            lat,lon,curdate,flag = gps.getcurrentposition(self.comport,20)
+            lat,lon,curdate,flag = gps.getcurrentposition(self.comport,5)
             if flag == 0:
                 if lat > 0:
                     latsign = 'N'
@@ -562,10 +555,10 @@ class RunSettings(QMainWindow):
                            "savejjvv", "savebufr", "saveprof", "saveloc", "useoceanbottom", "checkforgaps", "profreslabel",
                            "profres", "maxderivlabel", "maxderiv","originatingcentername","originatingcenter"]
 
-            wcols = [1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 1, 1, 5, 5, 5, 5, 5, 5]
-            wrows = [1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 8, 9, 2, 3, 5, 6, 9, 10]
+            wcols = [1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 1, 1, 5, 5, 5, 5, 1, 1]
+            wrows = [1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 8, 9, 2, 3, 5, 6, 11, 12]
             wrext = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-            wcolext = [2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 4, 4, 1, 1, 1, 1, 1, 1]
+            wcolext = [2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 4, 4, 1, 1, 1, 1, 4, 4]
 
             # adding user inputs
             for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
@@ -577,7 +570,7 @@ class RunSettings(QMainWindow):
             self.profeditortablayout.setColumnStretch(2, 1)
             self.profeditortablayout.setColumnStretch(3, 2)
             self.profeditortablayout.setColumnStretch(4, 3)
-            for i in range(0, 12):
+            for i in range(0, 14):
                 self.profeditortablayout.setRowStretch(i, 1)
             self.profeditortablayout.setRowStretch(12, 4)
 
@@ -585,21 +578,20 @@ class RunSettings(QMainWindow):
             self.profeditortab.setLayout(self.profeditortablayout)
 
         except Exception:
-            traceback.print_exc()
+            trace_error()
             self.posterror("Failed to build profile editor tab!")
-        finally:
-            QApplication.restoreOverrideCursor()
 
     # =============================================================================
     #         UPDATE BUFR FORMAT ORIGINATING CENTER ACCORDING TO TABLE
     # =============================================================================
     def updateoriginatingcenter(self):
         self.originatingcenter = int(self.profeditortabwidgets["originatingcenter"].value())
-        try:
-            curcentername = self.allcenters[str(self.originatingcenter).zfill(3)]
-        except:
+        ctrkey = str(self.originatingcenter).zfill(3)
+        if ctrkey in self.allcenters:
+            curcentername = self.allcenters[ctrkey]
+        else:
             curcentername = self.allcenters["xxx"]
-        self.profeditortabwidgets["originatingcentername"].setText("Center "+str(self.originatingcenter).zfill(3)+": "+curcentername)
+        self.profeditortabwidgets["originatingcentername"].setText("Center "+ctrkey+": "+curcentername)
 
     #lookup table for originating centers
     def buildcentertable(self):
@@ -734,17 +726,6 @@ class RunSettings(QMainWindow):
     def whatTab(self):
         currentIndex = self.tabWidget.currentIndex()
         return currentIndex
-
-    def renametab(self):
-        try:
-            curtab = int(self.whatTab())
-            name, ok = QInputDialog.getText(self, 'Rename Current Tab', 'Enter new tab name:', QLineEdit.Normal,
-                                            str(self.tabWidget.tabText(curtab)))
-            if ok:
-                self.tabWidget.setTabText(curtab, name)
-        except Exception:
-            traceback.print_exc()
-            self.posterror("Failed to rename the current tab")
 
     def setnewtabcolor(self, tab):
         p = QPalette()

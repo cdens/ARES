@@ -19,12 +19,10 @@
 #                    "flag": 0 if successful, 1 if timeout, 2 if unable to connect
 # =============================================================================
 
-
-import sys
 import serial.tools.list_ports
 import pynmea2
-import traceback
-import time
+from traceback import print_exc as trace_error
+from time import sleep
 
 def listcomports():
     portnums = []
@@ -73,12 +71,12 @@ def streamgpsdata(port):
                 except:
                     pass
                 finally:
-                    time.sleep(0.1)
+                    sleep(0.1)
 
     except KeyboardInterrupt:
         print('Terminated with keyboard interrupt!')
     except Exception:
-        traceback.print_exc()
+        trace_error()
 
 
 
@@ -116,5 +114,5 @@ def getcurrentposition(port,numattempts):
         return 0,0,0,2 #somehow exits loop successfully and ends "with" statement w/t getting position
 
     except Exception: #fails to connect to serial port
-        traceback.print_exc()
+        trace_error()
         return 0,0,0,2
