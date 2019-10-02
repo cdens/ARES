@@ -199,12 +199,13 @@ class RunProgram(QMainWindow):
         # loading WiNRADIO DLL API
         if cursys() == 'Windows':
             try:
-                if calcsize("P") == 32: #32-bit
+                if calcsize("P")*8 == 32: #32-bit
                     self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI_32.dll") #32-bit
-                elif calcsize("P") == 64: #64-bit
+                elif calcsize("P")*8 == 64: #64-bit
                     self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI_64.dll") #64-bit
                 else:
-                    self.postwarning("WiNRADIO driver not loaded (unrecognized system architecture)!")
+                    self.postwarning("WiNRADIO driver not loaded (unrecognized system architecture: "+str(calcsize("P")*8)+")!")
+                    self.wrdll = 0
             except:
                 self.postwarning("Failed to load WiNRADIO driver!")
                 self.wrdll = 0
@@ -526,9 +527,9 @@ class RunProgram(QMainWindow):
                     
             #adding table widget after all other buttons populated
             alltabdata[curtabstr]["tabwidgets"]["table"] = QTableWidget() #19
-            alltabdata[curtabstr]["tabwidgets"]["table"].setColumnCount(5)
+            alltabdata[curtabstr]["tabwidgets"]["table"].setColumnCount(7)
             alltabdata[curtabstr]["tabwidgets"]["table"].setRowCount(0) 
-            alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalHeaderLabels(('Time (s)', 'Frequency (Hz)', 'Signal Strength (dBm)', 'Depth (m)','Temperature (C)'))
+            alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalHeaderLabels(('Time (s)', 'Frequency (Hz)', 'Strength (dBm)', 'FFT Level', 'FFT Ratio (%)' ,'Depth (m)','Temperature (C)'))
             alltabdata[curtabstr]["tabwidgets"]["table"].verticalHeader().setVisible(False)
             alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) #removes scroll bars
             header = alltabdata[curtabstr]["tabwidgets"]["table"].horizontalHeader()       
@@ -537,6 +538,8 @@ class RunProgram(QMainWindow):
             header.setSectionResizeMode(2, QHeaderView.Stretch)
             header.setSectionResizeMode(3, QHeaderView.Stretch)
             header.setSectionResizeMode(4, QHeaderView.Stretch)
+            header.setSectionResizeMode(5, QHeaderView.Stretch)
+            header.setSectionResizeMode(6, QHeaderView.Stretch)
             alltabdata[curtabstr]["tabwidgets"]["table"].setEditTriggers(QTableWidget.NoEditTriggers)
             alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"]["table"],8,2,2,4)
 
@@ -578,6 +581,7 @@ class RunProgram(QMainWindow):
                     alltabdata[curtabstr]["tabwidgets"]["datasource"].addItem(wr)  # ADD COLOR OPTION
                 alltabdata[curtabstr]["tabwidgets"]["datasource"].currentIndexChanged.connect(self.datasourcechange)
                 alltabdata[curtabstr]["datasource"] = alltabdata[curtabstr]["tabwidgets"]["datasource"].currentText()
+
             else:
                 self.postwarning("You cannot refresh input devices while processing. Please click STOP to discontinue processing before refreshing device list")
         except Exception:
@@ -590,6 +594,8 @@ class RunProgram(QMainWindow):
             curtabstr = "Tab " + str(self.whatTab())
             index = alltabdata[curtabstr]["tabwidgets"]["datasource"].findText(alltabdata[curtabstr]["datasource"], Qt.MatchFixedString)
             
+            isbusy = False
+
             #checks to see if selection is busy
             woption = alltabdata[curtabstr]["tabwidgets"]["datasource"].currentText()
             if woption != "Audio" and woption != "Test":
@@ -597,15 +603,18 @@ class RunProgram(QMainWindow):
                     if ctab != curtabstr and (alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or
                                               alltabdata[ctab]["tabtype"] == "SignalProcessor_completed"):
                         if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == woption:
-                            self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
-                            if index >= 0:
-                                alltabdata[curtabstr]["tabwidgets"]["datasource"].setCurrentIndex(index)
-                            return
+                            isbusy = True
+
+            if isbusy:
+                self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
+                if index >= 0:
+                    alltabdata[curtabstr]["tabwidgets"]["datasource"].setCurrentIndex(index)
+                return
      
             #only lets you change the WINRADIO if the current tab isn't already processing
             if not alltabdata[curtabstr]["isprocessing"]:
                 alltabdata[curtabstr]["datasource"] = woption
-            else:
+            elif alltabdata[curtabstr]["datasource"] != woption:
                 if index >= 0:
                      alltabdata[curtabstr]["tabwidgets"]["datasource"].setCurrentIndex(index)
                 self.postwarning("You cannot change input devices while processing. Please click STOP to discontinue processing before switching devices")
@@ -837,8 +846,8 @@ class RunProgram(QMainWindow):
             trace_error()
 
     #slot to pass AXBT data from thread to main GUI
-    @pyqtSlot(int,float,float,float,float,float,int)
-    def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,ctime,i):
+    @pyqtSlot(int,float,float,float,float,float,float,float,int)
+    def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,cact,cratio,ctime,i):
         try:
             plottabstr = self.gettabstrfromnum(plottabnum)
 
@@ -874,11 +883,17 @@ class RunProgram(QMainWindow):
             tablefreq.setBackground(curcolor)
             tabletemp = QTableWidgetItem(str(ctemp))
             tabletemp.setBackground(curcolor)
-            if csig >= -150:
+            if csig == 0:
+                tablesignal = QTableWidgetItem('N/A')
+            elif csig >= -150:
                 tablesignal = QTableWidgetItem(str(csig))
             else:
                 tablesignal = QTableWidgetItem('*****')
             tablesignal.setBackground(curcolor)
+            tableact = QTableWidgetItem(str(cact))
+            tableact.setBackground(curcolor)
+            tablerat = QTableWidgetItem(str(cratio))
+            tablerat.setBackground(curcolor)
 
             table = alltabdata[plottabstr]["tabwidgets"]["table"]
             crow = table.rowCount()
@@ -886,8 +901,10 @@ class RunProgram(QMainWindow):
             table.setItem(crow, 0, tabletime)
             table.setItem(crow, 1, tablefreq)
             table.setItem(crow, 2, tablesignal)
-            table.setItem(crow, 3, tabledepth)
-            table.setItem(crow, 4, tabletemp)
+            table.setItem(crow, 3, tableact)
+            table.setItem(crow, 4, tablerat)
+            table.setItem(crow, 5, tabledepth)
+            table.setItem(crow, 6, tabletemp)
             table.scrollToBottom()
     #        if crow > 20: #uncomment to remove old rows
     #            table.removeRow(0)

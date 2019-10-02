@@ -19,15 +19,16 @@
 #                    "flag": 0 if successful, 1 if timeout, 2 if unable to connect
 # =============================================================================
 
-import serial.tools.list_ports
-import pynmea2
+from serial import Serial
+from serial.tools import list_ports
+from pynmea2 import parse
 from traceback import print_exc as trace_error
 from time import sleep
 
 def listcomports():
     portnums = []
     portinfo = []
-    ports = serial.tools.list_ports.comports()
+    ports = list_ports.comports()
     for pnum, sdesc, details in sorted(ports):
         portnums.append(pnum)
         portinfo.append("{}: {}".format(pnum, sdesc)) #short description
@@ -40,7 +41,7 @@ def streamgpsdata(port):
     try:
 
         #open/configure port
-        with serial.Serial(port, 4800, timeout=1) as ser:
+        with Serial(port, 4800, timeout=1) as ser:
             ii = 0
             while ii <= 100:
                 ii += 1
@@ -48,7 +49,7 @@ def streamgpsdata(port):
                 try:  # exceptions raised if line doesn't include lat/lon
                     #get and decode current line
                     try:
-                        nmeaobj = pynmea2.parse(ser.readline().decode('ascii', errors='replace').strip())
+                        nmeaobj = parse(ser.readline().decode('ascii', errors='replace').strip())
                         isgood = True
                     except:
                         print("Bad NMEA sentence!")
@@ -85,7 +86,7 @@ def getcurrentposition(port,numattempts):
 
     try:
         # try to read a line of data from the serial port and parse
-        with serial.Serial(port, 4800, timeout=1) as ser:
+        with Serial(port, 4800, timeout=1) as ser:
 
             ii = 0
             while True: #infinite loop
@@ -93,7 +94,7 @@ def getcurrentposition(port,numattempts):
                 ii += 1
                 try:
                     #decode the line
-                    nmeaobj = pynmea2.parse(ser.readline().decode('ascii', errors='replace').strip())
+                    nmeaobj = parse(ser.readline().decode('ascii', errors='replace').strip())
 
                     try: #exceptions raised if line doesn't include lat/lon
                         lat = round(nmeaobj.latitude,3)

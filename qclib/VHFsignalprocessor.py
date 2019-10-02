@@ -473,8 +473,10 @@ class ThreadProcessor(QRunnable):
                 cdepth = np.round(cdepth, 1)
                 cfreq = np.round(cfreq, 2)
                 ctime = np.round(ctime, 1)
+                actmax = np.round(np.log10(actmax),2)
+                ratiomax = np.round(100*ratiomax,1)
                 sigstrength = np.round(sigstrength, 2)
-                self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, cfreq, sigstrength, ctime, i)
+                self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, cfreq, sigstrength, actmax, ratiomax, ctime, i)
 
                 if not self.isfromaudio and not self.isfromtest:
                     timemodule.sleep(0.1)  # pauses before getting next point
@@ -530,7 +532,7 @@ class ThreadProcessor(QRunnable):
 
 #initializing signals for data to be passed back to main loop
 class ThreadProcessorSignals(QObject): 
-    iterated = pyqtSignal(int,float,float,float,float,float,int) #signal to add another entry to raw data arrays
+    iterated = pyqtSignal(int,float,float,float,float,float,float,float,int) #signal to add another entry to raw data arrays
     triggered = pyqtSignal(int,float) #signal that the first tone has been detected
     terminated = pyqtSignal(int) #signal that the loop has been terminated (by user input or program error)
     failed = pyqtSignal(int)

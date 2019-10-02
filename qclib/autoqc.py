@@ -30,11 +30,37 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,profres,checkforgap
     index = rawdepth <= maxdepth
     rawtemp = rawtemp[index]
     rawdepth = rawdepth[index]
+
+    #Step 2: Find and remove gaps due to VHF interference kicking off early Mk21 start
+    if checkforgaps:
+        donegapcheck = False
+        while not donegapcheck:
+            print("Iterating")
+            maxcheckdepth = 50 #only checks the upper 50m of the profile
+            maxgapdiff = 10 #if gap is larger than this range (m), correct profile
+            isgap = [0]
+            for i in range(1,len(rawdepth)):
+                print("i: {}   Depth: {}   Diffference: {}".format(i,rawdepth[i],rawdepth[i]-rawdepth[i-1]))
+                if (rawdepth[i] >= rawdepth[i-1]+ maxgapdiff) and (rawdepth[i-1] <= maxcheckdepth): #if there is a gap of sufficient size to correct
+                    print("gap found!")
+                    isgap.append(1) #NOTE: the logical 1 is placed at the first depth AFTER the gap
+                else:
+                    isgap.append(0)
+
+            #if there are gaps, find the deepest one and correct t/d profile with that depth as the surface (only works with linear fall rate equation)
+            if np.sum(isgap) > 0:
+                print("fixing")
+                lastgap = np.max(np.argwhere(isgap))
+                realstartdepth = rawdepth[lastgap]
+                rawtemp = rawtemp[lastgap:]
+                rawdepth = rawdepth[lastgap:]-realstartdepth
+            else: #otherwise, exit loop
+                donegapcheck = True
     
-    #Step 2: remove spikes using running standard deviation filter
+    #Step 3: remove spikes using running standard deviation filter
     temp_despike = np.array([])
     depth_despike = np.array([])
-    for n in range(len(rawdepth)):
+    for n in range(0,len(rawdepth)):
         
         #assigning region for running standard deviation filter
         if n <= 24:
@@ -48,13 +74,13 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,profres,checkforgap
         curmean = np.mean(tempspike)
         curstd = np.std(tempspike)
         
-        #only retain values within +/- 1 standard deviation of running mean
-        if abs(rawtemp[n]-curmean) <= curstd:
+        #only retain values within +/- 1 standard deviation of running mean or top 10 m
+        if abs(rawtemp[n]-curmean) <= curstd or rawdepth[n] < 10:
             depth_despike = np.append(depth_despike,rawdepth[n])
             temp_despike = np.append(temp_despike,rawtemp[n])
     
     
-    #Step 3: smooth the despiked profile
+    #Step 4: smooth the despiked profile
     temp_smooth = np.array([])
     depth_smooth = depth_despike.copy()
     smoothint = 5. #smoothing range in meters
@@ -70,23 +96,21 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,profres,checkforgap
             goodindex = np.all([ge,le],axis=0)
             temp_smooth = np.append(temp_smooth,np.mean(temp_despike[goodindex]))
         
-        
+    print("Input:")
+    print(rawtemp[:30])
+    print(rawdepth[:30])
+    print("   ")
+
+    print("Despiked:")
+    print(temp_despike[:30])
+    print(depth_despike[:30])
+    print("   ")
+
+    print("Smoothed:")
+    print(temp_smooth[:30])
+    print(depth_smooth[:30])
+    print("   ")
     
-    #Step 4: Find and remove gaps due to VHF interference kicking off early Mk21 start
-    if checkforgaps:
-        maxcheckdepth = np.min([len(depth_smooth),50]) #only checks the upper 50m of the profile
-        isgap = [0]*maxcheckdepth
-        for i in range(1,maxcheckdepth):
-            if depth_smooth[i] >= depth_smooth[i-1]+5: #if there is a gap of 5+ meters in the upper 50m of the profile
-                isgap[i] = 1 #NOTE: the logical 1 is placed at the first depth AFTER the gap
-        #if there are gaps, find the deepest one and correct t/d profile with that depth as the surface (only works with linear fall rate equation)
-        if np.sum(isgap) > 0:
-            lastgap = np.max(np.argwhere(isgap))
-            realstartdepth = depth_smooth[lastgap]
-            temp_smooth = temp_smooth[lastgap:]
-            depth_smooth = depth_smooth[lastgap:]-realstartdepth
-
-
     
     #Step 5: Set all values above sfc_correction to equal t(z=sfc_correction)
     if sfc_correction > 0:
