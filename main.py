@@ -86,6 +86,7 @@
 # =============================================================================
 from sys import argv, exit
 from platform import system as cursys
+from struct import calcsize
 from os import remove, path, listdir
 from traceback import print_exc as trace_error
 from ctypes import windll
@@ -198,14 +199,18 @@ class RunProgram(QMainWindow):
         # loading WiNRADIO DLL API
         if cursys() == 'Windows':
             try:
-                # self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI.dll") #32-bit
-                self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI_64.dll") #64-bit
+                if calcsize("P") == 32: #32-bit
+                    self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI_32.dll") #32-bit
+                elif calcsize("P") == 64: #64-bit
+                    self.wrdll = windll.LoadLibrary("qcdata/WRG39WSBAPI_64.dll") #64-bit
+                else:
+                    self.postwarning("WiNRADIO driver not loaded (unrecognized system architecture)!")
             except:
-                self.postwarning("WiNRADIO driver NOT FOUND! Please ensure a WiNRADIO Receiver is connected and powered on and then restart the program!")
+                self.postwarning("Failed to load WiNRADIO driver!")
                 self.wrdll = 0
                 trace_error()
         else:
-            self.postwarning("WiNRADIO communications only supported with Windows! Processing from audio/ASCII files is still available.")
+            self.postwarning("WiNRADIO communications only supported with Windows! Processing and editing from audio/ASCII files is still available.")
             self.wrdll = 0
 
 

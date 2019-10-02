@@ -401,8 +401,9 @@ class RunSettings(QMainWindow):
 
             self.gpstabwidgets["comporttitle"] = QLabel('COM Port Options:')  # 6
             self.gpstabwidgets["comport"] = QComboBox()  # 7
+            self.gpstabwidgets["comport"].clear()
+            self.gpstabwidgets["comport"].addItem('No COM Port Selected')
             self.gpstabwidgets["comport"].currentIndexChanged.connect(self.updatecomport)
-            self.updategpslist()
             self.updatecomport()
 
             # should be 7 entries
@@ -434,10 +435,9 @@ class RunSettings(QMainWindow):
     #updating the selected COM port from the menu
     def updatecomport(self):
         curcomnum = self.gpstabwidgets["comport"].currentIndex()
+        #won't overwrite existing com port settings if no port is selected
         if curcomnum > 0:
             self.comport = self.comports[curcomnum - 1]
-        else:
-            self.comport = 'n'
         self.refreshgpsdata()
 
     #refreshing the list of available COM ports
