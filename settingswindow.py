@@ -40,7 +40,9 @@ from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
 
 import qclib.GPS_COM_interaction as gps
 
-from ctypes import windll
+from platform import system as cursys
+if cursys() == 'Windows':
+    from ctypes import windll
 
 
 
@@ -86,7 +88,8 @@ class RunSettings(QMainWindow):
         self.setPalette(p)
 
         myappid = 'ARES_v1.0'  # arbitrary string
-        windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        if cursys() == 'Windows':
+            windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
         # changing font size
         font = QFont()

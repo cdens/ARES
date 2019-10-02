@@ -89,7 +89,9 @@ from platform import system as cursys
 from struct import calcsize
 from os import remove, path, listdir
 from traceback import print_exc as trace_error
-from ctypes import windll
+
+if cursys() == 'Windows':
+	from ctypes import windll
 
 from shutil import copy as shcopy
 
@@ -158,7 +160,8 @@ class RunProgram(QMainWindow):
         self.setPalette(p)
 
         myappid = 'ARES_v1.0'  # arbitrary string
-        windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        if cursys() == 'Windows':
+            windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
         #changing font size
         font = QFont()
