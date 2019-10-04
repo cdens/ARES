@@ -11,3 +11,14 @@ qclib/__pycache__/
 
 #ignore all program settings files
 *.ARESsettings
+=======
+# Ignore all QC data in folder
+qcdata/
+
+# Ignore test data files folder
+testdata/
+
+#ignore all pycache files
+__pycache__/
+qclib/__pycache__/
+*.pyc

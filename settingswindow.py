@@ -41,7 +41,8 @@ from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
 
 import qclib.GPS_COM_interaction as gps
 
-from ctypes import windll
+if cursys == 'Windows':
+    from ctypes import windll
 
 
 
