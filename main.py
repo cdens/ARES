@@ -134,7 +134,6 @@ class RunProgram(QMainWindow):
         
         try:
             self.initUI() #creates GUI window
-            self.setdefaults() #Default autoQC preferences
             self.buildmenu() #Creates interactive menu, options to create tabs and start autoQC
             self.loaddata() #loads climo and bathy data into program
             self.makenewprocessortab() #Opens first tab
@@ -177,6 +176,30 @@ class RunProgram(QMainWindow):
         self.tabWidget.setLayout(self.myBoxLayout)
         self.show()
 
+        #track whether preferences tab is opened
+        self.preferencesopened = False
+
+        #setting slash dependent on OS
+        global slash
+        if cursys() == 'Windows':
+            slash = '\\'
+        else:
+            slash = '/'
+
+        #settings file source
+        self.settingsfile = ".ARESsettings"
+
+        #setting up dictionary to store data for each tab
+        global alltabdata
+        alltabdata = {}
+
+        #loading default program settings
+        (self.autodtg, self.autolocation, self.autoid, self.platformID, self.savelog, self.saveedf, self.savewav, self.savesig, 
+            self.dtgwarn, self.renametabstodtg, self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.triggerfftratio, 
+            self.triggersiglev, self.useclimobottom, self.overlayclimo, self.comparetoclimo, self.savefin, self.savejjvv, self.savebufr, 
+            self.saveprof, self.saveloc, self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres, self.originatingcenter, 
+            self.comport) = swin.readsettings(self.settingsfile)
+
         #tab tracking
         self.totaltabs = 0
         self.tabnumbers = []
@@ -191,9 +214,7 @@ class RunProgram(QMainWindow):
             if len(cfile) >= 5:
                 cfilestart = cfile[:4]
                 cfileext = cfile[-3:]
-                if cfilestart.lower() == 'temp' and cfileext.lower() == 'wav':
-                    remove(cfile)
-                elif cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt':
+                if (cfilestart.lower() == 'temp' and cfileext.lower() == 'wav') or (cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt'):
                     remove(cfile)
 
         # loading WiNRADIO DLL API
@@ -213,60 +234,7 @@ class RunProgram(QMainWindow):
         else:
             self.postwarning("WiNRADIO communications only supported with Windows! Processing and editing from audio/ASCII files is still available.")
             self.wrdll = 0
-
-
         
-# =============================================================================
-#     DECLARE DEFAULT VARIABLES, GLOBAL PARAMETERS
-# =============================================================================
-    def setdefaults(self):
-        # processor preferences
-        self.autodtg = True  # auto determine profile date/time as system date/time on clicking "START"
-        self.autolocation = True  # auto determine location with GPS
-        self.autoid = True  # autopopulate platform ID
-        self.platformID = 'AFNNN'
-        self.savelog = True
-        self.saveedf = False
-        self.savewav = True
-        self.savesig = True
-        self.dtgwarn = True  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
-        self.renametabstodtg = True  # auto rename tab to dtg when loading profile editor
-        self.autosave = False  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
-        self.fftwindow = 0.3  # window to run FFT (in seconds)
-        self.minfftratio = 0.5  # minimum signal to noise ratio to ID data
-        self.minsiglev = 5E6  # minimum total signal level to receive data
-        self.triggerfftratio = 0.75  # minimum signal to noise ratio to ID data
-        self.triggersiglev = 1E7  # minimum total signal level to receive data
-
-        # profeditorpreferences
-        self.useclimobottom = True  # use climatology to ID bottom strikes
-        self.overlayclimo = True  # overlay the climatology on the plot
-        self.comparetoclimo = True  # check for climatology mismatch and display result on plot
-        self.savefin = True  # file types to save
-        self.savejjvv = True
-        self.savebufr = True
-        self.saveprof = True
-        self.saveloc = True
-        self.useoceanbottom = True  # use NTOPO1 bathymetry data to ID bottom strikes
-        self.checkforgaps = True  # look for/correct gaps in profile due to false starts from VHF interference
-        self.maxderiv = 1.5  # d2Tdz2 threshold to call a point an inflection point
-        self.profres = 8.0  # profile minimum vertical resolution (m)
-        self.originatingcenter = 62 #default center for BUFR message: NAVO
-
-        self.comport = 'n'
-        
-        #setting slash dependent on OS
-        global slash
-        if cursys() == 'Windows':
-            slash = '\\'
-        else:
-            slash = '/'
-
-        global alltabdata
-        alltabdata = {}
-
-        #track whether preferences tab is opened
-        self.preferencesopened = False
         
         
 # =============================================================================
@@ -357,6 +325,22 @@ class RunProgram(QMainWindow):
                        renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
                        comparetoclimo,savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport):
 
+        #save settings to self
+        self.savesettings(autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn,
+                       renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
+                       comparetoclimo,savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport)
+
+        #save settings to file
+        swin.writesettings(self.settingsfile, autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, 
+            fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
+            saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport)
+
+
+    #saves settings to self
+    def savesettings(self,autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn,
+                       renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
+                       comparetoclimo,savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport):
+
         # processor preferences
         self.autodtg = autodtg  # auto determine profile date/time as system date/time on clicking "START"
         self.autolocation = autolocation  # auto determine location with GPS
@@ -394,6 +378,7 @@ class RunProgram(QMainWindow):
         self.originatingcenter = originatingcenter #originating center for BUFR message
 
         self.comport = comport
+
 
     #slot to update main GUI loop if the preferences window has been closed
     @pyqtSlot(bool)
@@ -1257,10 +1242,10 @@ class RunProgram(QMainWindow):
             #ADDING FIGURES TO GRID LAYOUT (row column rowext colext)
             alltabdata[curtabstr]["ProfFig"] = plt.figure()
             alltabdata[curtabstr]["LocFig"] = plt.figure()
-            alltabdata[curtabstr]["ProfCanvas"] = FigureCanvas(alltabdata[curtabstr]["ProfFig"]) #self.canvas = FigureCanvas(self.figure)
-            alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["ProfCanvas"],0,0,12,1) #tablayout.addWidget(self.canvas)
-            alltabdata[curtabstr]["LocCanvas"] = FigureCanvas(alltabdata[curtabstr]["LocFig"]) #self.canvas = FigureCanvas(self.figure)
-            alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["LocCanvas"],11,2,1,5) #tablayout.addWidget(self.canvas)
+            alltabdata[curtabstr]["ProfCanvas"] = FigureCanvas(alltabdata[curtabstr]["ProfFig"]) 
+            alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["ProfCanvas"],0,0,12,1) 
+            alltabdata[curtabstr]["LocCanvas"] = FigureCanvas(alltabdata[curtabstr]["LocFig"]) 
+            alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["LocCanvas"],11,2,1,5) 
             
             #making profile processing result plots
             alltabdata[curtabstr]["ProfAx"] = alltabdata[curtabstr]["ProfFig"].add_axes([0.1, 0.05, 0.85, 0.9])
@@ -1376,7 +1361,6 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["maxdepthtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             
             #should be 16 entries 
-            Wsize = app.desktop().screenGeometry()
             widgetorder = ["toggleclimooverlay","addpoint","removepoint","sfccorrectiontitle","sfccorrection",
                            "maxdepthtitle","maxdepth","depthdelaytitle","depthdelay",
                            "rerunqc","proftxt","isbottomstrike","rcodetitle","rcode"]
@@ -2054,9 +2038,7 @@ class RunProgram(QMainWindow):
                 if len(cfile) >= 5:
                     cfilestart = cfile[:4]
                     cfileext = cfile[-3:]
-                    if cfilestart.lower() == 'temp' and cfileext.lower() == 'wav':
-                        remove(cfile)
-                    elif cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt':
+                    if (cfilestart.lower() == 'temp' and cfileext.lower() == 'wav') or (cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt'):
                         remove(cfile)
         else:
             event.ignore() 

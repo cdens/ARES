@@ -32,6 +32,7 @@
 # =============================================================================
 from traceback import print_exc as trace_error
 import numpy as np
+from os import remove, path
 
 from PyQt5.QtWidgets import (QMainWindow, QLabel, QSpinBox, QCheckBox, QPushButton, 
     QMessageBox, QWidget, QTabWidget, QGridLayout, QSlider, QComboBox, QLineEdit)
@@ -157,46 +158,6 @@ class RunSettings(QMainWindow):
         self.comport = comport # COM port for GPS feed
 
 
-
-    # =============================================================================
-    #     DECLARE DEFAULT VARIABLES, GLOBAL PARAMETERS
-    # =============================================================================
-    def setdefaultsettings(self):
-        # processor preferences
-        self.autodtg = True  # auto determine profile date/time as system date/time on clicking "START"
-        self.autolocation = True #auto determine location with GPS
-        self.autoid = True #autopopulate platform ID
-        self.platformID = 'AFNNN'
-        self.savelog = True
-        self.saveedf = False
-        self.savewav = True
-        self.savesig = True
-        self.dtgwarn = True  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
-        self.renametabstodtg = True  # auto rename tab to dtg when loading profile editor
-        self.autosave = False  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
-        self.fftwindow = 0.3  # window to run FFT (in seconds)
-        self.minfftratio = 0.5  # minimum signal to noise ratio to ID data
-        self.minsiglev = 5E6  # minimum total signal level to receive data
-
-        self.triggerfftratio = 0.75  # minimum signal to noise ratio to ID data
-        self.triggersiglev = 1E7  # minimum total signal level to receive data
-
-        #profeditorpreferences
-        self.useclimobottom = True  # use climatology to ID bottom strikes
-        self.overlayclimo = True  # overlay the climatology on the plot
-        self.comparetoclimo = True  # check for climatology mismatch and display result on plot
-        self.savefin = True  # file types to save
-        self.savejjvv = True
-        self.savebufr = True
-        self.saveprof = True
-        self.saveloc = True
-        self.useoceanbottom = True  # use NTOPO1 bathymetry data to ID bottom strikes
-        self.checkforgaps = True  # look for/correct gaps in profile due to false starts from VHF interference
-        self.maxderiv = 1.5  # d2Tdz2 threshold to call a point an inflection point
-        self.profres = 8.0 #profile minimum vertical resolution (m)
-        self.originatingcenter #BUFR table code for NAVO
-
-
     def updatepreferences(self): #records current configuration before exporting to main loop
 
         self.autodtg = self.processortabwidgets["autodtg"].isChecked()
@@ -238,7 +199,6 @@ class RunSettings(QMainWindow):
         self.maxderiv = float(self.profeditortabwidgets["maxderiv"].value())/100
 
         self.updateoriginatingcenter()
-
         self.updatecomport()
 
 
@@ -316,7 +276,7 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["triggersiglev"] = QSlider(Qt.Horizontal)  # 18
             self.processortabwidgets["triggersiglev"].setMinimum(400)
             self.processortabwidgets["triggersiglev"].setMaximum(900)
-            self.processortabwidgets["triggersiglev"].setValue(int(sigsliderval * 100))
+            self.processortabwidgets["triggersiglev"].setValue(int(trigsigsliderval * 100))
             self.processortabwidgets["triggersiglev"].valueChanged[int].connect(self.changetriggersiglev)
 
             self.processortabwidgets["triggerratiolabel"] = QLabel(
@@ -363,10 +323,6 @@ class RunSettings(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Failed to build new processor tab")
-
-
-
-
 
 
     # =============================================================================
@@ -435,10 +391,10 @@ class RunSettings(QMainWindow):
     #updating the selected COM port from the menu
     def updatecomport(self):
         curcomnum = self.gpstabwidgets["comport"].currentIndex()
-        #won't overwrite existing com port settings if no port is selected
         if curcomnum > 0:
             self.comport = self.comports[curcomnum - 1]
-        self.refreshgpsdata()
+        else:
+            self.comport = 'n'
 
     #refreshing the list of available COM ports
     def updategpslist(self):
@@ -665,7 +621,16 @@ class RunSettings(QMainWindow):
 
 
     def resetdefaults(self):
-        self.setdefaultsettings()
+        #pull default settings
+        (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
+            minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
+            saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport) = setdefaultsettings()
+
+        #save default settings to self
+        self.saveinputsettings(autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig,
+                               dtgwarn, renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,
+                               useclimobottom, overlayclimo, comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc,
+                               useoceanbottom, checkforgaps, maxderiv, profres, originatingcenter, comport)
 
         self.processortabwidgets["autodtg"].setChecked(self.autodtg)
         self.processortabwidgets["autolocation"].setChecked(self.autolocation)
@@ -718,7 +683,8 @@ class RunSettings(QMainWindow):
         self.profeditortabwidgets["maxderivlabel"].setText('Inflection Point Threshold (C/m<sup>2</sup>): ' + str(self.maxderiv).ljust(4, '0'))  # 17
         self.profeditortabwidgets["maxderiv"].setValue(int(self.maxderiv * 100))
 
-        self.profeditortabwidgets["originatingcenter"].setText(str(self.originatingcenter).zfill(3))
+        self.profeditortabwidgets["originatingcenter"].setValue(self.originatingcenter)
+        self.updateoriginatingcenter()
 
     # =============================================================================
     #     TAB MANIPULATION OPTIONS, OTHER GENERAL FUNCTIONS
@@ -755,3 +721,173 @@ class SettingsSignals(QObject):
     exported = pyqtSignal(bool,bool,bool,str,bool,bool,bool,bool,bool,bool,bool,float,float,float,float,float,bool,bool,
                           bool,bool,bool,bool,bool,bool,bool,bool,float,float,int,str)
     closed = pyqtSignal(bool)
+
+
+#Default settings for program
+def setdefaultsettings():
+    # processor preferences
+    autodtg = True  # auto determine profile date/time as system date/time on clicking "START"
+    autolocation = True #auto determine location with GPS
+    autoid = True #autopopulate platform ID
+    platformID = 'AFNNN'
+    savelog = True
+    saveedf = False
+    savewav = True
+    savesig = True
+    dtgwarn = True  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
+    renametabstodtg = True  # auto rename tab to dtg when loading profile editor
+    autosave = False  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
+    fftwindow = 0.3  # window to run FFT (in seconds)
+    minfftratio = 0.5  # minimum signal to noise ratio to ID data
+    minsiglev = 5E6  # minimum total signal level to receive data
+
+    triggerfftratio = 0.75  # minimum signal to noise ratio to ID data
+    triggersiglev = 1E7  # minimum total signal level to receive data
+
+    #profeditorpreferences
+    useclimobottom = True  # use climatology to ID bottom strikes
+    overlayclimo = True  # overlay the climatology on the plot
+    comparetoclimo = True  # check for climatology mismatch and display result on plot
+    savefin = True  # file types to save
+    savejjvv = True
+    savebufr = True
+    saveprof = True
+    saveloc = True
+    useoceanbottom = True  # use NTOPO1 bathymetry data to ID bottom strikes
+    checkforgaps = True  # look for/correct gaps in profile due to false starts from VHF interference
+    maxderiv = 1.5  # d2Tdz2 threshold to call a point an inflection point
+    profres = 8.0 #profile minimum vertical resolution (m)
+    originatingcenter = 62 #BUFR table code for NAVO
+
+    comport = 'n' #default com port is none
+
+    return (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
+        minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
+        saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport)
+
+
+#Read settings from txt file
+def readsettings(filename):
+    try:
+        #read settings from file
+        with open(filename) as file:
+            line = file.readline()
+            autodtg = bool(line.strip().split()[1]) 
+            line = file.readline()
+            autolocation = bool(line.strip().split()[1]) 
+            line = file.readline()
+            autoid = bool(line.strip().split()[1]) 
+            line = file.readline()
+            platformID = str(line.strip().split()[1]) 
+            line = file.readline()
+            savelog = bool(line.strip().split()[1]) 
+            line = file.readline()
+            saveedf = bool(line.strip().split()[1]) 
+            line = file.readline()
+            savewav = bool(line.strip().split()[1]) 
+            line = file.readline()
+            savesig = bool(line.strip().split()[1]) 
+            line = file.readline()
+            dtgwarn = bool(line.strip().split()[1]) 
+            line = file.readline()
+            renametabstodtg = bool(line.strip().split()[1])
+            line = file.readline() 
+            autosave = bool(line.strip().split()[1]) 
+            line = file.readline()
+            fftwindow = float(line.strip().split()[1]) 
+            line = file.readline()
+            minfftratio = float(line.strip().split()[1]) 
+            line = file.readline()
+            minsiglev = float(line.strip().split()[1]) 
+            line = file.readline()
+            triggerfftratio = float(line.strip().split()[1]) 
+            line = file.readline()
+            triggersiglev = float(line.strip().split()[1]) 
+            line = file.readline()
+            useclimobottom = bool(line.strip().split()[1]) 
+            line = file.readline()
+            overlayclimo = bool(line.strip().split()[1]) 
+            line = file.readline()
+            comparetoclimo = bool(line.strip().split()[1]) 
+            line = file.readline()
+            savefin = bool(line.strip().split()[1]) 
+            line = file.readline()
+            savejjvv = bool(line.strip().split()[1]) 
+            line = file.readline()
+            savebufr = bool(line.strip().split()[1]) 
+            line = file.readline()
+            saveprof = bool(line.strip().split()[1]) 
+            line = file.readline()
+            saveloc = bool(line.strip().split()[1]) 
+            line = file.readline()
+            useoceanbottom = bool(line.strip().split()[1]) 
+            line = file.readline()
+            checkforgaps = bool(line.strip().split()[1]) 
+            line = file.readline()
+            maxderiv = float(line.strip().split()[1]) 
+            line = file.readline()
+            profres = float(line.strip().split()[1]) 
+            line = file.readline()
+            originatingcenter = int(line.strip().split()[1]) 
+            line = file.readline()
+            comport = str(line.strip().split()[1]) 
+
+    #if settings file doesn't exist or is invalid, rewrites file with default settings
+    except:
+        (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
+            minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
+            saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport) = setdefaultsettings()
+
+        writesettings(filename, autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
+            minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
+            saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport)
+
+        trace_error() #report issue
+
+
+    return (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
+        minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
+        saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport)
+
+
+#Write settings from txt file
+def writesettings(filename,autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
+    minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
+    saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport):
+
+    #overwrites file by deleting if it exists
+    if path.exists(filename):
+        remove(filename)
+
+    #writes settings to file
+    with open(filename,'w') as file:
+        file.write('autodtg: '+str(autodtg) + '\n')
+        file.write('autolocation: '+str(autolocation) + '\n')
+        file.write('autoid: '+str(autoid) + '\n')
+        file.write('platformID: '+str(platformID) + '\n')
+        file.write('savelog: '+str(savelog) + '\n')
+        file.write('saveedf: '+str(saveedf) + '\n')
+        file.write('savewav: '+str(savewav) + '\n')
+        file.write('savesig: '+str(savesig) + '\n')
+        file.write('dtgwarn: '+str(dtgwarn) + '\n')
+        file.write('renametabstodtg: '+str(renametabstodtg) + '\n')
+        file.write('autosave: '+str(autosave) + '\n')
+        file.write('fftwindow: '+str(fftwindow) + '\n')
+        file.write('minfftratio: '+str(minfftratio) + '\n')
+        file.write('minsiglev: '+str(minsiglev) + '\n')
+        file.write('triggerfftratio: '+str(triggerfftratio) + '\n')
+        file.write('triggersiglev: '+str(triggersiglev) + '\n')
+        file.write('useclimobottom: '+str(useclimobottom) + '\n')
+        file.write('overlayclimo: '+str(overlayclimo) + '\n')
+        file.write('comparetoclimo: '+str(comparetoclimo) + '\n')
+        file.write('savefin: '+str(savefin) + '\n')
+        file.write('savejjvv: '+str(savejjvv) + '\n')
+        file.write('savebufr: '+str(savebufr) + '\n')
+        file.write('saveprof: '+str(saveprof) + '\n')
+        file.write('saveloc: '+str(saveloc) + '\n')
+        file.write('useoceanbottom: '+str(useoceanbottom) + '\n')
+        file.write('checkforgaps: '+str(checkforgaps) + '\n')
+        file.write('maxderiv: '+str(maxderiv) + '\n')
+        file.write('profres: '+str(profres) + '\n')
+        file.write('originatingcenter: '+str(originatingcenter) + '\n')
+        file.write('comport: '+str(comport) + '\n')
