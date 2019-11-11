@@ -90,8 +90,8 @@ from struct import calcsize
 from os import remove, path, listdir
 from traceback import print_exc as trace_error
 
-if cursys == 'Windows':
-    from ctypes import windll
+#if cursys == 'Windows':
+from ctypes import windll
 
 from shutil import copy as shcopy
 
