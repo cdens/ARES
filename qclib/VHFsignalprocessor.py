@@ -215,7 +215,7 @@ class ThreadProcessor(QRunnable):
 
     #initializing current thread (saving variables, reading audio data or contacting/configuring receiver)
     def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, 
-        fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, *args,**kwargs):
+        fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,slash,tempdir, *args,**kwargs):
         super(ThreadProcessor, self).__init__()
 
 
@@ -236,9 +236,9 @@ class ThreadProcessor(QRunnable):
         self.triggersiglev = triggersiglev
 
         #output file names
-        self.txtfilename = "sigdata_" + str(self.curtabnum) + '.txt'
+        self.txtfilename = tempdir + slash + "sigdata_" + str(self.curtabnum) + '.txt'
         self.txtfile = open(self.txtfilename, 'w')
-        self.wavfilename = "tempwav_" + str(self.curtabnum) + '.WAV'
+        self.wavfilename = tempdir + slash +  "tempwav_" + str(self.curtabnum) + '.WAV'
 
         # identifying whether tab is audio, test, or other format
         self.isfromaudio = False

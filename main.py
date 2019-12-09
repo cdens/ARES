@@ -95,6 +95,8 @@ if cursys() == 'Windows':
 
 from shutil import copy as shcopy
 
+from tempfile import gettempdir
+
 from PyQt5.QtWidgets import (QMainWindow, QAction, QApplication, QMenu, QLineEdit, QLabel, QSpinBox, QCheckBox,
     QPushButton, QMessageBox, QWidget, QFileDialog, QComboBox, QTextEdit, QTabWidget, QVBoxLayout, QInputDialog, 
     QGridLayout, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QDesktopWidget, 
@@ -188,8 +190,12 @@ class RunProgram(QMainWindow):
         else:
             slash = '/'
 
+        #getting temporary directory for files
+        self.tempdir = gettempdir()
+
         #settings file source
-        self.settingsfile = ".ARESsettings"
+        self.settingsfile = self.tempdir + slash + ".ARESsettings"
+
 
         #setting up dictionary to store data for each tab
         global alltabdata
@@ -211,13 +217,13 @@ class RunProgram(QMainWindow):
         self.threadpool.setMaxThreadCount(6)
 
         # delete all temporary files
-        allfilesanddirs = listdir()
+        allfilesanddirs = listdir(self.tempdir)
         for cfile in allfilesanddirs:
             if len(cfile) >= 5:
                 cfilestart = cfile[:4]
                 cfileext = cfile[-3:]
                 if (cfilestart.lower() == 'temp' and cfileext.lower() == 'wav') or (cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt'):
-                    remove(cfile)
+                    remove(self.tempdir + slash + cfile)
 
         # loading WiNRADIO DLL API
         if cursys() == 'Windows':
@@ -421,9 +427,12 @@ class RunProgram(QMainWindow):
             #ADDING FIGURE TO GRID LAYOUT
             alltabdata[curtabstr]["ProcessorCanvas"] = FigureCanvas(alltabdata[curtabstr]["ProcessorFig"]) 
             alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["ProcessorCanvas"],0,0,10,1)
-    
+            alltabdata[curtabstr]["ProcessorCanvas"].setStyleSheet("background-color:transparent;")
+            alltabdata[curtabstr]["ProcessorFig"].patch.set_facecolor('None')
+
             #making profile processing result plots
-            alltabdata[curtabstr]["ProcessorAx"] = alltabdata[curtabstr]["ProcessorFig"].add_axes([0.1, 0.05, 0.85, 0.9])
+            alltabdata[curtabstr]["ProcessorAx"] = plt.axes()
+
     
             #prep window to plot data
             alltabdata[curtabstr]["ProcessorAx"].set_xlabel('Temperature ($^\circ$C)')
@@ -763,7 +772,7 @@ class RunProgram(QMainWindow):
                 vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
                 alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
                          alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],self.fftwindow,
-                         self.minfftratio,self.minsiglev,self.triggerfftratio,self.triggersiglev)
+                         self.minfftratio,self.minsiglev,self.triggerfftratio,self.triggersiglev,slash,self.tempdir)
                 alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
 
                 alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
@@ -988,7 +997,8 @@ class RunProgram(QMainWindow):
             
             #saves profile if necessary
             if self.autosave:
-                self.savedataincurtab()
+                if not self.savedataincurtab(): #try to save profile, terminate function if failed
+                    return
             else:
                 reply = QMessageBox.question(self, 'Save Raw Data?',
                 "Would you like to save the raw data file? \n Filetype options can be adjusted in File>Raw Data File Types \n All unsaved work will be lost!", 
@@ -1230,7 +1240,7 @@ class RunProgram(QMainWindow):
                     alltabdata[curtabstr]["tabwidgets"][i] = 1 #bs variable- overwrites spacer item
                                 
             if self.renametabstodtg:
-                curtab = int(self.whatTab())
+                curtab = self.tabWidget.currentIndex()
                 self.tabWidget.setTabText(curtab,dtg)  
                 
             #now delete widget entries
@@ -1241,17 +1251,20 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tab"].setLayout(alltabdata[curtabstr]["tablayout2"]) 
             alltabdata[curtabstr]["tablayout2"].setSpacing(10)
             
-            #ADDING FIGURES TO GRID LAYOUT (row column rowext colext)
+            #ADDING FIGURES AND AXES TO GRID LAYOUT (row column rowext colext)
             alltabdata[curtabstr]["ProfFig"] = plt.figure()
-            alltabdata[curtabstr]["LocFig"] = plt.figure()
             alltabdata[curtabstr]["ProfCanvas"] = FigureCanvas(alltabdata[curtabstr]["ProfFig"]) 
             alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["ProfCanvas"],0,0,12,1) 
+            alltabdata[curtabstr]["ProfCanvas"].setStyleSheet("background-color:transparent;")
+            alltabdata[curtabstr]["ProfFig"].patch.set_facecolor('None')
+            alltabdata[curtabstr]["ProfAx"] = plt.axes()
+            alltabdata[curtabstr]["LocFig"] = plt.figure()
             alltabdata[curtabstr]["LocCanvas"] = FigureCanvas(alltabdata[curtabstr]["LocFig"]) 
             alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["LocCanvas"],11,2,1,5) 
+            alltabdata[curtabstr]["LocCanvas"].setStyleSheet("background-color:transparent;")
+            alltabdata[curtabstr]["LocFig"].patch.set_facecolor('None')
+            alltabdata[curtabstr]["LocAx"] = plt.axes()
             
-            #making profile processing result plots
-            alltabdata[curtabstr]["ProfAx"] = alltabdata[curtabstr]["ProfFig"].add_axes([0.1, 0.05, 0.85, 0.9])
-            alltabdata[curtabstr]["LocAx"] = alltabdata[curtabstr]["LocFig"].add_axes([0.1, 0.08, 0.85, 0.85])
             
             #adding toolbar
             alltabdata[curtabstr]["ProfToolbar"] = NavigationToolbar(alltabdata[curtabstr]["ProfCanvas"], self)
@@ -1713,7 +1726,7 @@ class RunProgram(QMainWindow):
     #renames tab (only user-visible name, not alltabdata dict key)
     def renametab(self):
         try:
-            curtab = int(self.whatTab())
+            curtab = self.tabWidget.currentIndex()
             name, ok = QInputDialog.getText(self, 'Rename Current Tab', 'Enter new tab name:',QLineEdit.Normal,str(self.tabWidget.tabText(curtab)))
             if ok:
                 self.tabWidget.setTabText(curtab,name)
@@ -1725,8 +1738,9 @@ class RunProgram(QMainWindow):
     def setnewtabcolor(self,tab):
         p = QPalette()
         gradient = QLinearGradient(0, 0, 0, 400)
-        gradient.setColorAt(0.0, QColor(255,255,255))
-        gradient.setColorAt(1.0, QColor(248, 248, 255))
+        gradient.setColorAt(0.0, QColor(253,253,255))
+        #gradient.setColorAt(1.0, QColor(248, 248, 255))
+        gradient.setColorAt(1.0, QColor(225, 225, 255))
         p.setBrush(QPalette.Window, QBrush(gradient))
         tab.setAutoFillBackground(True)
         tab.setPalette(p)
@@ -1763,8 +1777,6 @@ class RunProgram(QMainWindow):
 
                 elif alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_incomplete' or alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_completed':
                     plt.close(alltabdata[curtabstr]["ProcessorFig"])
-
-
 
                 #closing tab
                 self.tabWidget.removeTab(indextoclose)
@@ -1813,7 +1825,7 @@ class RunProgram(QMainWindow):
                     num = 99 #placeholder- dont have drop number here currently!!
                     
                     dtg = str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4)
-                    curtab = int(self.whatTab())
+                    curtab = self.tabWidget.currentIndex()
                     filename = self.tabWidget.tabText(curtab)
                     
                     if self.comparetoclimo:
@@ -2033,15 +2045,19 @@ class RunProgram(QMainWindow):
                 elif alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_incomplete' or alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_completed':
                     plt.close(alltabdata[curtabstr]["ProcessorFig"])
 
+                    #aborting all threads
+                    if alltabdata[curtabstr]["isprocessing"]:
+                        alltabdata[curtabstr]["processor"].abort()
+
             event.accept()
-            #delete all temporary wav files
-            allfilesanddirs = listdir()
+            # delete all temporary files
+            allfilesanddirs = listdir(self.tempdir)
             for cfile in allfilesanddirs:
                 if len(cfile) >= 5:
                     cfilestart = cfile[:4]
                     cfileext = cfile[-3:]
                     if (cfilestart.lower() == 'temp' and cfileext.lower() == 'wav') or (cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt'):
-                        remove(cfile)
+                        remove(self.tempdir + slash + cfile)
         else:
             event.ignore() 
     

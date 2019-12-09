@@ -35,21 +35,17 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,profres,checkforgap
     if checkforgaps:
         donegapcheck = False
         while not donegapcheck:
-            print("Iterating")
             maxcheckdepth = 50 #only checks the upper 50m of the profile
             maxgapdiff = 10 #if gap is larger than this range (m), correct profile
             isgap = [0]
             for i in range(1,len(rawdepth)):
-                print("i: {}   Depth: {}   Diffference: {}".format(i,rawdepth[i],rawdepth[i]-rawdepth[i-1]))
                 if (rawdepth[i] >= rawdepth[i-1]+ maxgapdiff) and (rawdepth[i-1] <= maxcheckdepth): #if there is a gap of sufficient size to correct
-                    print("gap found!")
                     isgap.append(1) #NOTE: the logical 1 is placed at the first depth AFTER the gap
                 else:
                     isgap.append(0)
 
             #if there are gaps, find the deepest one and correct t/d profile with that depth as the surface (only works with linear fall rate equation)
             if np.sum(isgap) > 0:
-                print("fixing")
                 lastgap = np.max(np.argwhere(isgap))
                 realstartdepth = rawdepth[lastgap]
                 rawtemp = rawtemp[lastgap:]
@@ -95,21 +91,6 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,profres,checkforgap
             
             goodindex = np.all([ge,le],axis=0)
             temp_smooth = np.append(temp_smooth,np.mean(temp_despike[goodindex]))
-        
-    print("Input:")
-    print(rawtemp[:30])
-    print(rawdepth[:30])
-    print("   ")
-
-    print("Despiked:")
-    print(temp_despike[:30])
-    print(depth_despike[:30])
-    print("   ")
-
-    print("Smoothed:")
-    print(temp_smooth[:30])
-    print(depth_smooth[:30])
-    print("   ")
     
     
     #Step 5: Set all values above sfc_correction to equal t(z=sfc_correction)

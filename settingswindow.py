@@ -362,6 +362,8 @@ class RunSettings(QMainWindow):
             self.gpstabwidgets["comport"] = QComboBox()  # 7
             self.gpstabwidgets["comport"].clear()
             self.gpstabwidgets["comport"].addItem('No COM Port Selected')
+            if self.comport != 'n': #includes comport from settings on list if it isn't 'None selected'
+                self.gpstabwidgets["comport"].addItem(self.comport)
             self.gpstabwidgets["comport"].currentIndexChanged.connect(self.updatecomport)
             self.updatecomport()
 
