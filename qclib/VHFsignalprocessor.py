@@ -139,7 +139,7 @@ def freqtotemp(frequency):
     return temp
 
 #function to run fft here
-def dofft(pcmdata,fs,minratio,minsiglev):
+def dofft(pcmdata,fs):
 
     # conducting fft, converting to real space
     rawfft = np.fft.fft(pcmdata)
@@ -152,18 +152,19 @@ def dofft(pcmdata,fs,minratio,minsiglev):
     f = np.array([df * n if n < N / 2 else df * (n - N) for n in range(N)])
 
     #limiting frequencies, converting data to ratio form
-    maxf = np.max(fftdata)
     ind = np.all((np.greater_equal(f,1300),np.less_equal(f,2800)),axis=0)
     f = f[ind]
-    fftdata = fftdata[ind]/maxf
 
-    # pulls max frequency if criteria are met, otherwise sets equal to 0
-    if np.max(fftdata) >= minratio and maxf >= minsiglev:
-        freq = f[np.argmax(fftdata)]
-    else:
-        freq = 0
+    maxsig = np.max(fftdata[ind]) #maximum signal strength in band
 
-    return freq, maxf, np.max(fftdata)
+    #getting fft data ratio (sig_inband/maxsig_all)
+    maxf_all = np.max(fftdata) #max signal strength
+    fftdata = fftdata[ind]/maxf_all
+
+    freq = f[np.argmax(fftdata)] #frequency of max signal within band
+    maxratio = np.max(fftdata) #FFT ratio (sig_inband/sig_all) for max freq in band
+
+    return freq, maxsig, maxratio
     
 #table lookup for VHF channels and frequencies
 def channelandfrequencylookup(value,direction):
@@ -436,16 +437,20 @@ class ThreadProcessor(QRunnable):
                     sigstrength = -15000
                 sigstrength = float(sigstrength) / 10  # signal strength in dBm
                 if sigstrength >= -150:
-                    cfreq,actmax,ratiomax = dofft(currentdata, self.f_s, self.minfftratio, self.minsiglev)
+                    cfreq,actmax,ratiomax = dofft(currentdata, self.f_s)
                 else:
                     cfreq = 0
                     actmax = 0
                     ratiomax = 0
 
-                #writing raw data to sigdata file (ASCII) for current thread
+                #writing raw data to sigdata file (ASCII) for current thread- before correcting for minratio/minsiglev
                 cline = str(ctime) + ',' + str(cfreq) + ',' + str(actmax) + ',' + str(ratiomax) + '\n'
                 if self.keepgoing:
                     self.txtfile.write(cline)
+
+                #changing frequency to zero if below minimum specifications
+                if actmax < self.minsiglev or ratiomax < self.minfftratio:
+                    cfreq = 0
 
                 # if statement to trigger reciever after first valid frequency arrives
                 if not self.istriggered and cfreq != 0 and ratiomax >= self.triggerfftratio and actmax >= self.triggersiglev:

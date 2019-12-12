@@ -76,7 +76,8 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     topomap = ListedColormap(topo)
 
     #contour bathymetry
-    c = ax.pcolormesh(exportlon,exportlat,exportrelief,vmin=-4000,vmax=4000,cmap = topomap)
+    c = ax.pcolormesh(exportlon,exportlat,exportrelief,vmin=-4000,vmax=10,cmap = topomap)
+    ax.contour(exportlon,exportlat,exportrelief,np.arange(-8000,-4000,1000),colors='white',linestyles='dashed',linewidths=0.5,alpha=0.5)
     cbar = fig.colorbar(c,ax=ax)
     cbar.set_label('Elevation (m)')
     
@@ -84,8 +85,7 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     ax.scatter(lon,lat,color='r',marker='x',linewidth=2) 
     #overlay dtg in text
     halflim = dcoord*0.309
-    ax.fill([lon-halflim,lon-halflim,lon+halflim,lon+halflim],[lat+0.6,lat+1.25,lat+1.25,lat+0.6],color='w',edgecolor='none',alpha=0.2)
-    ax.text(lon-halflim,lat+0.75,dtg,fontweight='bold')
+    ax.text(lon-halflim,lat+0.75,dtg,fontweight='bold',bbox=dict(facecolor='white', alpha=0.3))
     
     #plot formatting
     gplt.setgeoaxes(fig,ax,lonrange,latrange,'x')

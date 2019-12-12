@@ -528,14 +528,9 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalHeaderLabels(('Time (s)', 'Frequency (Hz)', 'Strength (dBm)', 'FFT Level', 'FFT Ratio (%)' ,'Depth (m)','Temperature (C)'))
             alltabdata[curtabstr]["tabwidgets"]["table"].verticalHeader().setVisible(False)
             alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) #removes scroll bars
-            header = alltabdata[curtabstr]["tabwidgets"]["table"].horizontalHeader()       
-            header.setSectionResizeMode(0, QHeaderView.Stretch)
-            header.setSectionResizeMode(1, QHeaderView.Stretch)
-            header.setSectionResizeMode(2, QHeaderView.Stretch)
-            header.setSectionResizeMode(3, QHeaderView.Stretch)
-            header.setSectionResizeMode(4, QHeaderView.Stretch)
-            header.setSectionResizeMode(5, QHeaderView.Stretch)
-            header.setSectionResizeMode(6, QHeaderView.Stretch)
+            header = alltabdata[curtabstr]["tabwidgets"]["table"].horizontalHeader() 
+            for ii in range(0,7):
+                header.setSectionResizeMode(ii, QHeaderView.Stretch)  
             alltabdata[curtabstr]["tabwidgets"]["table"].setEditTriggers(QTableWidget.NoEditTriggers)
             alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"]["table"],8,2,2,4)
 
