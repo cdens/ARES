@@ -11,3 +11,12 @@ qclib/__pycache__/
 
 #ignore all program settings files
 *.ARESsettings
+
+#any zipped folders with data
+*.gz
+
+#Mac stuff
+.DS_Store
+
+#Shortcuts
+*.lnk

@@ -127,8 +127,7 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,profres,checkforgap
                 depth.append(depth_smooth[i+1])
                 temperature.append(temp_smooth[i+1])
                 lastdepth = depth_smooth[i+1]
-                
-    
+
     #add surface value if one doesn't exist
     if depth[0] != 0:
         sst = temperature[0]

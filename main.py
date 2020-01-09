@@ -160,8 +160,9 @@ class RunProgram(QMainWindow):
         p.setColor(self.backgroundRole(), QColor(255,255,255))
         self.setPalette(p)
 
-        myappid = 'ARES_v1.0'  # arbitrary string
-        windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        if cursys() == 'Windows':
+            myappid = 'ARES_v1.0'  # arbitrary string
+            windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
         #changing font size
         font = QFont()
@@ -1242,20 +1243,20 @@ class RunProgram(QMainWindow):
             del alltabdata[curtabstr]["tabwidgets"]
             QObjectCleanupHandler().add(alltabdata[curtabstr]["tablayout"])
             
-            alltabdata[curtabstr]["tablayout2"] = QGridLayout()
-            alltabdata[curtabstr]["tab"].setLayout(alltabdata[curtabstr]["tablayout2"]) 
-            alltabdata[curtabstr]["tablayout2"].setSpacing(10)
+            alltabdata[curtabstr]["tablayout"] = QGridLayout()
+            alltabdata[curtabstr]["tab"].setLayout(alltabdata[curtabstr]["tablayout"]) 
+            alltabdata[curtabstr]["tablayout"].setSpacing(10)
             
             #ADDING FIGURES AND AXES TO GRID LAYOUT (row column rowext colext)
             alltabdata[curtabstr]["ProfFig"] = plt.figure()
             alltabdata[curtabstr]["ProfCanvas"] = FigureCanvas(alltabdata[curtabstr]["ProfFig"]) 
-            alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["ProfCanvas"],0,0,12,1) 
+            alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["ProfCanvas"],0,0,12,1) 
             alltabdata[curtabstr]["ProfCanvas"].setStyleSheet("background-color:transparent;")
             alltabdata[curtabstr]["ProfFig"].patch.set_facecolor('None')
             alltabdata[curtabstr]["ProfAx"] = plt.axes()
             alltabdata[curtabstr]["LocFig"] = plt.figure()
             alltabdata[curtabstr]["LocCanvas"] = FigureCanvas(alltabdata[curtabstr]["LocFig"]) 
-            alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["LocCanvas"],11,2,1,5) 
+            alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["LocCanvas"],11,2,1,5) 
             alltabdata[curtabstr]["LocCanvas"].setStyleSheet("background-color:transparent;")
             alltabdata[curtabstr]["LocFig"].patch.set_facecolor('None')
             alltabdata[curtabstr]["LocAx"] = plt.axes()
@@ -1263,7 +1264,7 @@ class RunProgram(QMainWindow):
             
             #adding toolbar
             alltabdata[curtabstr]["ProfToolbar"] = NavigationToolbar(alltabdata[curtabstr]["ProfCanvas"], self)
-            alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["ProfToolbar"],1,2,1,2)
+            alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["ProfToolbar"],1,2,1,2)
             # alltabdata[curtabstr]["ProfToolbar"].setFixedWidth(300)
             
             #plot data
@@ -1382,15 +1383,15 @@ class RunProgram(QMainWindow):
             
             #adding user inputs
             for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
-                alltabdata[curtabstr]["tablayout2"].addWidget(alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
+                alltabdata[curtabstr]["tablayout"].addWidget(alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
 
             #adjusting stretch factors for all rows/columns
             colstretch = [7,1,1,1,1,1,1,1,1]
             for col,cstr in zip(range(0,len(colstretch)),colstretch):
-                alltabdata[curtabstr]["tablayout2"].setColumnStretch(col,cstr)
+                alltabdata[curtabstr]["tablayout"].setColumnStretch(col,cstr)
             rowstretch = [1,1,1,1,1,1,1,1,0,1,1,8]
             for row,rstr in zip(range(0,len(rowstretch)),rowstretch):
-                alltabdata[curtabstr]["tablayout2"].setRowStretch(row,rstr)
+                alltabdata[curtabstr]["tablayout"].setRowStretch(row,rstr)
             
             alltabdata[curtabstr]["tabtype"] = "ProfileEditor"
         except Exception:

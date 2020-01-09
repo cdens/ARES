@@ -588,7 +588,7 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
     fxy = int('1100111100000001', 2)
 
     # Section 4 info (data)
-    identifier = identifer[:9] #concatenates identifier if necessary
+    identifier = identifier[:9] #concatenates identifier if necessary
     idtobuffer = 9 - len(identifier) # padding and encoding station identifier
     id_utf = identifier.encode('utf-8')
     for i in range(0, idtobuffer):
