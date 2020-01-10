@@ -24,7 +24,7 @@
 
 import numpy as np
 
-def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,profres,checkforgaps):
+def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,smoothlev,profres,maxdev,checkforgaps):
     
     #Step 1: cut off all values below maximum depth
     index = rawdepth <= maxdepth
@@ -71,7 +71,7 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,profres,checkforgap
         curstd = np.std(tempspike)
         
         #only retain values within +/- 1 standard deviation of running mean or top 10 m
-        if abs(rawtemp[n]-curmean) <= curstd or rawdepth[n] < 10:
+        if abs(rawtemp[n]-curmean) <= maxdev*curstd or rawdepth[n] < 10:
             depth_despike = np.append(depth_despike,rawdepth[n])
             temp_despike = np.append(temp_despike,rawtemp[n])
     
@@ -79,7 +79,7 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,profres,checkforgap
     #Step 4: smooth the despiked profile
     temp_smooth = np.array([])
     depth_smooth = depth_despike.copy()
-    smoothint = 5. #smoothing range in meters
+    smoothint = smoothlev #smoothing range in meters
     for n in range(len(depth_despike)):
         if depth_despike[n] <= smoothint/2:
             temp_smooth = np.append(temp_smooth,np.mean(temp_despike[np.less_equal(depth_despike,smoothint)]))
@@ -118,12 +118,8 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,maxderiv,profres,checkforgap
     for i in range(len(dT2dz2)):
         if dTdz[i] <= 0.5: #constraint on first derivative of temp with depth (no unrealistic spikes)
 
-            #logical condition if point is good: either an inflection point or to maintain prescribed vertical resolution
-            iscriticalpoint = (depth_smooth[i+1]-lastdepth >= profres or
-                               abs(dT2dz2[i]) >= maxderiv)
-            
             #if the point is a critical value given the selected resolution level, append to output profile
-            if iscriticalpoint:
+            if depth_smooth[i+1]-lastdepth >= profres:
                 depth.append(depth_smooth[i+1])
                 temperature.append(temp_smooth[i+1])
                 lastdepth = depth_smooth[i+1]

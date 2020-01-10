@@ -34,7 +34,7 @@ from traceback import print_exc as trace_error
 import numpy as np
 from os import remove, path
 
-from PyQt5.QtWidgets import (QMainWindow, QLabel, QSpinBox, QCheckBox, QPushButton, 
+from PyQt5.QtWidgets import (QMainWindow, QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton,
     QMessageBox, QWidget, QTabWidget, QGridLayout, QSlider, QComboBox, QLineEdit)
 from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QObject
 from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
@@ -55,7 +55,7 @@ class RunSettings(QMainWindow):
     # =============================================================================
     def __init__(self,autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig, dtgwarn,
                  renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
-                 comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps, maxderiv, profres, originatingcenter, comport):
+                 comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps, smoothlev, profres, maxstdev, originatingcenter, comport):
         super().__init__()
 
         try:
@@ -67,7 +67,7 @@ class RunSettings(QMainWindow):
             self.saveinputsettings(autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig,
                                    dtgwarn, renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,
                                    useclimobottom, overlayclimo, comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc,
-                                   useoceanbottom, checkforgaps, maxderiv, profres, originatingcenter, comport)
+                                   useoceanbottom, checkforgaps, smoothlev, profres, maxstdev, originatingcenter, comport)
 
             #building window/tabs
             self.buildcentertable()
@@ -122,8 +122,8 @@ class RunSettings(QMainWindow):
     # =============================================================================
     def saveinputsettings(self, autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig, dtgwarn,
                            renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
-                           comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps, maxderiv,
-                           profres, originatingcenter, comport):
+                           comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps, smoothlev,
+                           profres, maxstdev, originatingcenter, comport):
 
         # processor preferences
         self.autodtg = autodtg  # auto determine profile date/time as system date/time on clicking "START"
@@ -154,8 +154,9 @@ class RunSettings(QMainWindow):
         self.saveloc = saveloc
         self.useoceanbottom = useoceanbottom  # use ETOPO1 bathymetry data to ID bottom strikes
         self.checkforgaps = checkforgaps  # look for/correct gaps in profile due to false starts from VHF interference
-        self.maxderiv = maxderiv  # d2Tdz2 threshold to call a point an inflection point
+        self.smoothlev = smoothlev  # d2Tdz2 threshold to call a point an inflection point
         self.profres = profres  # profile minimum vertical resolution (m)
+        self.maxstdev = maxstdev # max standard deviation coefficient for autoQC despiker
         self.originatingcenter = originatingcenter #originating center for BUFR message
 
         self.comport = comport # COM port for GPS feed
@@ -198,8 +199,9 @@ class RunSettings(QMainWindow):
         self.useoceanbottom = self.profeditortabwidgets["useoceanbottom"].isChecked()
         self.checkforgaps = self.profeditortabwidgets["checkforgaps"].isChecked()
 
-        self.profres = float(self.profeditortabwidgets["profres"].value())/10
-        self.maxderiv = float(self.profeditortabwidgets["maxderiv"].value())/100
+        self.profres = self.profeditortabwidgets["profres"].value()
+        self.smoothlev = self.profeditortabwidgets["smoothlev"].value()
+        self.maxstdev = self.profeditortabwidgets["maxstdev"].value()
 
         self.updateoriginatingcenter()
         self.updatecomport()
@@ -481,25 +483,37 @@ class RunSettings(QMainWindow):
             self.profeditortabwidgets["checkforgaps"].setChecked(self.checkforgaps)
 
             self.profres = float(self.profres)
-            self.profeditortabwidgets["profreslabel"] = QLabel(
-                'Minimum Profile Resolution (m): ' + str(float(self.profres)).ljust(4,'0'))  # 13
-            self.profeditortabwidgets["profres"] = QSlider(Qt.Horizontal)  # 14
-            self.profeditortabwidgets["profres"].setValue(int(self.profres * 10))
+
+            if self.profres%0.25 != 0:
+                self.profres = np.round(self.profres*4)/4
+            self.profeditortabwidgets["profreslabel"] = QLabel("Minimum Profile Resolution (m)")  # 13
+            self.profeditortabwidgets["profres"] = QDoubleSpinBox()  # 14
             self.profeditortabwidgets["profres"].setMinimum(0)
-            self.profeditortabwidgets["profres"].setMaximum(500)
-            self.profeditortabwidgets["profres"].valueChanged[int].connect(self.changeprofres)
+            self.profeditortabwidgets["profres"].setMaximum(50)
+            self.profeditortabwidgets["profres"].setSingleStep(0.25)
+            self.profeditortabwidgets["profres"].setValue(self.profres)
 
-            self.profeditortabwidgets["maxderivlabel"] = QLabel(
-                'Inflection Point Threshold (C/m<sup>2</sup>): ' + str(self.maxderiv).ljust(4,'0'))  # 15
-            self.profeditortabwidgets["maxderiv"] = QSlider(Qt.Horizontal)  # 16
-            self.profeditortabwidgets["maxderiv"].setMinimum(0)
-            self.profeditortabwidgets["maxderiv"].setMaximum(400)
-            self.profeditortabwidgets["maxderiv"].setValue(int(self.maxderiv * 100))
-            self.profeditortabwidgets["maxderiv"].valueChanged[int].connect(self.changemaxderiv)
+            if self.smoothlev%0.25 != 0:
+                self.smoothlev = np.round(self.smoothlev*4)/4
+            self.profeditortabwidgets["smoothlevlabel"] = QLabel("Smoothing Window (m)")  # 15
+            self.profeditortabwidgets["smoothlev"] = QDoubleSpinBox()  # 16
+            self.profeditortabwidgets["smoothlev"].setMinimum(0)
+            self.profeditortabwidgets["smoothlev"].setMaximum(100)
+            self.profeditortabwidgets["smoothlev"].setSingleStep(0.25)
+            self.profeditortabwidgets["smoothlev"].setValue(self.smoothlev)
+
+            if self.maxstdev%0.1 != 0:
+                self.maxstdev = np.round(self.maxstdev*10)/10
+            self.profeditortabwidgets["maxstdevlabel"] = QLabel("Despiking Coefficient")  # 17
+            self.profeditortabwidgets["maxstdev"] = QDoubleSpinBox()  # 18
+            self.profeditortabwidgets["maxstdev"].setMinimum(0)
+            self.profeditortabwidgets["maxstdev"].setMaximum(2)
+            self.profeditortabwidgets["maxstdev"].setSingleStep(0.05)
+            self.profeditortabwidgets["maxstdev"].setValue(self.maxstdev)
 
 
-            self.profeditortabwidgets["originatingcentername"] = QLabel("")  # 15
-            self.profeditortabwidgets["originatingcenter"] = QSpinBox()  # 16
+            self.profeditortabwidgets["originatingcentername"] = QLabel("")  # 19
+            self.profeditortabwidgets["originatingcenter"] = QSpinBox()  # 20
             self.profeditortabwidgets["originatingcenter"].setMinimum(0)
             self.profeditortabwidgets["originatingcenter"].setMaximum(255)
             self.profeditortabwidgets["originatingcenter"].setSingleStep(1)
@@ -511,15 +525,15 @@ class RunSettings(QMainWindow):
                 curcentername = "Center ID not recognized!"
             self.profeditortabwidgets["originatingcentername"].setText("Center "+str(self.originatingcenter).zfill(3)+": "+curcentername)
 
-            # should be 19 entries
+            # should be 18 entries
             widgetorder = ["climotitle", "useclimobottom", "comparetoclimo", "overlayclimo", "filesavetypes", "savefin",
                            "savejjvv", "savebufr", "saveprof", "saveloc", "useoceanbottom", "checkforgaps", "profreslabel",
-                           "profres", "maxderivlabel", "maxderiv","originatingcentername","originatingcenter"]
+                           "profres","smoothlevlabel", "smoothlev", "maxstdevlabel", "maxstdev", "originatingcentername","originatingcenter"]
 
-            wcols = [1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 1, 1, 5, 5, 5, 5, 1, 1]
-            wrows = [1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 8, 9, 2, 3, 5, 6, 11, 12]
-            wrext = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-            wcolext = [2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 4, 4, 1, 1, 1, 1, 4, 4]
+            wcols = [1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 1, 1, 5, 5, 5, 5, 5, 5, 1, 1]
+            wrows = [1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 8, 9, 2, 3, 5, 6, 9, 10, 11, 12]
+            wrext = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            wcolext = [2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 4, 4, 1, 1, 1, 1, 1, 1, 4, 4]
 
             # adding user inputs
             for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
@@ -562,7 +576,7 @@ class RunSettings(QMainWindow):
                            "009":"       US NWS: Other                 ",
                            "051":"       Miami (RSMC)                  ",
                            "052":"       Miami (RSMC) NHC              ",
-                           "052":"       MSC Monitoring                ",
+                           "053":"       MSC Monitoring                ",
                            "054":"       Montreal (RSMC)               ",
                            "055":"       San Francisco                 ",
                            "056":"       ARINC Center                  ",
@@ -604,15 +618,6 @@ class RunSettings(QMainWindow):
         self.processortabwidgets["triggerratiolabel"].setText('Trigger Signal Ratio (%): ' + str(np.round(self.triggerfftratio*100)).ljust(4,'0'))
 
 
-    def changeprofres(self, value):
-        self.profres = float(value) / 10
-        self.profeditortabwidgets["profreslabel"].setText('Minimum Profile Resolution (m): ' + str(float(self.profres)).ljust(4,'0'))
-
-    def changemaxderiv(self, value):
-        self.maxderiv = float(value) / 100
-        self.profeditortabwidgets["maxderivlabel"].setText('Inflection Point Threshold (C/m<sup>2</sup>): ' + str(self.maxderiv).ljust(4,'0'))
-
-
     # =============================================================================
     #   EXPORT AND/OR RESET ALL SETTINGS
     # =============================================================================
@@ -622,20 +627,20 @@ class RunSettings(QMainWindow):
                                    self.saveedf, self.savewav, self.savesig, self.dtgwarn, self.renametabstodtg,
                                    self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.triggerfftratio, self.triggersiglev, self.useclimobottom,
                                    self.overlayclimo, self.comparetoclimo, self.savefin, self.savejjvv, self.savebufr, self.saveprof,
-                                   self.saveloc, self.useoceanbottom, self.checkforgaps, self.maxderiv, self.profres, self.originatingcenter, self.comport)
+                                   self.saveloc, self.useoceanbottom, self.checkforgaps, self.smoothlev, self.profres, self.maxstdev, self.originatingcenter, self.comport)
 
 
     def resetdefaults(self):
         #pull default settings
         (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
             minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-            saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport) = setdefaultsettings()
+            saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport) = setdefaultsettings()
 
         #save default settings to self
         self.saveinputsettings(autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig,
                                dtgwarn, renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,
                                useclimobottom, overlayclimo, comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc,
-                               useoceanbottom, checkforgaps, maxderiv, profres, originatingcenter, comport)
+                               useoceanbottom, checkforgaps, smoothlev, profres, maxstdev, originatingcenter, comport)
 
         self.processortabwidgets["autodtg"].setChecked(self.autodtg)
         self.processortabwidgets["autolocation"].setChecked(self.autolocation)
@@ -682,11 +687,11 @@ class RunSettings(QMainWindow):
         self.profeditortabwidgets["useoceanbottom"].setChecked(self.useoceanbottom)
         self.profeditortabwidgets["checkforgaps"].setChecked(self.checkforgaps)
 
-        self.profeditortabwidgets["profreslabel"].setText('Minimum Profile Resolution (m): ' + str(self.profres).ljust(4, '0'))  # 15
-        self.profeditortabwidgets["profres"].setValue(int(self.profres * 10))
+        self.profeditortabwidgets["profres"].setValue(self.profres)
+        self.profeditortabwidgets["smoothlev"].setValue(self.smoothlev)
+        self.profeditortabwidgets["maxstdev"].setValue(self.maxstdev)
 
-        self.profeditortabwidgets["maxderivlabel"].setText('Inflection Point Threshold (C/m<sup>2</sup>): ' + str(self.maxderiv).ljust(4, '0'))  # 17
-        self.profeditortabwidgets["maxderiv"].setValue(int(self.maxderiv * 100))
+        #TODO add this for maxstdev
 
         self.profeditortabwidgets["originatingcenter"].setValue(self.originatingcenter)
         self.updateoriginatingcenter()
@@ -698,7 +703,8 @@ class RunSettings(QMainWindow):
         currentIndex = self.tabWidget.currentIndex()
         return currentIndex
 
-    def setnewtabcolor(self, tab):
+    @staticmethod
+    def setnewtabcolor(tab):
         p = QPalette()
         gradient = QLinearGradient(0, 0, 0, 400)
         gradient.setColorAt(0.0, QColor(255, 255, 255))
@@ -712,7 +718,8 @@ class RunSettings(QMainWindow):
         event.accept()
         self.signals.closed.emit(True)
 
-    def posterror(self,errortext):
+    @staticmethod
+    def posterror(errortext):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Critical)
         msg.setText(errortext)
@@ -724,7 +731,7 @@ class RunSettings(QMainWindow):
 # SIGNAL SETUP HERE
 class SettingsSignals(QObject):
     exported = pyqtSignal(bool,bool,bool,str,bool,bool,bool,bool,bool,bool,bool,float,float,float,float,float,bool,bool,
-                          bool,bool,bool,bool,bool,bool,bool,bool,float,float,int,str)
+                          bool,bool,bool,bool,bool,bool,bool,bool,float,float,float,int,str)
     closed = pyqtSignal(bool)
 
 
@@ -760,15 +767,16 @@ def setdefaultsettings():
     saveloc = True
     useoceanbottom = True  # use NTOPO1 bathymetry data to ID bottom strikes
     checkforgaps = True  # look for/correct gaps in profile due to false starts from VHF interference
-    maxderiv = 1.5  # d2Tdz2 threshold to call a point an inflection point
-    profres = 8.0 #profile minimum vertical resolution (m)
+    smoothlev = 2  # Smoothing Window size (m)
+    profres = 1 #profile minimum vertical resolution (m)
+    maxstdev = 1 #profile standard deviation coefficient for despiker (autoQC)
     originatingcenter = 62 #BUFR table code for NAVO
 
     comport = 'n' #default com port is none
 
     return (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
         minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-        saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport)
+        saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport)
 
 
 #Read settings from txt file
@@ -829,9 +837,11 @@ def readsettings(filename):
             line = file.readline()
             checkforgaps = bool(line.strip().split()[1]) 
             line = file.readline()
-            maxderiv = float(line.strip().split()[1]) 
+            smoothlev = float(line.strip().split()[1]) 
             line = file.readline()
             profres = float(line.strip().split()[1]) 
+            line = file.readline()
+            maxstdev = float(line.strip().split()[1])
             line = file.readline()
             originatingcenter = int(line.strip().split()[1]) 
             line = file.readline()
@@ -841,24 +851,24 @@ def readsettings(filename):
     except:
         (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
             minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-            saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport) = setdefaultsettings()
+            saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport) = setdefaultsettings()
 
         writesettings(filename, autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
             minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-            saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport)
+            saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport)
 
         trace_error() #report issue
 
 
     return (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
         minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-        saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport)
+        saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport)
 
 
 #Write settings from txt file
 def writesettings(filename,autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
     minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-    saveprof, saveloc, useoceanbottom, checkforgaps,maxderiv, profres, originatingcenter, comport):
+    saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport):
 
     #overwrites file by deleting if it exists
     if path.exists(filename):
@@ -892,7 +902,8 @@ def writesettings(filename,autodtg, autolocation, autoid, platformID, savelog, s
         file.write('saveloc: '+str(saveloc) + '\n')
         file.write('useoceanbottom: '+str(useoceanbottom) + '\n')
         file.write('checkforgaps: '+str(checkforgaps) + '\n')
-        file.write('maxderiv: '+str(maxderiv) + '\n')
+        file.write('smoothlev: '+str(smoothlev) + '\n')
         file.write('profres: '+str(profres) + '\n')
+        file.write('maxstdev: '+str(maxstdev) + '\n')
         file.write('originatingcenter: '+str(originatingcenter) + '\n')
         file.write('comport: '+str(comport) + '\n')

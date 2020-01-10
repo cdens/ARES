@@ -20,3 +20,6 @@ qclib/__pycache__/
 
 #Shortcuts
 *.lnk
+
+#PyCharm control file
+.idea

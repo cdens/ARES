@@ -420,7 +420,7 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
         #writing all data to file
         i = 0
         while i < len(filestrings):
-            if i == 0: #first line has six columns
+            if i == 0 and len(filestrings) >= 6: #first line has six columns (only if there is enough data)
                 line = (filestrings[i] + ' ' + filestrings[i+1] + ' ' + filestrings[i+2] + ' ' + filestrings[i+3]
                          + ' ' + filestrings[i+4] + ' ' + filestrings[i+5] + '\n')
                 i = i + 6
