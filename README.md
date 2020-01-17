@@ -8,10 +8,6 @@
 Table of Contents
 =================
   * [Overview](#overview)
-    * [Bash](#bash)
-    * [Fish](#fish)
-    * [DevIcons](#devicons-optional)
-    * [Manual Install](#alternatively)
   * [Signal Processor](#signal-processor-capabilities)
   * [Profile Editor](#profile-editor-capabilities)
     * [Profile Editing Tools](#profile-editing-tools)
