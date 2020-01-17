@@ -65,12 +65,14 @@ def readlogfile(logfile):
 
             try:
                 curfreq = np.double(line[2])
+                cdepth = np.double(line[1])
+                ctemp = np.double(line[3])
             except:
                 curfreq = np.NaN
 
             if ~np.isnan(curfreq) and curfreq != 0: #if it is a valid frequency, save the datapoint
-                depth.append(np.double(line[1]))
-                temperature.append(np.double(line[3]))
+                depth.append(cdepth)
+                temperature.append(ctemp)
     
     #convert to numpy arrays
     depth = np.asarray(depth)
@@ -123,7 +125,7 @@ def readlogfile_alldata(logfile):
 def writelogfile(logfile,initdatestr,inittimestr,timefromstart,depth,frequency,tempc):
     with open(logfile,'w') as f_out:
 
-    	#write header
+        #write header
         f_out.write('     Probe Type = AXBT\n')
         f_out.write('       Date = ' + initdatestr + '\n')
         f_out.write('       Time = ' + inittimestr + '\n\n')
@@ -352,7 +354,7 @@ def readjjvvfile(jjvvfile,decade):
                 try:
                     int(curentry) #won't execute if curentry has non-numbers in it (e.g. the current entry is the identifier)
 
-                    if (int(curentry[:3]) == 999 and int(curentry[3:])*100 == hundreds + 100):
+                    if int(curentry[:3]) == 999 and int(curentry[3:])*100 == hundreds + 100:
                         hundreds = hundreds + 100
                     else:
                         if int(curentry[:2]) + hundreds != lastdepth:
@@ -382,11 +384,11 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
         #first line- header information
         lonstr = str(int(abs(lon*1000))).zfill(6)
         latstr = str(int(abs(lat*1000))).zfill(5)
-        if (lon >= 0 and lat >= 0):
+        if lon >= 0 and lat >= 0:
             quad = '1'
-        elif (lon >= 0 and lat < 0):
+        elif lon >= 0 and lat < 0:
             quad = '3'
-        elif (lon < 0 and lat >= 0):
+        elif lon < 0 and lat >= 0:
             quad = '7'
         else:
             quad = '5'
@@ -559,6 +561,8 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
         sxn1len = 18
     elif version == 4:
         sxn1len = 22
+    else:
+        sxn1len = 18
 
     mastertable = 0  # For standard WMO FM 94-IX BUFR table
     originatingsubcenter = 0
@@ -689,7 +693,7 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
 
         #writing profile data- better option- converts and writes 1 byte at a time
         for cbit in np.arange(0,len(bufrarray),8):
-	        bufr.write(int(bufrarray[cbit:cbit+8],2).to_bytes(1,byteorder=binarytype,signed=False)) #writing profile data
+            bufr.write(int(bufrarray[cbit:cbit+8],2).to_bytes(1,byteorder=binarytype,signed=False)) #writing profile data
 
         # Section 5 (End)
         bufr.write(b'7777')

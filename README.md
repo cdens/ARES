@@ -1,7 +1,30 @@
-Program: AXBT Realtime Editing System (ARES)
-Authors: Casey Densmore (cdensmore101@gmail.com) and Matt Kuhn
+# **AXBT Realtime Editing System (ARES)**
 
--------------------------------------    Overview     ------------------------------------
+
+**Authors: Casey Densmore (cdensmore101@gmail.com) and Matt Kuhn**
+
+![Icon](qclib/dropicon.png)
+
+Table of Contents
+=================
+  * [Overview](#overview)
+    * [Bash](#bash)
+    * [Fish](#fish)
+    * [DevIcons](#devicons-optional)
+    * [Manual Install](#alternatively)
+  * [Signal Processor](#signal-processor-capabilities)
+  * [Profile Editor](#profile-editor-capabilities)
+    * [Profile Editing Tools](#profile-editing-tools)
+    * [Profile Viewing Tools](#profile-viewing-tools)
+    * [Profile Flagging Tools](#profile-flagging-tools)
+  * [Additional Information](#nolink)
+    * [Required Datasets](#python)
+    * [Radio Reciever Interaction](#switching-between-buffers)
+    * [Platform Support](#toggle-relative-numbering)
+    * [Python Requirements](#comfortable-motion-scrolling)
+
+
+## Overview
 This program is designed to enable processing and editing of ocean AXBT-generated temperature
 vs. depth profiles in a single program. Multiple profiles can be received (limited by the 
 number of receivers connected) and edited simultaneously in different tabs. The profile
@@ -13,7 +36,7 @@ in the profile editor are both guided by ocean climatology and bathymetry data (
 listed below). 
 
 
---------------------------    Signal Processor Capabilities     --------------------------
+## Signal Processor Capabilities
 The WiNRADIO signal processor tab can be opened either from the file menu
 or by typing CTRL+N. The dropdown menu allows the user to select the data source:
 either a connected receiver (all detected receivers will be listed by serial number),
@@ -27,57 +50,58 @@ will first open a prompt to save the raw data files (currently .DTA and .edf are
 this can be adjusted in the File menu) before loading the profile editor tab.
 
 
----------------------------    Profile Editor Capabilities     ---------------------------
+## Profile Editor Capabilities
 The profile editor tab populates with an automatically quality-controlled profile (red line) 
 extracted from the raw data (black line). The autoQC algorithm which generates this profile
 completes the following modifications to the raw data:
-	> Despiking (points > 1 stdev from the mean in a 10m sliding window are removed)
-	> 5m running smooth filter
-	> Gap (VHF interference/false start) detection and removable (may be suppressed in settings)
-	> Bottom strike detection (comparison to climatology and NOAA bathymetric data)
-	> Climatology comparison (Levitus Ocean Climatology)
-	> Point selection (resolution may be configured in settings)
 
-Profile editing tools:
-	> Isothermal layer depth: create a surface isothermal layer (reccomended < 10m)
+	* Despiking (points > 1 stdev from the mean in a 10m sliding window are removed)
+	* 5m running smooth filter
+	* Gap (VHF interference/false start) detection and removable (may be suppressed in settings)
+	* Bottom strike detection (comparison to climatology and NOAA bathymetric data)
+	* Climatology comparison (Levitus Ocean Climatology)
+	* Point selection (resolution may be configured in settings)
+
+### Profile editing tools
+	* Isothermal layer depth: create a surface isothermal layer (reccomended < 10m)
 		to remove any surface spikes transmitted prior to AXBT acclimation to
 		ambient ocean temperatures
-	> Depth delay: vertical shift in profile to account for any uncorrected VHF
+	* Depth delay: vertical shift in profile to account for any uncorrected VHF
 		interference-driven false starts.
-	> Maximum depth: tune profile maximum depth to suppress excessive interference
+	* Maximum depth: tune profile maximum depth to suppress excessive interference
 		or cut off any artifact data from bottom strikes. If ARES will not extend
 		the depth of the automatically QC'ed profile to the depth of the raw profile,
 		turn off the climatology and bathymetry-driven bottom strike detection options
 		in the settings and then select "Rerun QC"
-	> Add/Remove Point: Add or remove individual points from the profile
-	> Inflection Point Threshold: This slider adjusts the magnitude of the d2T/dz2 value
+	* Add/Remove Point: Add or remove individual points from the profile
+	* Inflection Point Threshold: This slider adjusts the magnitude of the d2T/dz2 value
 		necessary for a point to be labelled as an inflection point and automatically
 		recorded in the final profile. This option, along with the resolution setting 
 		under "Profile Editor Preferences", requires the user to select "Rerun QC" in 
 		order to take effect
 	
-Profile viewing tools:
-	> Overlay climatology: View or hide the shaded blue climatological ocean temperatures
+### Profile viewing tools
+	* Overlay climatology: View or hide the shaded blue climatological ocean temperatures
 		based on AXBT drop location and month. This profile should not be taken as the
 		absolute truth, but rather a guide that may highlight potential discrepancies if
 		the measured and climatological profiles deviate significantly.
-	> Navigation toolbar: The toolbar in the top row adjacent to the profile plot provides
+	* Navigation toolbar: The toolbar in the top row adjacent to the profile plot provides
 		the option to change the VIEW of the profile. No part of this toolbar makes any
 		changes to the temperature-depth profile, but rather enables the user to zoom 
 		and pan to different locations on the profile. 
 		
-Profile flagging tools:
-	> Bottom strike: This checkbox should be selected if either ETOPO1-indicated ocean
+### Profile flagging tools
+	* Bottom strike: This checkbox should be selected if either ETOPO1-indicated ocean
 		depth or profile shape suggest the thermister probe reached the ocean bottom. 
 		While this option does not affect the QC process for the profile, it is recorded
 		in any JJVV files exported with the quality-controlled data. 
-	> Profile flag: This menu is currently an INTERNAL-USE feature that enables the user
+	* Profile flag: This menu is currently an INTERNAL-USE feature that enables the user
 		to quickly highlight any potential profile errors or discrepancies. Currently 
 		the selection of this box is not saved to any output files, but that will be 
 		changed in a future release.
 		
 
--------------------------------    Required Datasets     ---------------------------------
+## Required Datasets
 This program requires several datasets, saved in $ARES_PATH$/qcdata/$datasetsubfolder$/
 Required datasets are:
 	> Levitus Monthly Ocean Temperature Climatology (netCDF4 1 degree horizontal resolution):
@@ -91,7 +115,7 @@ Required datasets are:
 		identify the region in which the AXBT was launched
 
 
----------------------------    Radio Receiver Interaction     ----------------------------
+## Radio Reciever Interaction
 Processing AXBT files transmitted live via VHF requires a connected WiNRADIO
 receiver. Multiple radio receivers may be connected and operated simultaneously.
 The WiNRADIO driver is built into the program, and thus there are no external 
@@ -105,7 +129,7 @@ ensure that the power supply and USB connections between the receiver and the co
 secured before starting a processing instance.
 
 
---------------------------------    Platform Support     ---------------------------------
+## Platform Support
 ARES is currently only fully functional in Windows as there is currently
 no .so or .dylib counterparts to the .DLL file that enables communication
 between ARES and the WiNRADIO receiver API. Future versions may either
@@ -113,7 +137,7 @@ between ARES and the WiNRADIO receiver API. Future versions may either
 option such as SDR. 
 
 
-------------------------------    Python Requirements     --------------------------------
+## Python requirements
 This program was developed in Python 3.x, with the GUI built using PyQt5.
 Python dependencies are as follows:
 Python core modules: sys, os, platform, traceback, ctypes, datetime, time
@@ -126,13 +150,23 @@ Modules which must first be installed before running ARES:
 	fbs (generate executable)
 	wheel (to download Shapely .whl file if on Windows)
 	
-Installer command (Linux/MacOs):
+### Installing on Linux/MacOs:
+```
 pip3 install numpy matplotlib scipy PyShp PyQt5 cmocean netCDF4 Shapely fbs pyserial pynmea2
+```
 
-Installer command (Windows):
+NOTE: You may need to install the libgeos library (e.g. *brew install libgeos* on MacOS) for Shapely to work
+
+### Installing on Windows:
+```
 pip install numpy matplotlib scipy PyShp PyQt5 cmocean netCDF4 wheel fbs pyserial pynmea2
-***download Shapely wheel for Python v3.x from https://www.lfd.uci.edu/~gohlke/pythonlibs/- 
-***should be Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl depending on Python version and windows type
-***e.g. Shapely-1.6.4.post2-cp37-cp37m-win_amd64.whl for Python v3.7, Windows x64-bit
-pip install Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl ***(again, fill in necessary info there)
+```
+
+Next, download Shapely wheel for Python v3.x from https://www.lfd.uci.edu/~gohlke/pythonlibs/- 
+The file should be named Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl depending on Python version and windows type (e.g. Shapely-1.6.4.post2-cp37-cp37m-win_amd64.whl for Python v3.7, Windows x64-bit)
+
+```
+pip install Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl 
+```
+***(again, fill in necessary info there)
 
