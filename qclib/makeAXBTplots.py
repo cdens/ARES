@@ -54,7 +54,7 @@ def makeprofileplot(ax,rawtemperature,rawdepth,temperature,depth,climotempfill,c
     ax.legend()
     ax.grid()
     ax.set_xlim([-2,32])
-    ax.set_ylim([5,1000])
+    ax.set_ylim([-5,1000])
     ax.invert_yaxis()
     
     return climohandle
