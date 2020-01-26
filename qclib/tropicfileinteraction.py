@@ -403,16 +403,19 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
         i = 0
         lastdepth = -1
 
-        #appending data to list, adding hundreds increment counters where necessary
+        # appending data to list, adding hundreds increment counters where necessary
         while i < len(depth):
             curdepth = int(depth[i])
-            if curdepth-hundreds > 99:
+            if curdepth - hundreds > 99:  # need to increment hundreds counter in file
                 hundreds = hundreds + 100
-                filestrings.append('999' + str(int(hundreds/100)).zfill(2))
-            if curdepth - lastdepth >= 1: #depth must be increasing
-                filestrings.append(str(curdepth-hundreds).zfill(2) + str(int(round(temperature[i],1)*10)).zfill(3))
-                lastdepth = curdepth
-            i = i + 1
+                filestrings.append('999' + str(int(hundreds / 100)).zfill(2))
+            else:
+                if curdepth - lastdepth >= 1 and curdepth - hundreds <= 99:  # depth must be increasing, not outside of current hundreds range
+                    filestrings.append(
+                        str(curdepth - hundreds).zfill(2) + str(int(round(temperature[i], 1) * 10)).zfill(3))
+                    lastdepth = curdepth
+                i += 1
+
         if isbtmstrike: #note if the profile struck the bottom
             filestrings.append('00000')
 
