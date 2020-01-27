@@ -113,6 +113,8 @@
 
 import numpy as np
 from scipy.io import wavfile #for wav file reading
+from scipy.signal import tukey #taper generation
+
 import wave #WAV file writing
 
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject
@@ -140,6 +142,9 @@ def freqtotemp(frequency):
 
 #function to run fft here
 def dofft(pcmdata,fs):
+    # apply taper- alpha=0.25
+    taper = tukey(len(pcmdata), alpha=0.25)
+    pcmdata = taper * pcmdata
 
     # conducting fft, converting to real space
     rawfft = np.fft.fft(pcmdata)

@@ -846,63 +846,70 @@ class RunProgram(QMainWindow):
         try:
             plottabstr = self.gettabstrfromnum(plottabnum)
 
-            #writing data to tab dictionary
-            alltabdata[plottabstr]["rawdata"]["time"] = np.append(alltabdata[plottabstr]["rawdata"]["time"],ctime)
-            alltabdata[plottabstr]["rawdata"]["depth"] = np.append(alltabdata[plottabstr]["rawdata"]["depth"],cdepth)
-            alltabdata[plottabstr]["rawdata"]["frequency"] = np.append(alltabdata[plottabstr]["rawdata"]["frequency"],cfreq)
-            alltabdata[plottabstr]["rawdata"]["temperature"] = np.append(alltabdata[plottabstr]["rawdata"]["temperature"],ctemp)
-
-            #plot the most recent point
-            if i%50 == 0: #draw the canvas every fifty points (~5 sec for 10 Hz sampling)
-                try:
-                    del alltabdata[plottabstr]["ProcessorAx"].lines[-1]
-                except:
-                    pass
-                alltabdata[plottabstr]["ProcessorAx"].plot(alltabdata[plottabstr]["rawdata"]["temperature"],alltabdata[plottabstr]["rawdata"]["depth"],color='k')
-                alltabdata[plottabstr]["ProcessorCanvas"].draw()
-
-            #coloring new cell based on whether or not it has good data
-            if np.isnan(ctemp):
-                ctemp = '*****'
-                cdepth = '*****'
-                curcolor = QColor(179, 179, 255) #light blue
+            if len(alltabdata[plottabstr]["rawdata"]["depth"]) > 0:
+                lastdepth = alltabdata[plottabstr]["rawdata"]["depth"][-1]
             else:
-                curcolor = QColor(204, 255, 220) #light green
+                lastdepth = -1
 
-            #updating table
-            tabletime = QTableWidgetItem(str(ctime))
-            tabletime.setBackground(curcolor)
-            tabledepth = QTableWidgetItem(str(cdepth))
-            tabledepth.setBackground(curcolor)
-            tablefreq = QTableWidgetItem(str(cfreq))
-            tablefreq.setBackground(curcolor)
-            tabletemp = QTableWidgetItem(str(ctemp))
-            tabletemp.setBackground(curcolor)
-            if csig == 0:
-                tablesignal = QTableWidgetItem('N/A')
-            elif csig >= -150:
-                tablesignal = QTableWidgetItem(str(csig))
-            else:
-                tablesignal = QTableWidgetItem('*****')
-            tablesignal.setBackground(curcolor)
-            tableact = QTableWidgetItem(str(cact))
-            tableact.setBackground(curcolor)
-            tablerat = QTableWidgetItem(str(cratio))
-            tablerat.setBackground(curcolor)
+            #only appending a datapoint if depths are different
+            if cdepth != lastdepth:
+                #writing data to tab dictionary
+                alltabdata[plottabstr]["rawdata"]["time"] = np.append(alltabdata[plottabstr]["rawdata"]["time"],ctime)
+                alltabdata[plottabstr]["rawdata"]["depth"] = np.append(alltabdata[plottabstr]["rawdata"]["depth"],cdepth)
+                alltabdata[plottabstr]["rawdata"]["frequency"] = np.append(alltabdata[plottabstr]["rawdata"]["frequency"],cfreq)
+                alltabdata[plottabstr]["rawdata"]["temperature"] = np.append(alltabdata[plottabstr]["rawdata"]["temperature"],ctemp)
 
-            table = alltabdata[plottabstr]["tabwidgets"]["table"]
-            crow = table.rowCount()
-            table.insertRow(crow)
-            table.setItem(crow, 0, tabletime)
-            table.setItem(crow, 1, tablefreq)
-            table.setItem(crow, 2, tablesignal)
-            table.setItem(crow, 3, tableact)
-            table.setItem(crow, 4, tablerat)
-            table.setItem(crow, 5, tabledepth)
-            table.setItem(crow, 6, tabletemp)
-            table.scrollToBottom()
-    #        if crow > 20: #uncomment to remove old rows
-    #            table.removeRow(0)
+                #plot the most recent point
+                if i%50 == 0: #draw the canvas every fifty points (~5 sec for 10 Hz sampling)
+                    try:
+                        del alltabdata[plottabstr]["ProcessorAx"].lines[-1]
+                    except:
+                        pass
+                    alltabdata[plottabstr]["ProcessorAx"].plot(alltabdata[plottabstr]["rawdata"]["temperature"],alltabdata[plottabstr]["rawdata"]["depth"],color='k')
+                    alltabdata[plottabstr]["ProcessorCanvas"].draw()
+
+                #coloring new cell based on whether or not it has good data
+                if np.isnan(ctemp):
+                    ctemp = '*****'
+                    cdepth = '*****'
+                    curcolor = QColor(179, 179, 255) #light blue
+                else:
+                    curcolor = QColor(204, 255, 220) #light green
+
+                #updating table
+                tabletime = QTableWidgetItem(str(ctime))
+                tabletime.setBackground(curcolor)
+                tabledepth = QTableWidgetItem(str(cdepth))
+                tabledepth.setBackground(curcolor)
+                tablefreq = QTableWidgetItem(str(cfreq))
+                tablefreq.setBackground(curcolor)
+                tabletemp = QTableWidgetItem(str(ctemp))
+                tabletemp.setBackground(curcolor)
+                if csig == 0:
+                    tablesignal = QTableWidgetItem('N/A')
+                elif csig >= -150:
+                    tablesignal = QTableWidgetItem(str(csig))
+                else:
+                    tablesignal = QTableWidgetItem('*****')
+                tablesignal.setBackground(curcolor)
+                tableact = QTableWidgetItem(str(cact))
+                tableact.setBackground(curcolor)
+                tablerat = QTableWidgetItem(str(cratio))
+                tablerat.setBackground(curcolor)
+
+                table = alltabdata[plottabstr]["tabwidgets"]["table"]
+                crow = table.rowCount()
+                table.insertRow(crow)
+                table.setItem(crow, 0, tabletime)
+                table.setItem(crow, 1, tablefreq)
+                table.setItem(crow, 2, tablesignal)
+                table.setItem(crow, 3, tableact)
+                table.setItem(crow, 4, tablerat)
+                table.setItem(crow, 5, tabledepth)
+                table.setItem(crow, 6, tabletemp)
+                table.scrollToBottom()
+                #        if crow > 20: #uncomment to remove old rows
+                #            table.removeRow(0)
         except Exception:
             trace_error()
         
