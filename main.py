@@ -1113,7 +1113,7 @@ class RunProgram(QMainWindow):
     def selectdatafile(self):
         try:
             fname,ok = QFileDialog.getOpenFileName(self, 'Open file', 
-             '',"Source Data Files (*.DTA *.Dta *.dta *.EDF *.Edf *.edf *.edf)")
+             '',"Source Data Files (*.DTA *.Dta *.dta *.EDF *.Edf *.edf *.edf *.NVO *.Nvo *.nvo *.FIN *.Fin *.fin *.JJVV *.Jjvv *.jjvv *.TXT *.Txt *.txt)")
             if ok:
                 curtabstr = "Tab " + str(self.whatTab())
                 alltabdata[curtabstr]["tabwidgets"]["logedit"].setText(fname)
@@ -1165,13 +1165,13 @@ class RunProgram(QMainWindow):
                 elif logfile[-4:].lower() == '.edf':
                     rawtemperature,rawdepth,year,month,day,hour,minute,second,lat,lon = tfio.readedffile(logfile)
                     time = hour*100 + second
-                elif logfile[-4:].lower() == '.fin':
+                elif logfile[-4:].lower() == '.fin' or logfile[-4:].lower() == '.nvo' or logfile[-4:].lower() == '.txt': #assumes .txt are fin/nvo format
                     rawtemperature,rawdepth,day,month,year,time,lat,lon,_ = tfio.readfinfile(logfile)
                 elif logfile[-5:].lower() == '.jjvv':
                     rawtemperature,rawdepth,day,month,year,time,lat,lon,identifier = tfio.readjjvvfile(logfile,round(year,-1))
                 else:
                     QApplication.restoreOverrideCursor()
-                    self.postwarning('Invalid Data File Format (must be .dta,.edf,.fin, or .jjvv)!')
+                    self.postwarning('Invalid Data File Format (must be .dta,.edf,.nvo,.fin, or .jjvv)!')
                     return
             except Exception:
                 trace_error()
