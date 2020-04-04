@@ -459,7 +459,7 @@ class ThreadProcessor(QRunnable):
             self.kill(5)
             
             
-    def kill(self,reason)
+    def kill(self,reason):
         curtabnum = self.curtabnum
         self.keepgoing = False  # kills while loop
         
