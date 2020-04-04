@@ -312,7 +312,7 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["triggerratiolabel"] = QLabel(
                 'Trigger Signal Ratio (%): ' + str(np.round(self.settingsdict["triggerfftratio"] * 100)).ljust(4, '0'))  # 19
             self.processortabwidgets["triggerratio"] = QSlider(Qt.Horizontal)  # 20
-            self.processortabwidgets["triggerratio"].setValue(int(self.settingsdict["minfftratio * 100"]))
+            self.processortabwidgets["triggerratio"].setValue(int(self.settingsdict["minfftratio"] * 100))
             self.processortabwidgets["triggerratio"].setMinimum(0)
             self.processortabwidgets["triggerratio"].setMaximum(100)
             self.processortabwidgets["triggerratio"].valueChanged[int].connect(self.changetriggerratio)
@@ -387,16 +387,31 @@ class RunSettings(QMainWindow):
             self.gpstabwidgets["gpsdate"] = QLabel("Date/Time: ") # 3
             self.gpstabwidgets["gpslat"] = QLabel("Latitude: ") # 4
             self.gpstabwidgets["gpslon"] = QLabel("Longitude: ") # 5
-
-            self.gpstabwidgets["comporttitle"] = QLabel('COM Port Options:')  # 6
+            
+            #creating drop-down selection menu for available serial connections
+            self.gpstabwidgets["comporttitle"] = QLabel('Available Serial Connections:')  # 6
             self.gpstabwidgets["comport"] = QComboBox()  # 7
             self.gpstabwidgets["comport"].clear()
-            self.gpstabwidgets["comport"].addItem('No COM Port Selected')
-            if self.comport != 'n': #includes comport from settings on list if it isn't 'None selected'
-                self.gpstabwidgets["comport"].addItem(self.settingsdict["comport"])
+            self.gpstabwidgets["comport"].addItem('No Serial Connection Selected')
+            for cport in self.settingsdict["comportdetails"]: #adding previously detected ports
+                self.gpstabwidgets["comport"].addItem(cport)
+                
+            #includes comport from settings on list if it isn't 'None selected'
+            if self.settingsdict["comport"] != 'n':
+                #if the listed receiver is connected, keep setting and set dropdown box to select that receiver
+                if self.settingsdict["comport"] in self.settingsdict["comports"]: 
+                    self.gpstabwidgets["comport"].setCurrentIndex(self.settingsdict["comports"]. index(self.settingsdict["comport"])+1)
+                #if the listed receiver is not connected, set setting and current index to N/A
+                else:
+                    self.settingsdict["comport"] = 'n'    
+            #if no receiver is selected, set current index to top
+            else:
+                self.gpstabwidgets["comport"].setCurrentIndex(0)
+                
+                
+            #connect comport change to function
             self.gpstabwidgets["comport"].currentIndexChanged.connect(self.updatecomport)
-            self.updatecomport()
-
+            
             # should be 7 entries
             widgetorder = ["updateports", "refreshgpsdata", "gpsdate", "gpslat", "gpslon","comporttitle","comport"]
 
@@ -427,7 +442,7 @@ class RunSettings(QMainWindow):
     def updatecomport(self):
         curcomnum = self.gpstabwidgets["comport"].currentIndex()
         if curcomnum > 0:
-            self.settingsdict["comport"] = self.comports[curcomnum - 1]
+            self.settingsdict["comport"] = self.settingsdict["comports"][curcomnum - 1]
         else:
             self.settingsdict["comport"] = 'n'
 
@@ -435,8 +450,8 @@ class RunSettings(QMainWindow):
     def updategpslist(self):
         self.gpstabwidgets["comport"].clear()
         self.gpstabwidgets["comport"].addItem('No COM Port Selected')
-        self.comports,comportoptions = gps.listcomports()
-        for curport in comportoptions:
+        self.settingsdict["comports"],self.settingsdict["comportdetails"] = gps.listcomports()
+        for curport in self.settingsdict["comportdetails"]:
             self.gpstabwidgets["comport"].addItem(curport)
 
     #attempt to refresh GPS data with currently selected COM port
@@ -514,7 +529,7 @@ class RunSettings(QMainWindow):
             self.profeditortabwidgets["checkforgaps"].setChecked(self.settingsdict["checkforgaps"])
 
             self.settingsdict["profres"] = float(self.settingsdict["profres"])
-            if self.profres%0.25 != 0:
+            if self.settingsdict["profres"]%0.25 != 0:
                 self.settingsdict["profres"] = np.round(self.settingsdict["profres"]*4)/4
             self.profeditortabwidgets["profreslabel"] = QLabel("Minimum Profile Resolution (m)")  # 13
             self.profeditortabwidgets["profres"] = QDoubleSpinBox()  # 14
@@ -523,8 +538,8 @@ class RunSettings(QMainWindow):
             self.profeditortabwidgets["profres"].setSingleStep(0.25)
             self.profeditortabwidgets["profres"].setValue(self.settingsdict["profres"])
 
-            if self.smoothlev%0.25 != 0:
-                self.smoothlev = np.round(self.smoothlev*4)/4
+            if self.settingsdict["smoothlev"]%0.25 != 0:
+                self.settingsdict["smoothlev"] = np.round(self.settingsdict["smoothlev"]*4)/4
             self.profeditortabwidgets["smoothlevlabel"] = QLabel("Smoothing Window (m)")  # 15
             self.profeditortabwidgets["smoothlev"] = QDoubleSpinBox()  # 16
             self.profeditortabwidgets["smoothlev"].setMinimum(0)
@@ -532,8 +547,8 @@ class RunSettings(QMainWindow):
             self.profeditortabwidgets["smoothlev"].setSingleStep(0.25)
             self.profeditortabwidgets["smoothlev"].setValue(self.settingsdict["smoothlev"])
 
-            if self.maxstdev%0.1 != 0:
-                self.maxstdev = np.round(self.maxstdev*10)/10
+            if self.settingsdict["maxstdev"]%0.1 != 0:
+                self.settingsdict["maxstdev"] = np.round(self.settingsdict["maxstdev"]*10)/10
             self.profeditortabwidgets["maxstdevlabel"] = QLabel("Despiking Coefficient")  # 17
             self.profeditortabwidgets["maxstdev"] = QDoubleSpinBox()  # 18
             self.profeditortabwidgets["maxstdev"].setMinimum(0)

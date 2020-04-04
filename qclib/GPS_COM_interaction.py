@@ -31,10 +31,20 @@ def listcomports():
     ports = list_ports.comports()
     for pnum, sdesc, details in sorted(ports):
         portnums.append(pnum)
-        portinfo.append("{}: {}".format(pnum, sdesc)) #short description
+        portinfo.append(f"{pnum}: {sdesc}") #short description
         # portinfo.append("{}: {} [{}]".format(port, desc, details)) #long description
     return portnums,portinfo
 
+def listcomports_verbose():
+    portnums = []
+    portinfo = []
+    ports = list_ports.comports()
+    for pnum, sdesc, details in sorted(ports):
+        portnums.append(pnum)
+        portinfo.append(f"{pnum}: {sdesc}, {details}") #short description
+        # portinfo.append("{}: {} [{}]".format(port, desc, details)) #long description
+    return portnums,portinfo
+    
 
 
 def streamgpsdata(port):

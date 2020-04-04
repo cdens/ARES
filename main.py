@@ -204,6 +204,7 @@ class RunProgram(QMainWindow):
 
         #loading default program settings
         self.settingsdict = swin.readsettings(self.settingsfile)
+        self.settingsdict["comports"],self.settingsdict["comportdetails"] = gps.listcomports() #pulling available port info from OS
 
         #tab tracking
         self.totaltabs = 0
