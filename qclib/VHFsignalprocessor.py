@@ -358,7 +358,8 @@ class ThreadProcessor(QRunnable):
                 bufferpointer = cast(bufferpointer_int, POINTER(c_int16 * bufferlength))
                 bufferdata = bufferpointer.contents
                 self.f_s = samplerate
-                self.audiostream.extend(bufferdata[:])
+                self.audiostream.extend(bufferdata[:]) #append data to end
+                del self.audiostream[:bufferlength-1] #remove data from start
                 wave.Wave_write.writeframes(self.wavfile,bytearray(bufferdata))
 
             curtabnum = self.curtabnum
