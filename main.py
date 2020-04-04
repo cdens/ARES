@@ -883,21 +883,21 @@ class RunProgram(QMainWindow):
     #posts message in main GUI if thread processor fails for some reason
     @pyqtSlot(int)
     def failedWRmessage(self,messagenum):
-        if messagenum == 0:
+        if messagenum == 1:
             self.posterror("Failed to connect to specified WiNRADIO!")
-        elif messagenum == 1:
-            self.posterror("Failed to power on specified WiNRADIO!")
         elif messagenum == 2:
-            self.posterror("Failed to initialize demodulator for specified WiNRADIO!")
+            self.posterror("Failed to power on specified WiNRADIO!")
         elif messagenum == 3:
-            self.posterror("Failed to set VHF frequency for specified WiNRADIO!")
+            self.posterror("Failed to initialize demodulator for specified WiNRADIO!")
         elif messagenum == 4:
-            self.posterror("Unspecified error communicating with the current WiNRADIO device!")
+            self.posterror("Failed to set VHF frequency for specified WiNRADIO!")
         elif messagenum == 5:
             self.postwarning("Failed to adjust volume on the specified WiNRADIO!")
         elif messagenum == 6:
-            self.posterror("Failed to configure the WiNRADIO audio stream!")
+            self.posterror("Error configuring with the current WiNRADIO device!")
         elif messagenum == 7:
+            self.posterror("Failed to configure the WiNRADIO audio stream!")
+        elif messagenum == 8:
             self.posterror("Contact lost with WiNRADIO receiver! Please ensure device is connected and powered on!")
 
     #updates on screen progress bar if thread is processing audio data

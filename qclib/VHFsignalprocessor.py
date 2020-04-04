@@ -257,7 +257,7 @@ class ThreadProcessor(QRunnable):
                 self.audiostream = snd[:, 0]
             except:
                 self.audiostream = snd
-        elif datasource == 'Test':
+        elif datasource == 'Test': #test run- use included audio file
             self.audiofile = 'testdata/MZ000006.WAV'
             self.isfromtest = True
             self.f_s, snd = wavfile.read(self.audiofile)
@@ -268,11 +268,12 @@ class ThreadProcessor(QRunnable):
 
             #initializing variables to check if WiNRADIO remains connected
             self.disconnectcount = 0
-            self.bufferlen = 0
-
+            self.numcontacts = 0
+            self.lastcontacts = 0
+            
             # initialize audio stream data variables
             self.f_s = 64000  # default value
-            self.audiostream = [0] * 64000
+            self.audiostream = [0] * 1 * self.f_s #initializes the buffer with 1 second of zeros
 
             # saves WiNRADIO DLL/API library
             self.wrdll = wrdll
@@ -291,58 +292,29 @@ class ThreadProcessor(QRunnable):
             #opening current WiNRADIO/establishing contact
             self.hradio = self.wrdll.Open(self.serialnum_2WR)
             if self.hradio == 0:
-                self.keepgoing = False
-                self.txtfile.close()
-                wave.Wave_write.close(self.wavfile)
-                self.signals.failed.emit(0)
-                return
+                self.kill(1)
 
             try:
                 # power on- kill if failed
                 if wrdll.SetPower(self.hradio, True) == 0:
-                    self.keepgoing = False
-                    self.signals.failed.emit(1)
-                    self.txtfile.close()
-                    wave.Wave_write.close(self.wavfile)
-                    self.signals.terminated.emit(curtabnum)
-                    self.wrdll.CloseRadioDevice(self.hradio)
-                    return
+                    self.kill(2)
 
                 # initialize demodulator- kill if failed
                 if wrdll.InitializeDemodulator(self.hradio) == 0:
-                    self.keepgoing = False
-                    self.signals.failed.emit(2)
-                    self.txtfile.close()
-                    wave.Wave_write.close(self.wavfile)
-                    self.signals.terminated.emit(curtabnum)
-                    self.wrdll.CloseRadioDevice(self.hradio)
-                    return
+                    self.kill(3)
 
                 # change frequency- kill if failed
                 self.vhffreq_2WR = c_ulong(int(vhffreq * 1E6))
                 if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
-                    self.keepgoing = False
-                    self.txtfile.close()
-                    wave.Wave_write.close(self.wavfile)
-                    self.signals.failed.emit(3)
-                    self.signals.terminated.emit(curtabnum)
-                    self.wrdll.CloseRadioDevice(self.hradio)
-                    return
+                    self.kill(4)
 
                 # set volume- warn if failed
                 if self.wrdll.SetVolume(self.hradio, 31) == 0:
-                    self.signals.failed.emit(5)
+                    self.kill(5)
 
             except Exception: #if any WiNRADIO comms/initialization attempts failed, terminate thread
-                self.keepgoing = False
-                self.signals.failed.emit(4)
-                self.signals.terminated.emit(curtabnum)
-                self.txtfile.close()
-                wave.Wave_write.close(self.wavfile)
-                self.wrdll.SetupStreams(self.hradio, None, None, None, None)
-                self.wrdll.CloseRadioDevice(self.hradio)  # closes the radio if initialization fails
                 traceback.print_exc()
-
+                self.kill(6)
         else:
             shcopy(self.audiofile, self.wavfilename) #copying audio file if datasource = Test or Audio
 
@@ -354,23 +326,20 @@ class ThreadProcessor(QRunnable):
             #Declaring the callbuck function to update the audio buffer
             @CFUNCTYPE(None, c_void_p, c_void_p, c_ulong, c_ulong)
             def updateaudiobuffer(streampointer_int, bufferpointer_int, size, samplerate):
+                self.numcontacts += 1 #note that the buffer has been pulled again
                 bufferlength = int(size / 2)
                 bufferpointer = cast(bufferpointer_int, POINTER(c_int16 * bufferlength))
                 bufferdata = bufferpointer.contents
                 self.f_s = samplerate
                 self.audiostream.extend(bufferdata[:]) #append data to end
-                del self.audiostream[:bufferlength-1] #remove data from start
+                del self.audiostream[:bufferlength] #remove data from start
                 wave.Wave_write.writeframes(self.wavfile,bytearray(bufferdata))
 
             curtabnum = self.curtabnum
 
             # initializes audio callback function
             if self.wrdll.SetupStreams(self.hradio, None, None, updateaudiobuffer, c_int(self.curtabnum)) == 0:
-                self.signals.failed.emit(6)
-                self.signals.terminated.emit(curtabnum)
-                self.txtfile.close()
-                wave.Wave_write.close(self.wavfile)
-                self.wrdll.CloseRadioDevice(self.hradio)
+                self.kill(7)
             else:
                 timemodule.sleep(0.3)  # gives the buffer time to populate
 
@@ -398,22 +367,15 @@ class ThreadProcessor(QRunnable):
                 if not self.isfromaudio and not self.isfromtest:
 
                     #protocal to kill thread if connection with WiNRADIO is lost
-                    if len(self.audiostream) == self.bufferlen: #checks if the audio stream is receiving new data
+                    if self.numcontacts == self.lastcontacts: #checks if the audio stream is receiving new data
                         self.disconnectcount += 1
                     else:
                         self.disconnectcount = 0
-                        self.bufferlen = len(self.audiostream)
+                        self.lastcontacts = self.numcontacts
 
                     #if the audio stream hasn't received new data for several iterations and checking device connection fails
                     if self.disconnectcount >= 30 and not self.wrdll.IsDeviceConnected(self.hradio):
-                        self.wrdll.SetupStreams(self.hradio, None, None, None, None)
-                        self.wrdll.CloseRadioDevice(self.hradio)
-                        self.signals.failed.emit(7)
-                        self.txtfile.close()
-                        wave.Wave_write.close(self.wavfile)
-                        self.signals.terminated.emit(self.curtabnum)
-                        self.keepgoing = False
-                        return
+                        self.kill(8)
 
                     # listens to current frequency, gets sound level, set audio stream, and corresponding time
                     sigstrength = self.wrdll.GetSignalStrengthdBm(self.hradio)
@@ -493,22 +455,16 @@ class ThreadProcessor(QRunnable):
                     timemodule.sleep(0.1)  # pauses before getting next point
 
         except Exception: #if the thread encounters an error, terminate
-            self.keepgoing = False
-            self.txtfile.close()
-
-            if not self.isfromaudio and not self.isfromtest:
-                wave.Wave_write.close(self.wavfile)
-                self.wrdll.SetupStreams(self.hradio, None, None, None, None)
-                self.wrdll.CloseRadioDevice(self.hradio)
-
-            self.signals.failed.emit(4)
             traceback.print_exc()  # if there is an error, terminates processing
-            self.signals.terminated.emit(self.curtabnum)
-
-    @pyqtSlot()
-    def abort(self): #executed when user selects "Stop" button
+            self.kill(5)
+            
+            
+    def kill(self,reason)
         curtabnum = self.curtabnum
         self.keepgoing = False  # kills while loop
+        
+        if reason != 0: #notify event loop that processor failed if non-zero exit code provided
+            self.signals.failed.emit(reason)
 
         if not self.isfromaudio and not self.isfromtest:
             wave.Wave_write.close(self.wavfile)
@@ -516,19 +472,22 @@ class ThreadProcessor(QRunnable):
             self.wrdll.CloseRadioDevice(self.hradio)
         self.signals.terminated.emit(curtabnum)  # emits signal that processor has been terminated
         self.txtfile.close()
+        
         return
+
+        
+    @pyqtSlot()
+    def abort(self): #executed when user selects "Stop" button
+        self.kill(0) #tell processor to terminate with 0 (success) exit code
+        
 
     @pyqtSlot(float)
     def changecurrentfrequency(self, newfreq): #update VHF frequency for WiNRADIO
         # change frequency- kill if failed
         self.vhffreq_2WR = c_ulong(int(newfreq * 1E6))
         if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
-            self.txtfile.close()
-            wave.Wave_write.close(self.wavfile)
-            self.signals.failed.emit(3)
-            self.wrdll.SetupStreams(self.hradio, None, None, None, None)
-            self.wrdll.CloseRadioDevice(self.hradio)
-            return
+            self.kill(4)
+            
 
     @pyqtSlot(float,float,int,float,int)
     def changethresholds(self,fftwindow,minfftratio,minsiglev,triggerfftratio,triggersiglev): #update data thresholds for FFT
