@@ -252,6 +252,12 @@ class ThreadProcessor(QRunnable):
         if datasource[:5] == 'Audio':
             self.audiofile = datasource[6:]
             self.isfromaudio = True
+            
+            #checking file length- wont process files with more frames corresponding to 1 hour of audio @ fs=64 kHz
+            file_info = wave.open(self.audiofile)
+            if file_info.getnframes() > 2.5E8:
+                self.kill(9)
+            
             self.f_s, snd = wavfile.read(self.audiofile) #reading file
             try: #if left/right stereo
                 self.audiostream = snd[:, 0]
@@ -390,9 +396,7 @@ class ThreadProcessor(QRunnable):
 
                     #kill test threads once time exceeds the max time of the audio file
                     if self.isfromtest and ctime > self.maxtime:
-                        self.txtfile.close()
-                        self.signals.terminated.emit(self.curtabnum)
-                        return
+                        self.kill(0)
 
                     #getting current data to sample from audio file
                     ind = np.all([np.greater_equal(self.alltimes,ctime-self.fftwindow/2),np.less_equal(self.alltimes,ctime + self.fftwindow/2)],axis=0)
@@ -452,7 +456,7 @@ class ThreadProcessor(QRunnable):
                 self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, cfreq, sigstrength, actmax, ratiomax, ctime, i)
 
                 if not self.isfromaudio and not self.isfromtest:
-                    timemodule.sleep(0.1)  # pauses before getting next point
+                    timemodule.sleep(0.1)  # pauses before getting next point when processing in realtime
 
         except Exception: #if the thread encounters an error, terminate
             traceback.print_exc()  # if there is an error, terminates processing

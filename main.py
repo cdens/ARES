@@ -899,6 +899,8 @@ class RunProgram(QMainWindow):
             self.posterror("Failed to configure the WiNRADIO audio stream!")
         elif messagenum == 8:
             self.posterror("Contact lost with WiNRADIO receiver! Please ensure device is connected and powered on!")
+        elif messagenum == 9:
+            self.posterror("Selected audio file is too large! Please trim the audio file before processing")
 
     #updates on screen progress bar if thread is processing audio data
     @pyqtSlot(int,int)
