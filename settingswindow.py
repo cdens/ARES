@@ -750,10 +750,10 @@ def setdefaultsettings():
     renametabstodtg = True  # auto rename tab to dtg when loading profile editor
     autosave = False  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
     fftwindow = 0.3  # window to run FFT (in seconds)
-    minfftratio = 0.5  # minimum signal to noise ratio to ID data
-    minsiglev = 5E6  # minimum total signal level to receive data
+    minfftratio = 0.42  # minimum signal to noise ratio to ID data
+    minsiglev = 6.3E5  # minimum total signal level to receive data
 
-    triggerfftratio = 0.75  # minimum signal to noise ratio to ID data
+    triggerfftratio = 0.8  # minimum signal to noise ratio to ID data
     triggersiglev = 1E7  # minimum total signal level to receive data
 
     #profeditorpreferences

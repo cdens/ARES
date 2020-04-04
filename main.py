@@ -194,8 +194,8 @@ class RunProgram(QMainWindow):
         #getting temporary directory for files
         self.tempdir = gettempdir()
 
-        #settings file source
-        self.settingsfile = self.tempdir + slash + ".ARESsettings"
+        #settings file source- places dotfile in user's home directory
+        self.settingsfile = path.expanduser("~") + slash + ".ARESsettings"
 
 
         #setting up dictionary to store data for each tab
