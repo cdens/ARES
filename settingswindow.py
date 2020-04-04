@@ -53,9 +53,7 @@ class RunSettings(QMainWindow):
     # =============================================================================
     #   INITIALIZE WINDOW, INTERFACE
     # =============================================================================
-    def __init__(self,autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig, dtgwarn,
-                 renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
-                 comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps, smoothlev, profres, maxstdev, originatingcenter, comport):
+    def __init__(self,settingsdict):
         super().__init__()
 
         try:
@@ -64,10 +62,7 @@ class RunSettings(QMainWindow):
             self.signals = SettingsSignals()
 
             #records current settings received from main loop
-            self.saveinputsettings(autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig,
-                                   dtgwarn, renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,
-                                   useclimobottom, overlayclimo, comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc,
-                                   useoceanbottom, checkforgaps, smoothlev, profres, maxstdev, originatingcenter, comport)
+            self.settingsdict = settingsdict
 
             #building window/tabs
             self.buildcentertable()
@@ -79,6 +74,8 @@ class RunSettings(QMainWindow):
             trace_error()
             self.posterror("Failed to initialize the settings menu.")
 
+            
+            
     def initUI(self):
 
         # setting title/icon, background color
@@ -117,94 +114,122 @@ class RunSettings(QMainWindow):
             self.mainLayout.setRowStretch(i,1)
         self.show()
 
+        
+        
+        
     # =============================================================================
-    #     SAVE INPUT SETTINGS TO CLASS
+    #   FUNCTIONS TO UPDATE/EXPORT/RESET SETTINGS
     # =============================================================================
-    def saveinputsettings(self, autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig, dtgwarn,
-                           renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo,
-                           comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc, useoceanbottom, checkforgaps, smoothlev,
-                           profres, maxstdev, originatingcenter, comport):
+    def applychanges(self):
+        self.updatepreferences()
+        self.signals.exported.emit(self.settingsdict)
 
-        # processor preferences
-        self.autodtg = autodtg  # auto determine profile date/time as system date/time on clicking "START"
-        self.autolocation = autolocation  # auto determine location with GPS
-        self.autoid = autoid  # autopopulate platform ID
-        self.platformID = platformID
-        self.savelog = savelog
-        self.saveedf = saveedf
-        self.savewav = savewav
-        self.savesig = savesig
-        self.dtgwarn = dtgwarn  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
-        self.renametabstodtg = renametabstodtg # auto rename tab to dtg when loading profile editor
-        self.autosave = autosave  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
-        self.fftwindow = fftwindow  # window to run FFT (in seconds)
-        self.minfftratio = minfftratio  # minimum signal to noise ratio to ID data
-        self.minsiglev = minsiglev  # minimum total signal level to receive data
-        self.triggerfftratio = triggerfftratio  # minimum signal to noise ratio to ID data
-        self.triggersiglev = triggersiglev  # minimum total signal level to receive data
 
-        # profeditorpreferences
-        self.useclimobottom = useclimobottom  # use climatology to ID bottom strikes
-        self.overlayclimo = overlayclimo  # overlay the climatology on the plot
-        self.comparetoclimo = comparetoclimo  # check for climatology mismatch and display result on plot
-        self.savefin = savefin  # file types to save
-        self.savejjvv = savejjvv
-        self.savebufr = savebufr
-        self.saveprof = saveprof
-        self.saveloc = saveloc
-        self.useoceanbottom = useoceanbottom  # use ETOPO1 bathymetry data to ID bottom strikes
-        self.checkforgaps = checkforgaps  # look for/correct gaps in profile due to false starts from VHF interference
-        self.smoothlev = smoothlev  # d2Tdz2 threshold to call a point an inflection point
-        self.profres = profres  # profile minimum vertical resolution (m)
-        self.maxstdev = maxstdev # max standard deviation coefficient for autoQC despiker
-        self.originatingcenter = originatingcenter #originating center for BUFR message
+    def resetdefaults(self):
+        #pull default settings
+        self.settingsdict = setdefaultsettings()
+        
+        
+        self.processortabwidgets["autodtg"].setChecked(self.settingsdict["autodtg"])
+        self.processortabwidgets["autolocation"].setChecked(self.settingsdict["autolocation"])
+        self.processortabwidgets["autoID"].setChecked(self.settingsdict["autoid"])
 
-        self.comport = comport # COM port for GPS feed
+        self.processortabwidgets["savelog"].setChecked(self.settingsdict["savelog"])
+        self.processortabwidgets["saveedf"].setChecked(self.settingsdict["saveedf"])
+        self.processortabwidgets["savewav"].setChecked(self.settingsdict["savewav"])
+        self.processortabwidgets["savesig"].setChecked(self.settingsdict["savesig"])
+
+        self.processortabwidgets["dtgwarn"].setChecked(self.settingsdict["dtgwarn"])
+        self.processortabwidgets["renametab"].setChecked(self.settingsdict["renametabstodtg"])
+        self.processortabwidgets["autosave"].setChecked(self.settingsdict["autosave"])
+
+        self.processortabwidgets["fftwindowlabel"].setText('FFT Window (s): ' + str(self.settingsdict["fftwindow"]))  # 15
+        self.processortabwidgets["fftwindow"].setValue(int(self.settingsdict["fftwindow"] * 100))
+
+        sigsliderval = np.log10(self.settingsdict["minsiglev"])
+        self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (log[x]): ' + str(np.round(self.settingsdict["sigsliderval"], 2)).ljust(4, '0'))  # 17
+        self.processortabwidgets["fftsiglev"].setValue(int(self.settingsdict["sigsliderval"] * 100))
+
+        self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.settingsdict["minfftratio"] * 100)))  # 19
+        self.processortabwidgets["fftratio"].setValue(int(self.settingsdict["minfftratio"] * 100))
+
+        trigsigsliderval = np.log10(self.settingsdict["triggersiglev"])
+        self.processortabwidgets["triggersiglevlabel"].setText(
+            'Trigger Signal Level (log[x]): ' + str(np.round(self.settingsdict["trigsigsliderval"], 2)).ljust(4, '0'))  # 17
+        self.processortabwidgets["triggersiglev"].setValue(int(self.settingsdict["trigsigsliderval"] * 100))
+
+        self.processortabwidgets["triggerratiolabel"].setText(
+            'Trigger Signal Ratio (%): ' + str(np.round(self.settingsdict["triggerfftratio"] * 100)))  # 19
+        self.processortabwidgets["triggerratio"].setValue(int(self.settingsdict["triggerfftratio"] * 100))
+
+        self.profeditortabwidgets["useclimobottom"].setChecked(self.settingsdict["useclimobottom"])
+        self.profeditortabwidgets["comparetoclimo"].setChecked(self.settingsdict["comparetoclimo"])
+        self.profeditortabwidgets["overlayclimo"].setChecked(self.settingsdict["overlayclimo"])
+
+        self.profeditortabwidgets["savefin"].setChecked(self.settingsdict["savefin"])
+        self.profeditortabwidgets["savejjvv"].setChecked(self.settingsdict["savejjvv"])
+        self.profeditortabwidgets["savebufr"].setChecked(self.settingsdict["savebufr"])
+        self.profeditortabwidgets["saveprof"].setChecked(self.settingsdict["saveprof"])
+        self.profeditortabwidgets["saveloc"].setChecked(self.settingsdict["saveloc"])
+
+        self.profeditortabwidgets["useoceanbottom"].setChecked(self.settingsdict["useoceanbottom"])
+        self.profeditortabwidgets["checkforgaps"].setChecked(self.settingsdict["checkforgaps"])
+        
+        self.profeditortabwidgets["profres"].setValue(self.settingsdict["profres"])
+        self.profeditortabwidgets["smoothlev"].setValue(self.settingsdict["smoothlev"])
+        self.profeditortabwidgets["maxstdev"].setValue(self.settingsdict["maxstdev"])
+
+        self.profeditortabwidgets["originatingcenter"].setValue(self.settingsdict["originatingcenter"])
+        self.updateoriginatingcenter()
+        
 
 
     def updatepreferences(self): #records current configuration before exporting to main loop
 
-        self.autodtg = self.processortabwidgets["autodtg"].isChecked()
-        self.autolocation = self.processortabwidgets["autolocation"].isChecked()
-        self.autoid = self.processortabwidgets["autoID"].isChecked()
+        self.settingsdict["autodtg"] = self.processortabwidgets["autodtg"].isChecked()
+        self.settingsdict["autolocation"] = self.processortabwidgets["autolocation"].isChecked()
+        self.settingsdict["autoid"] = self.processortabwidgets["autoID"].isChecked()
 
-        self.savelog = self.processortabwidgets["savelog"].isChecked()
-        self.saveedf = self.processortabwidgets["saveedf"].isChecked()
-        self.savewav = self.processortabwidgets["savewav"].isChecked()
-        self.savesig = self.processortabwidgets["savesig"].isChecked()
+        self.settingsdict["savelog"] = self.processortabwidgets["savelog"].isChecked()
+        self.settingsdict["saveedf"] = self.processortabwidgets["saveedf"].isChecked()
+        self.settingsdict["savewav"] = self.processortabwidgets["savewav"].isChecked()
+        self.settingsdict["savesig"] = self.processortabwidgets["savesig"].isChecked()
 
-        self.dtgwarn = self.processortabwidgets["dtgwarn"].isChecked()
-        self.renametabstodtg = self.processortabwidgets["renametab"].isChecked()
-        self.autosave = self.processortabwidgets["autosave"].isChecked()
+        self.settingsdict["dtgwarn"] = self.processortabwidgets["dtgwarn"].isChecked()
+        self.settingsdict["renametabstodtg"] = self.processortabwidgets["renametab"].isChecked()
+        self.settingsdict["autosave"] = self.processortabwidgets["autosave"].isChecked()
 
-        self.fftwindow = float(self.processortabwidgets["fftwindow"].value())/100
-        self.minsiglev = 10**(float(self.processortabwidgets["fftsiglev"].value())/100)
-        self.minfftratio = float(self.processortabwidgets["fftratio"].value())/100
+        self.settingsdict["fftwindow"] = float(self.processortabwidgets["fftwindow"].value())/100
+        self.settingsdict["minsiglev"] = 10**(float(self.processortabwidgets["fftsiglev"].value())/100)
+        self.settingsdict["minfftratio"] = float(self.processortabwidgets["fftratio"].value())/100
 
-        self.triggersiglev = 10**(float(self.processortabwidgets["triggersiglev"].value())/100)
-        self.triggerfftratio = float(self.processortabwidgets["triggerratio"].value())/100
+        self.settingsdict["triggersiglev"] = 10**(float(self.processortabwidgets["triggersiglev"].value())/100)
+        self.settingsdict["triggerfftratio"] = float(self.processortabwidgets["triggerratio"].value())/100
 
-        self.platformID = self.processortabwidgets["IDedit"].text()
+        self.settingsdict["platformID"] = self.processortabwidgets["IDedit"].text()
 
-        self.useclimobottom = self.profeditortabwidgets["useclimobottom"].isChecked()
-        self.comparetoclimo =  self.profeditortabwidgets["comparetoclimo"].isChecked()
-        self.overlayclimo = self.profeditortabwidgets["overlayclimo"].isChecked()
+        self.settingsdict["useclimobottom"] = self.profeditortabwidgets["useclimobottom"].isChecked()
+        self.settingsdict["comparetoclimo"] =  self.profeditortabwidgets["comparetoclimo"].isChecked()
+        self.settingsdict["overlayclimo"] = self.profeditortabwidgets["overlayclimo"].isChecked()
 
-        self.savefin = self.profeditortabwidgets["savefin"].isChecked()
-        self.savejjvv = self.profeditortabwidgets["savejjvv"].isChecked()
-        self.savebufr = self.profeditortabwidgets["savebufr"].isChecked()
-        self.saveprof = self.profeditortabwidgets["saveprof"].isChecked()
-        self.saveloc = self.profeditortabwidgets["saveloc"].isChecked()
+        self.settingsdict["savefin"] = self.profeditortabwidgets["savefin"].isChecked()
+        self.settingsdict["savejjvv"] = self.profeditortabwidgets["savejjvv"].isChecked()
+        self.settingsdict["savebufr"] = self.profeditortabwidgets["savebufr"].isChecked()
+        self.settingsdict["saveprof"] = self.profeditortabwidgets["saveprof"].isChecked()
+        self.settingsdict["saveloc"] = self.profeditortabwidgets["saveloc"].isChecked()
 
-        self.useoceanbottom = self.profeditortabwidgets["useoceanbottom"].isChecked()
-        self.checkforgaps = self.profeditortabwidgets["checkforgaps"].isChecked()
+        self.settingsdict["useoceanbottom"] = self.profeditortabwidgets["useoceanbottom"].isChecked()
+        self.settingsdict["checkforgaps"] = self.profeditortabwidgets["checkforgaps"].isChecked()
 
-        self.profres = self.profeditortabwidgets["profres"].value()
-        self.smoothlev = self.profeditortabwidgets["smoothlev"].value()
-        self.maxstdev = self.profeditortabwidgets["maxstdev"].value()
+        self.settingsdict["profres"] = self.profeditortabwidgets["profres"].value()
+        self.settingsdict["smoothlev"] = self.profeditortabwidgets["smoothlev"].value()
+        self.settingsdict["maxstdev"] = self.profeditortabwidgets["maxstdev"].value()
 
         self.updateoriginatingcenter()
         self.updatecomport()
+        
+    
+    
 
 
     # =============================================================================
@@ -228,39 +253,39 @@ class RunSettings(QMainWindow):
             # making widgets
             self.processortabwidgets["autopopulatetitle"] = QLabel('Autopopulate Drop Entries:') #1
             self.processortabwidgets["autodtg"] = QCheckBox('Autopopulate DTG (UTC)') #2
-            self.processortabwidgets["autodtg"].setChecked(self.autodtg)
+            self.processortabwidgets["autodtg"].setChecked(self.settingsdict["autodtg"])
             self.processortabwidgets["autolocation"] = QCheckBox('Autopopulate Location') #3
-            self.processortabwidgets["autolocation"].setChecked(self.autolocation)
+            self.processortabwidgets["autolocation"].setChecked(self.settingsdict["autolocation"])
             self.processortabwidgets["autoID"] = QCheckBox('Autopopulate Platform Identifier') #4
-            self.processortabwidgets["autoID"].setChecked(self.autoid)
+            self.processortabwidgets["autoID"].setChecked(self.settingsdict["autoid"])
             self.processortabwidgets["IDlabel"] = QLabel('Platform Identifier:') #5
-            self.processortabwidgets["IDedit"] = QLineEdit(self.platformID) #6
+            self.processortabwidgets["IDedit"] = QLineEdit(self.settingsdict["platformID"]) #6
 
             self.processortabwidgets["filesavetypes"] = QLabel('Filetypes to save:       ') #7
             self.processortabwidgets["savelog"] = QCheckBox('LOG File') #8
-            self.processortabwidgets["savelog"].setChecked(self.savelog)
+            self.processortabwidgets["savelog"].setChecked(self.settingsdict["savelog"])
             self.processortabwidgets["saveedf"] = QCheckBox('EDF File') #9
-            self.processortabwidgets["saveedf"].setChecked(self.saveedf)
+            self.processortabwidgets["saveedf"].setChecked(self.settingsdict["saveedf"])
             self.processortabwidgets["savewav"] = QCheckBox('WAV File') #10
-            self.processortabwidgets["savewav"].setChecked(self.savewav)
+            self.processortabwidgets["savewav"].setChecked(self.settingsdict["savewav"])
             self.processortabwidgets["savesig"] = QCheckBox('Signal Data') #11
-            self.processortabwidgets["savesig"].setChecked(self.savesig)
+            self.processortabwidgets["savesig"].setChecked(self.settingsdict["savesig"])
 
             self.processortabwidgets["dtgwarn"] = QCheckBox('Warn if DTG is not within past 12 hours') #12
-            self.processortabwidgets["dtgwarn"].setChecked(self.dtgwarn)
+            self.processortabwidgets["dtgwarn"].setChecked(self.settingsdict["dtgwarn"])
             self.processortabwidgets["renametab"] = QCheckBox('Auto-rename tab to DTG on transition to profile editing mode') #13
-            self.processortabwidgets["renametab"].setChecked(self.renametabstodtg)
+            self.processortabwidgets["renametab"].setChecked(self.settingsdict["renametabstodtg"])
             self.processortabwidgets["autosave"] = QCheckBox('Autosave raw data files when transitioning to profile editor mode') #14
-            self.processortabwidgets["autosave"].setChecked(self.autosave)
+            self.processortabwidgets["autosave"].setChecked(self.settingsdict["autosave"])
 
-            self.processortabwidgets["fftwindowlabel"] = QLabel('FFT Window (s): ' +str(self.fftwindow).ljust(4,'0')) #15
+            self.processortabwidgets["fftwindowlabel"] = QLabel('FFT Window (s): ' +str(self.settingsdict["fftwindow"]).ljust(4,'0')) #15
             self.processortabwidgets["fftwindow"] = QSlider(Qt.Horizontal) #16
-            self.processortabwidgets["fftwindow"].setValue(int(self.fftwindow * 100))
+            self.processortabwidgets["fftwindow"].setValue(int(self.settingsdict["fftwindow"] * 100))
             self.processortabwidgets["fftwindow"].setMinimum(10)
             self.processortabwidgets["fftwindow"].setMaximum(100)
             self.processortabwidgets["fftwindow"].valueChanged[int].connect(self.changefftwindow)
 
-            sigsliderval = np.log10(self.minsiglev)
+            sigsliderval = np.log10(self.settingsdict["minsiglev"])
             self.processortabwidgets["fftsiglevlabel"] = QLabel('Minimum Signal Level (log[x]): ' + str(np.round(sigsliderval,2)).ljust(4,'0'))  # 17
             self.processortabwidgets["fftsiglev"] = QSlider(Qt.Horizontal)  # 18
             self.processortabwidgets["fftsiglev"].setMinimum(400)
@@ -268,14 +293,14 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["fftsiglev"].setValue(int(sigsliderval * 100))
             self.processortabwidgets["fftsiglev"].valueChanged[int].connect(self.changefftsiglev)
 
-            self.processortabwidgets["fftratiolabel"] = QLabel('Minimum Signal Ratio (%): ' + str(np.round(self.minfftratio*100)).ljust(4,'0'))  # 19
+            self.processortabwidgets["fftratiolabel"] = QLabel('Minimum Signal Ratio (%): ' + str(np.round(self.settingsdict["minfftratio"]*100)).ljust(4,'0'))  # 19
             self.processortabwidgets["fftratio"] = QSlider(Qt.Horizontal)  # 20
-            self.processortabwidgets["fftratio"].setValue(int(self.minfftratio * 100))
+            self.processortabwidgets["fftratio"].setValue(int(self.settingsdict["minfftratio"] * 100))
             self.processortabwidgets["fftratio"].setMinimum(0)
             self.processortabwidgets["fftratio"].setMaximum(100)
             self.processortabwidgets["fftratio"].valueChanged[int].connect(self.changefftratio)
 
-            trigsigsliderval = np.log10(self.triggersiglev)
+            trigsigsliderval = np.log10(self.settingsdict["triggersiglev"])
             self.processortabwidgets["triggersiglevlabel"] = QLabel(
                 'Trigger Signal Level (log[x]): ' + str(np.round(trigsigsliderval, 2)).ljust(4, '0'))  # 17
             self.processortabwidgets["triggersiglev"] = QSlider(Qt.Horizontal)  # 18
@@ -285,9 +310,9 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["triggersiglev"].valueChanged[int].connect(self.changetriggersiglev)
 
             self.processortabwidgets["triggerratiolabel"] = QLabel(
-                'Trigger Signal Ratio (%): ' + str(np.round(self.triggerfftratio * 100)).ljust(4, '0'))  # 19
+                'Trigger Signal Ratio (%): ' + str(np.round(self.settingsdict["triggerfftratio"] * 100)).ljust(4, '0'))  # 19
             self.processortabwidgets["triggerratio"] = QSlider(Qt.Horizontal)  # 20
-            self.processortabwidgets["triggerratio"].setValue(int(self.minfftratio * 100))
+            self.processortabwidgets["triggerratio"].setValue(int(self.settingsdict["minfftratio * 100"]))
             self.processortabwidgets["triggerratio"].setMinimum(0)
             self.processortabwidgets["triggerratio"].setMaximum(100)
             self.processortabwidgets["triggerratio"].valueChanged[int].connect(self.changetriggerratio)
@@ -328,6 +353,9 @@ class RunSettings(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Failed to build new processor tab")
+            
+    
+    
 
 
     # =============================================================================
@@ -365,7 +393,7 @@ class RunSettings(QMainWindow):
             self.gpstabwidgets["comport"].clear()
             self.gpstabwidgets["comport"].addItem('No COM Port Selected')
             if self.comport != 'n': #includes comport from settings on list if it isn't 'None selected'
-                self.gpstabwidgets["comport"].addItem(self.comport)
+                self.gpstabwidgets["comport"].addItem(self.settingsdict["comport"])
             self.gpstabwidgets["comport"].currentIndexChanged.connect(self.updatecomport)
             self.updatecomport()
 
@@ -399,9 +427,9 @@ class RunSettings(QMainWindow):
     def updatecomport(self):
         curcomnum = self.gpstabwidgets["comport"].currentIndex()
         if curcomnum > 0:
-            self.comport = self.comports[curcomnum - 1]
+            self.settingsdict["comport"] = self.comports[curcomnum - 1]
         else:
-            self.comport = 'n'
+            self.settingsdict["comport"] = 'n'
 
     #refreshing the list of available COM ports
     def updategpslist(self):
@@ -413,8 +441,8 @@ class RunSettings(QMainWindow):
 
     #attempt to refresh GPS data with currently selected COM port
     def refreshgpsdata(self):
-        if self.comport != 'n':
-            lat,lon,curdate,flag = gps.getcurrentposition(self.comport,5)
+        if self.settingsdict["comport"] != 'n':
+            lat,lon,curdate,flag = gps.getcurrentposition(self.settingsdict["comport"],5)
             if flag == 0:
                 if lat > 0:
                     latsign = 'N'
@@ -435,6 +463,9 @@ class RunSettings(QMainWindow):
             self.gpstabwidgets["gpsdate"].setText("Date/Time:")
             self.gpstabwidgets["gpslat"].setText("Latitude:")
             self.gpstabwidgets["gpslon"].setText("Longitude:")
+    
+    
+    
 
 
     # =============================================================================
@@ -458,40 +489,39 @@ class RunSettings(QMainWindow):
             # making widgets
             self.profeditortabwidgets["climotitle"] = QLabel('Climatology Options:')  # 1
             self.profeditortabwidgets["useclimobottom"] = QCheckBox('Use climatology to detect bottom strikes')  # 2
-            self.profeditortabwidgets["useclimobottom"].setChecked(self.useclimobottom)
+            self.profeditortabwidgets["useclimobottom"].setChecked(self.settingsdict["useclimobottom"])
             self.profeditortabwidgets["comparetoclimo"] = QCheckBox('Autocompare profile to climatology')  # 3
-            self.profeditortabwidgets["comparetoclimo"].setChecked(self.comparetoclimo)
+            self.profeditortabwidgets["comparetoclimo"].setChecked(self.settingsdict["comparetoclimo"])
             self.profeditortabwidgets["overlayclimo"] = QCheckBox('Overlay climatology in saved plots')  # 4
-            self.profeditortabwidgets["overlayclimo"].setChecked(self.overlayclimo)
+            self.profeditortabwidgets["overlayclimo"].setChecked(self.settingsdict["overlayclimo"])
 
             self.profeditortabwidgets["filesavetypes"] = QLabel('Filetypes to save:     ')  # 5
             self.profeditortabwidgets["savefin"] = QCheckBox('FIN File')  # 6
-            self.profeditortabwidgets["savefin"].setChecked(self.savefin)
+            self.profeditortabwidgets["savefin"].setChecked(self.settingsdict["savefin"])
             self.profeditortabwidgets["savejjvv"] = QCheckBox('JJVV File')  # 7
-            self.profeditortabwidgets["savejjvv"].setChecked(self.savejjvv)
+            self.profeditortabwidgets["savejjvv"].setChecked(self.settingsdict["savejjvv"])
             self.profeditortabwidgets["savebufr"] = QCheckBox('BUFR File')  # 8
-            self.profeditortabwidgets["savebufr"].setChecked(self.savebufr)
+            self.profeditortabwidgets["savebufr"].setChecked(self.settingsdict["savebufr"])
             self.profeditortabwidgets["saveprof"] = QCheckBox('Profile PNG')  # 9
-            self.profeditortabwidgets["saveprof"].setChecked(self.saveprof)
+            self.profeditortabwidgets["saveprof"].setChecked(self.settingsdict["saveprof"])
             self.profeditortabwidgets["saveloc"] = QCheckBox('Location PNG')  # 10
-            self.profeditortabwidgets["saveloc"].setChecked(self.saveloc)
+            self.profeditortabwidgets["saveloc"].setChecked(self.settingsdict["saveloc"])
 
             self.profeditortabwidgets["useoceanbottom"] = QCheckBox(
                 'ID bottom strikes with NOAA ETOPO1 bathymetry data')  # 11
-            self.profeditortabwidgets["useoceanbottom"].setChecked(self.useoceanbottom)
+            self.profeditortabwidgets["useoceanbottom"].setChecked(self.settingsdict["useoceanbottom"])
             self.profeditortabwidgets["checkforgaps"] = QCheckBox('ID false starts due to VHF interference')  # 12
-            self.profeditortabwidgets["checkforgaps"].setChecked(self.checkforgaps)
+            self.profeditortabwidgets["checkforgaps"].setChecked(self.settingsdict["checkforgaps"])
 
-            self.profres = float(self.profres)
-
+            self.settingsdict["profres"] = float(self.settingsdict["profres"])
             if self.profres%0.25 != 0:
-                self.profres = np.round(self.profres*4)/4
+                self.settingsdict["profres"] = np.round(self.settingsdict["profres"]*4)/4
             self.profeditortabwidgets["profreslabel"] = QLabel("Minimum Profile Resolution (m)")  # 13
             self.profeditortabwidgets["profres"] = QDoubleSpinBox()  # 14
             self.profeditortabwidgets["profres"].setMinimum(0)
             self.profeditortabwidgets["profres"].setMaximum(50)
             self.profeditortabwidgets["profres"].setSingleStep(0.25)
-            self.profeditortabwidgets["profres"].setValue(self.profres)
+            self.profeditortabwidgets["profres"].setValue(self.settingsdict["profres"])
 
             if self.smoothlev%0.25 != 0:
                 self.smoothlev = np.round(self.smoothlev*4)/4
@@ -500,7 +530,7 @@ class RunSettings(QMainWindow):
             self.profeditortabwidgets["smoothlev"].setMinimum(0)
             self.profeditortabwidgets["smoothlev"].setMaximum(100)
             self.profeditortabwidgets["smoothlev"].setSingleStep(0.25)
-            self.profeditortabwidgets["smoothlev"].setValue(self.smoothlev)
+            self.profeditortabwidgets["smoothlev"].setValue(self.settingsdict["smoothlev"])
 
             if self.maxstdev%0.1 != 0:
                 self.maxstdev = np.round(self.maxstdev*10)/10
@@ -509,7 +539,7 @@ class RunSettings(QMainWindow):
             self.profeditortabwidgets["maxstdev"].setMinimum(0)
             self.profeditortabwidgets["maxstdev"].setMaximum(2)
             self.profeditortabwidgets["maxstdev"].setSingleStep(0.05)
-            self.profeditortabwidgets["maxstdev"].setValue(self.maxstdev)
+            self.profeditortabwidgets["maxstdev"].setValue(self.settingsdict["maxstdev"])
 
 
             self.profeditortabwidgets["originatingcentername"] = QLabel("")  # 19
@@ -517,13 +547,14 @@ class RunSettings(QMainWindow):
             self.profeditortabwidgets["originatingcenter"].setMinimum(0)
             self.profeditortabwidgets["originatingcenter"].setMaximum(255)
             self.profeditortabwidgets["originatingcenter"].setSingleStep(1)
-            self.profeditortabwidgets["originatingcenter"].setValue(self.originatingcenter)
+            self.profeditortabwidgets["originatingcenter"].setValue(self.settingsdict["originatingcenter"])
             self.profeditortabwidgets["originatingcenter"].valueChanged[int].connect(self.updateoriginatingcenter)
+            
             try:
-                curcentername = self.allcenters[str(self.originatingcenter).zfill(3)]
+                curcentername = self.allcenters[str(self.settingsdict["originatingcenter"]).zfill(3)]
             except:
                 curcentername = "Center ID not recognized!"
-            self.profeditortabwidgets["originatingcentername"].setText("Center "+str(self.originatingcenter).zfill(3)+": "+curcentername)
+            self.profeditortabwidgets["originatingcentername"].setText("Center "+str(self.settingsdict["originatingcenter"]).zfill(3)+": "+curcentername)
 
             # should be 18 entries
             widgetorder = ["climotitle", "useclimobottom", "comparetoclimo", "overlayclimo", "filesavetypes", "savefin",
@@ -556,17 +587,20 @@ class RunSettings(QMainWindow):
             trace_error()
             self.posterror("Failed to build profile editor tab!")
 
+    
+    
+    
     # =============================================================================
     #         UPDATE BUFR FORMAT ORIGINATING CENTER ACCORDING TO TABLE
     # =============================================================================
     def updateoriginatingcenter(self):
-        self.originatingcenter = int(self.profeditortabwidgets["originatingcenter"].value())
-        ctrkey = str(self.originatingcenter).zfill(3)
+        self.settingsdict["originatingcenter"] = int(self.profeditortabwidgets["originatingcenter"].value())
+        ctrkey = str(self.settingsdict["originatingcenter"]).zfill(3)
         if ctrkey in self.allcenters:
             curcentername = self.allcenters[ctrkey]
         else:
             curcentername = self.allcenters["xxx"]
-        self.profeditortabwidgets["originatingcentername"].setText("Center "+ctrkey+": "+curcentername)
+        self.profeditortabwidgets["originatingcentername"].setText("Center " + ctrkey + ": " + curcentername)
 
     #lookup table for originating centers
     def buildcentertable(self):
@@ -596,105 +630,31 @@ class RunSettings(QMainWindow):
     #         SLIDER CHANGE FUNCTION CALLS
     # =============================================================================
     def changefftwindow(self, value):
-        self.fftwindow = float(value) / 100
-        self.processortabwidgets["fftwindowlabel"].setText('FFT Window (s): ' +str(self.fftwindow).ljust(4,'0'))
+        self.settingsdict["fftwindow"] = float(value) / 100
+        self.processortabwidgets["fftwindowlabel"].setText('FFT Window (s): ' +str(self.settingsdict["fftwindow"]).ljust(4,'0'))
 
     def changefftsiglev(self, value):
         sigsliderval = float(value) / 100
-        self.minsiglev = 10**sigsliderval
+        self.settingsdict["minsiglev"] = 10**sigsliderval
         self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (log[x]): ' + str(np.round(sigsliderval,2)).ljust(4,'0'))
 
     def changefftratio(self, value):
-        self.minfftratio = float(value) / 100
+        self.settingsdict["minfftratio"] = float(value) / 100
         self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.minfftratio*100)).ljust(4,'0'))
 
     def changetriggersiglev(self, value):
         trigsigsliderval = float(value) / 100
-        self.triggersiglev = 10**trigsigsliderval
+        self.settingsdict["triggersiglev"] = 10**trigsigsliderval
         self.processortabwidgets["triggersiglevlabel"].setText('Trigger Signal Level (log[x]): ' + str(np.round(trigsigsliderval,2)).ljust(4,'0'))
 
     def changetriggerratio(self, value):
-        self.triggerfftratio = float(value) / 100
-        self.processortabwidgets["triggerratiolabel"].setText('Trigger Signal Ratio (%): ' + str(np.round(self.triggerfftratio*100)).ljust(4,'0'))
-
-
-    # =============================================================================
-    #   EXPORT AND/OR RESET ALL SETTINGS
-    # =============================================================================
-    def applychanges(self):
-        self.updatepreferences()
-        self.signals.exported.emit(self.autodtg, self.autolocation, self.autoid, self.platformID, self.savelog,
-                                   self.saveedf, self.savewav, self.savesig, self.dtgwarn, self.renametabstodtg,
-                                   self.autosave, self.fftwindow, self.minfftratio, self.minsiglev, self.triggerfftratio, self.triggersiglev, self.useclimobottom,
-                                   self.overlayclimo, self.comparetoclimo, self.savefin, self.savejjvv, self.savebufr, self.saveprof,
-                                   self.saveloc, self.useoceanbottom, self.checkforgaps, self.smoothlev, self.profres, self.maxstdev, self.originatingcenter, self.comport)
-
-
-    def resetdefaults(self):
-        #pull default settings
-        (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
-            minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-            saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport) = setdefaultsettings()
-
-        #save default settings to self
-        self.saveinputsettings(autodtg, autolocation, autoid, platformID, savelog, saveedf, savewav, savesig,
-                               dtgwarn, renametabstodtg, autosave, fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,
-                               useclimobottom, overlayclimo, comparetoclimo, savefin, savejjvv, savebufr, saveprof, saveloc,
-                               useoceanbottom, checkforgaps, smoothlev, profres, maxstdev, originatingcenter, comport)
-
-        self.processortabwidgets["autodtg"].setChecked(self.autodtg)
-        self.processortabwidgets["autolocation"].setChecked(self.autolocation)
-        self.processortabwidgets["autoID"].setChecked(self.autoid)
-
-        self.processortabwidgets["savelog"].setChecked(self.savelog)
-        self.processortabwidgets["saveedf"].setChecked(self.saveedf)
-        self.processortabwidgets["savewav"].setChecked(self.savewav)
-        self.processortabwidgets["savesig"].setChecked(self.savesig)
-
-        self.processortabwidgets["dtgwarn"].setChecked(self.dtgwarn)
-        self.processortabwidgets["renametab"].setChecked(self.renametabstodtg)
-        self.processortabwidgets["autosave"].setChecked(self.autosave)
-
-        self.processortabwidgets["fftwindowlabel"].setText('FFT Window (s): ' + str(self.fftwindow))  # 15
-        self.processortabwidgets["fftwindow"].setValue(int(self.fftwindow * 100))
-
-        sigsliderval = np.log10(self.minsiglev)
-        self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (log[x]): ' + str(np.round(sigsliderval, 2)).ljust(4, '0'))  # 17
-        self.processortabwidgets["fftsiglev"].setValue(int(sigsliderval * 100))
-
-        self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.minfftratio * 100)))  # 19
-        self.processortabwidgets["fftratio"].setValue(int(self.minfftratio * 100))
-
-        trigsigsliderval = np.log10(self.triggersiglev)
-        self.processortabwidgets["triggersiglevlabel"].setText(
-            'Trigger Signal Level (log[x]): ' + str(np.round(trigsigsliderval, 2)).ljust(4, '0'))  # 17
-        self.processortabwidgets["triggersiglev"].setValue(int(trigsigsliderval * 100))
-
-        self.processortabwidgets["triggerratiolabel"].setText(
-            'Trigger Signal Ratio (%): ' + str(np.round(self.triggerfftratio * 100)))  # 19
-        self.processortabwidgets["triggerratio"].setValue(int(self.triggerfftratio * 100))
-
-        self.profeditortabwidgets["useclimobottom"].setChecked(self.useclimobottom)
-        self.profeditortabwidgets["comparetoclimo"].setChecked(self.comparetoclimo)
-        self.profeditortabwidgets["overlayclimo"].setChecked(self.overlayclimo)
-
-        self.profeditortabwidgets["savefin"].setChecked(self.savefin)
-        self.profeditortabwidgets["savejjvv"].setChecked(self.savejjvv)
-        self.profeditortabwidgets["savebufr"].setChecked(self.savebufr)
-        self.profeditortabwidgets["saveprof"].setChecked(self.saveprof)
-        self.profeditortabwidgets["saveloc"].setChecked(self.saveloc)
-
-        self.profeditortabwidgets["useoceanbottom"].setChecked(self.useoceanbottom)
-        self.profeditortabwidgets["checkforgaps"].setChecked(self.checkforgaps)
-
-        self.profeditortabwidgets["profres"].setValue(self.profres)
-        self.profeditortabwidgets["smoothlev"].setValue(self.smoothlev)
-        self.profeditortabwidgets["maxstdev"].setValue(self.maxstdev)
-
-        #TODO add this for maxstdev
-
-        self.profeditortabwidgets["originatingcenter"].setValue(self.originatingcenter)
-        self.updateoriginatingcenter()
+        self.settingsdict["triggerfftratio"] = float(value) / 100
+        self.processortabwidgets["triggerratiolabel"].setText('Trigger Signal Ratio (%): ' + str(np.round(self.settingsdict["triggerfftratio"]*100)).ljust(4,'0'))
+        
+    
+        
+    
+        
 
     # =============================================================================
     #     TAB MANIPULATION OPTIONS, OTHER GENERAL FUNCTIONS
@@ -730,145 +690,141 @@ class RunSettings(QMainWindow):
 
 # SIGNAL SETUP HERE
 class SettingsSignals(QObject):
-    exported = pyqtSignal(bool,bool,bool,str,bool,bool,bool,bool,bool,bool,bool,float,float,float,float,float,bool,bool,
-                          bool,bool,bool,bool,bool,bool,bool,bool,float,float,float,int,str)
+    exported = pyqtSignal(dict)
     closed = pyqtSignal(bool)
 
 
 #Default settings for program
 def setdefaultsettings():
+    
+    settingsdict = {}
+    
     # processor preferences
-    autodtg = True  # auto determine profile date/time as system date/time on clicking "START"
-    autolocation = True #auto determine location with GPS
-    autoid = True #autopopulate platform ID
-    platformID = 'AFNNN'
-    savelog = True
-    saveedf = False
-    savewav = True
-    savesig = True
-    dtgwarn = True  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
-    renametabstodtg = True  # auto rename tab to dtg when loading profile editor
-    autosave = False  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
-    fftwindow = 0.3  # window to run FFT (in seconds)
-    minfftratio = 0.42  # minimum signal to noise ratio to ID data
-    minsiglev = 6.3E5  # minimum total signal level to receive data
+    settingsdict["autodtg"] = True  # auto determine profile date/time as system date/time on clicking "START"
+    settingsdict["autolocation"] = True #auto determine location with GPS
+    settingsdict["autoid"] = True #autopopulate platform ID
+    settingsdict["platformID"] = 'AFNNN'
+    settingsdict["savelog"] = True
+    settingsdict["saveedf"] = False
+    settingsdict["savewav"] = True
+    settingsdict["savesig"] = True
+    settingsdict["dtgwarn"] = True  # warn user if entered dtg is more than 12 hours old or after current system time (in future)
+    settingsdict["renametabstodtg"] = True  # auto rename tab to dtg when loading profile editor
+    settingsdict["autosave"] = False  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
+    settingsdict["fftwindow"] = 0.3  # window to run FFT (in seconds)
+    settingsdict["minfftratio"] = 0.42  # minimum signal to noise ratio to ID data
+    settingsdict["minsiglev"] = 6.3E5  # minimum total signal level to receive data
 
-    triggerfftratio = 0.8  # minimum signal to noise ratio to ID data
-    triggersiglev = 1E7  # minimum total signal level to receive data
+    settingsdict["triggerfftratio"] = 0.8  # minimum signal to noise ratio to ID data
+    settingsdict["triggersiglev"] = 1E7  # minimum total signal level to receive data
 
     #profeditorpreferences
-    useclimobottom = True  # use climatology to ID bottom strikes
-    overlayclimo = True  # overlay the climatology on the plot
-    comparetoclimo = True  # check for climatology mismatch and display result on plot
-    savefin = True  # file types to save
-    savejjvv = True
-    savebufr = True
-    saveprof = True
-    saveloc = True
-    useoceanbottom = True  # use NTOPO1 bathymetry data to ID bottom strikes
-    checkforgaps = True  # look for/correct gaps in profile due to false starts from VHF interference
-    smoothlev = 2  # Smoothing Window size (m)
-    profres = 1 #profile minimum vertical resolution (m)
-    maxstdev = 1 #profile standard deviation coefficient for despiker (autoQC)
-    originatingcenter = 62 #BUFR table code for NAVO
+    settingsdict["useclimobottom"] = True  # use climatology to ID bottom strikes
+    settingsdict["overlayclimo"] = True  # overlay the climatology on the plot
+    settingsdict["comparetoclimo"] = True  # check for climatology mismatch and display result on plot
+    settingsdict["savefin"] = True  # file types to save
+    settingsdict["savejjvv"] = True
+    settingsdict["savebufr"] = True
+    settingsdict["saveprof"] = True
+    settingsdict["saveloc"] = True
+    settingsdict["useoceanbottom"] = True  # use NTOPO1 bathymetry data to ID bottom strikes
+    settingsdict["checkforgaps"] = True  # look for/correct gaps in profile due to false starts from VHF interference
+    settingsdict["smoothlev"] = 2  # Smoothing Window size (m)
+    settingsdict["profres"] = 1 #profile minimum vertical resolution (m)
+    settingsdict["maxstdev"] = 1 #profile standard deviation coefficient for despiker (autoQC)
+    settingsdict["originatingcenter"] = 62 #BUFR table code for NAVO
 
-    comport = 'n' #default com port is none
+    settingsdict["comport"] = 'n' #default com port is none
+    
 
-    return (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
-        minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-        saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport)
+    return settingsdict
 
 
 #Read settings from txt file
 def readsettings(filename):
     try:
+        
+        settingsdict = {}
+        
         #read settings from file
         with open(filename) as file:
             line = file.readline()
-            autodtg = bool(line.strip().split()[1]) 
+            settingsdict["autodtg"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            autolocation = bool(line.strip().split()[1]) 
+            settingsdict["autolocation"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            autoid = bool(line.strip().split()[1]) 
+            settingsdict["autoid"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            platformID = str(line.strip().split()[1]) 
+            settingsdict["platformID"] = str(line.strip().split()[1]) 
             line = file.readline()
-            savelog = bool(line.strip().split()[1]) 
+            settingsdict["savelog"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            saveedf = bool(line.strip().split()[1]) 
+            settingsdict["saveedf"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            savewav = bool(line.strip().split()[1]) 
+            settingsdict["savewav"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            savesig = bool(line.strip().split()[1]) 
+            settingsdict["savesig"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            dtgwarn = bool(line.strip().split()[1]) 
+            settingsdict["dtgwarn"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            renametabstodtg = bool(line.strip().split()[1])
+            settingsdict["renametabstodtg"] = bool(line.strip().split()[1])
             line = file.readline() 
-            autosave = bool(line.strip().split()[1]) 
+            settingsdict["autosave"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            fftwindow = float(line.strip().split()[1]) 
+            settingsdict["fftwindow"] = float(line.strip().split()[1]) 
             line = file.readline()
-            minfftratio = float(line.strip().split()[1]) 
+            settingsdict["minfftratio"] = float(line.strip().split()[1]) 
             line = file.readline()
-            minsiglev = float(line.strip().split()[1]) 
+            settingsdict["minsiglev"] = float(line.strip().split()[1]) 
             line = file.readline()
-            triggerfftratio = float(line.strip().split()[1]) 
+            settingsdict["triggerfftratio"] = float(line.strip().split()[1]) 
             line = file.readline()
-            triggersiglev = float(line.strip().split()[1]) 
+            settingsdict["triggersiglev"] = float(line.strip().split()[1]) 
             line = file.readline()
-            useclimobottom = bool(line.strip().split()[1]) 
+            settingsdict["useclimobottom"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            overlayclimo = bool(line.strip().split()[1]) 
+            settingsdict["overlayclimo"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            comparetoclimo = bool(line.strip().split()[1]) 
+            settingsdict["comparetoclimo"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            savefin = bool(line.strip().split()[1]) 
+            settingsdict["savefin"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            savejjvv = bool(line.strip().split()[1]) 
+            settingsdict["savejjvv"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            savebufr = bool(line.strip().split()[1]) 
+            settingsdict["savebufr"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            saveprof = bool(line.strip().split()[1]) 
+            settingsdict["saveprof"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            saveloc = bool(line.strip().split()[1]) 
+            settingsdict["saveloc"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            useoceanbottom = bool(line.strip().split()[1]) 
+            settingsdict["useoceanbottom"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            checkforgaps = bool(line.strip().split()[1]) 
+            settingsdict["checkforgaps"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            smoothlev = float(line.strip().split()[1]) 
+            settingsdict["smoothlev"] = float(line.strip().split()[1]) 
             line = file.readline()
-            profres = float(line.strip().split()[1]) 
+            settingsdict["profres"] = float(line.strip().split()[1]) 
             line = file.readline()
-            maxstdev = float(line.strip().split()[1])
+            settingsdict["maxstdev"] = float(line.strip().split()[1])
             line = file.readline()
-            originatingcenter = int(line.strip().split()[1]) 
+            settingsdict["originatingcenter"] = int(line.strip().split()[1]) 
             line = file.readline()
-            comport = str(line.strip().split()[1]) 
+            settingsdict["comport"] = str(line.strip().split()[1]) 
+            
 
     #if settings file doesn't exist or is invalid, rewrites file with default settings
     except:
-        (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
-            minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-            saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport) = setdefaultsettings()
-
-        writesettings(filename, autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
-            minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-            saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport)
-
+        settingsdict = setdefaultsettings()
+        writesettings(filename, settingsdict)
         trace_error() #report issue
 
 
-    return (autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
-        minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-        saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport)
+    return settingsdict
 
 
 #Write settings from txt file
-def writesettings(filename,autodtg, autolocation, autoid, platformID, savelog, saveedf,savewav, savesig, dtgwarn, renametabstodtg, autosave, fftwindow, 
-    minfftratio, minsiglev, triggerfftratio, triggersiglev, useclimobottom, overlayclimo, comparetoclimo,savefin, savejjvv, savebufr, 
-    saveprof, saveloc, useoceanbottom, checkforgaps,smoothlev, profres, maxstdev, originatingcenter, comport):
+def writesettings(filename,settingsdict):
+    
 
     #overwrites file by deleting if it exists
     if path.exists(filename):
@@ -876,34 +832,38 @@ def writesettings(filename,autodtg, autolocation, autoid, platformID, savelog, s
 
     #writes settings to file
     with open(filename,'w') as file:
-        file.write('autodtg: '+str(autodtg) + '\n')
-        file.write('autolocation: '+str(autolocation) + '\n')
-        file.write('autoid: '+str(autoid) + '\n')
-        file.write('platformID: '+str(platformID) + '\n')
-        file.write('savelog: '+str(savelog) + '\n')
-        file.write('saveedf: '+str(saveedf) + '\n')
-        file.write('savewav: '+str(savewav) + '\n')
-        file.write('savesig: '+str(savesig) + '\n')
-        file.write('dtgwarn: '+str(dtgwarn) + '\n')
-        file.write('renametabstodtg: '+str(renametabstodtg) + '\n')
-        file.write('autosave: '+str(autosave) + '\n')
-        file.write('fftwindow: '+str(fftwindow) + '\n')
-        file.write('minfftratio: '+str(minfftratio) + '\n')
-        file.write('minsiglev: '+str(minsiglev) + '\n')
-        file.write('triggerfftratio: '+str(triggerfftratio) + '\n')
-        file.write('triggersiglev: '+str(triggersiglev) + '\n')
-        file.write('useclimobottom: '+str(useclimobottom) + '\n')
-        file.write('overlayclimo: '+str(overlayclimo) + '\n')
-        file.write('comparetoclimo: '+str(comparetoclimo) + '\n')
-        file.write('savefin: '+str(savefin) + '\n')
-        file.write('savejjvv: '+str(savejjvv) + '\n')
-        file.write('savebufr: '+str(savebufr) + '\n')
-        file.write('saveprof: '+str(saveprof) + '\n')
-        file.write('saveloc: '+str(saveloc) + '\n')
-        file.write('useoceanbottom: '+str(useoceanbottom) + '\n')
-        file.write('checkforgaps: '+str(checkforgaps) + '\n')
-        file.write('smoothlev: '+str(smoothlev) + '\n')
-        file.write('profres: '+str(profres) + '\n')
-        file.write('maxstdev: '+str(maxstdev) + '\n')
-        file.write('originatingcenter: '+str(originatingcenter) + '\n')
-        file.write('comport: '+str(comport) + '\n')
+        file.write('autodtg: '+str(settingsdict["autodtg"]) + '\n')
+        file.write('autolocation: '+str(settingsdict["autolocation"]) + '\n')
+        file.write('autoid: '+str(settingsdict["autoid"]) + '\n')
+        file.write('platformID: '+str(settingsdict["platformID"]) + '\n')
+        file.write('savelog: '+str(settingsdict["savelog"]) + '\n')
+        file.write('saveedf: '+str(settingsdict["saveedf"]) + '\n')
+        file.write('savewav: '+str(settingsdict["savewav"]) + '\n')
+        file.write('savesig: '+str(settingsdict["savesig"]) + '\n')
+        file.write('dtgwarn: '+str(settingsdict["dtgwarn"]) + '\n')
+        file.write('renametabstodtg: '+str(settingsdict["renametabstodtg"]) + '\n')
+        file.write('autosave: '+str(settingsdict["autosave"]) + '\n')
+        file.write('fftwindow: '+str(settingsdict["fftwindow"]) + '\n')
+        file.write('minfftratio: '+str(settingsdict["minfftratio"]) + '\n')
+        file.write('minsiglev: '+str(settingsdict["minsiglev"]) + '\n')
+        file.write('triggerfftratio: '+str(settingsdict["triggerfftratio"]) + '\n')
+        file.write('triggersiglev: '+str(settingsdict["triggersiglev"]) + '\n')
+        file.write('useclimobottom: '+str(settingsdict["useclimobottom"]) + '\n')
+        file.write('overlayclimo: '+str(settingsdict["overlayclimo"]) + '\n')
+        file.write('comparetoclimo: '+str(settingsdict["comparetoclimo"]) + '\n')
+        file.write('savefin: '+str(settingsdict["savefin"]) + '\n')
+        file.write('savejjvv: '+str(settingsdict["savejjvv"]) + '\n')
+        file.write('savebufr: '+str(settingsdict["savebufr"]) + '\n')
+        file.write('saveprof: '+str(settingsdict["saveprof"]) + '\n')
+        file.write('saveloc: '+str(settingsdict["saveloc"]) + '\n')
+        file.write('useoceanbottom: '+str(settingsdict["useoceanbottom"]) + '\n')
+        file.write('checkforgaps: '+str(settingsdict["checkforgaps"]) + '\n')
+        file.write('smoothlev: '+str(settingsdict["smoothlev"]) + '\n')
+        file.write('profres: '+str(settingsdict["profres"]) + '\n')
+        file.write('maxstdev: '+str(settingsdict["maxstdev"]) + '\n')
+        file.write('originatingcenter: '+str(settingsdict["originatingcenter"]) + '\n')
+        file.write('comport: '+str(settingsdict["comport"]) + '\n')
+        
+        
+
+        
