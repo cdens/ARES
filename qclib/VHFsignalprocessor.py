@@ -135,10 +135,12 @@ def timetodepth(time):
     depth = 1.52*time
     return depth
     
+    
 #convert frequency (Hz) to temperature (C)
 def freqtotemp(frequency):
     temp = (frequency - 1440)/36
     return temp
+    
 
 #function to run fft here
 def dofft(pcmdata,fs):
@@ -159,17 +161,20 @@ def dofft(pcmdata,fs):
     #limiting frequencies, converting data to ratio form
     ind = np.all((np.greater_equal(f,1300),np.less_equal(f,2800)),axis=0)
     f = f[ind]
+    
+    #maximum signal strength in band
+    maxsig = np.max(fftdata[ind]) 
 
-    maxsig = np.max(fftdata[ind]) #maximum signal strength in band
-
-    #getting fft data ratio (sig_inband/maxsig_all)
-    maxf_all = np.max(fftdata) #max signal strength
+    #ratio maximum signal in band to max signal total (SNR)
+    maxf_all = np.max(fftdata) #max signal strength for entire spectrum
     fftdata = fftdata[ind]/maxf_all
-
-    freq = f[np.argmax(fftdata)] #frequency of max signal within band
     maxratio = np.max(fftdata) #FFT ratio (sig_inband/sig_all) for max freq in band
+    
+    #frequency of max signal within band (AXBT-transmitted frequency)
+    freq = f[np.argmax(fftdata)] 
 
     return freq, maxsig, maxratio
+    
     
 #table lookup for VHF channels and frequencies
 def channelandfrequencylookup(value,direction):
@@ -279,7 +284,7 @@ class ThreadProcessor(QRunnable):
             
             # initialize audio stream data variables
             self.f_s = 64000  # default value
-            self.audiostream = [0] * 1 * self.f_s #initializes the buffer with 1 second of zeros
+            self.audiostream = [0] * 2 * self.f_s #initializes the buffer with 2 seconds of zeros
 
             # saves WiNRADIO DLL/API library
             self.wrdll = wrdll
@@ -349,8 +354,7 @@ class ThreadProcessor(QRunnable):
             else:
                 timemodule.sleep(0.3)  # gives the buffer time to populate
 
-            self.audiostream.extend([0] * 64000)
-
+                
         else: #if source is an audio file
             #configuring sample times for the audio file
             self.alltimes = np.arange(0, len(self.audiostream), 1) / self.f_s

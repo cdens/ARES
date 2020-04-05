@@ -249,18 +249,21 @@ class RunProgram(QMainWindow):
 
     #loads climatology and bathymetry data 
     def loaddata(self):
-        climodata = sio.loadmat('qcdata/climo/LevitusClimo.mat')
+        climodata = sio.loadmat('qcdata/climo/GDEM_Climo.mat')
         self.climodata = {}
         self.climodata["lon"] =  climodata['X'][:, 0]
         self.climodata["lat"] = climodata['Y'][:, 0]
         self.climodata["depth"] = climodata['Z'][:, 0]
-        self.climodata["temp_climo_gridded"] = climodata['temp']
+        self.climodata["temp"] = climodata['temp']
+        self.climodata["stdev"] = climodata['stdev']
+        del climodata
 
         bathydata = sio.loadmat('qcdata/bathy/ETOPO1_bathymetry.mat')
         self.bathymetrydata = {}
         self.bathymetrydata['x']= bathydata['x'][:,0]
         self.bathymetrydata['y'] = bathydata['y'][:,0]
         self.bathymetrydata['z'] = bathydata['z']
+        del bathydata
 
     #builds file menu for GUI
     def buildmenu(self):
@@ -1151,7 +1154,7 @@ class RunProgram(QMainWindow):
             # pull ocean depth from ETOPO1 Grid-Registered Ice Sheet based global relief dataset
             # Data source: NOAA-NGDC: https://www.ngdc.noaa.gov/mgg/global/global.html
             oceandepth, exportlat, exportlon, exportrelief = oci.getoceandepth(lat, lon, 6, self.bathymetrydata)
-
+            
             #getting climatology
             climotemps,climodepths,climotempfill,climodepthfill = oci.getclimatologyprofile(lat,lon,month,self.climodata)
 
@@ -1342,6 +1345,7 @@ class RunProgram(QMainWindow):
             climotempfill = alltabdata[curtabstr]["profdata"]["climotempfill"]
             climodepthfill = alltabdata[curtabstr]["profdata"]["climodepthfill"]
             oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
+            
 
             # resetting depth correction data
             sfc_correction = 0
@@ -1361,6 +1365,14 @@ class RunProgram(QMainWindow):
                 temperature = depth = matchclimo = climobottomcutoff = 0
                 trace_error()
                 self.posterror("Error raised in automatic profile QC")
+                
+            print(f"Ocean Depth: {oceandepth}")
+            print(f"Climo Temps: {climotemps}")
+            print(f"Climo Depths: {climodepths}")
+            print(f"QC Temps: {temperature}")
+            print(f"QC Depths: {depth}")
+            print(f"matchclimo: {matchclimo}")
+            print(f"climobottomcutoff: {climobottomcutoff}")
 
             # limit profile depth by climatology cutoff, ocean depth cutoff
             maxdepth = np.ceil(np.max(depth))
@@ -1594,57 +1606,60 @@ class RunProgram(QMainWindow):
             #current t/d profile
             tempplot = alltabdata[curtabstr]["profdata"]["temp_qc"].copy()
             depthplot = alltabdata[curtabstr]["profdata"]["depth_qc"].copy()
+            
+            if len(tempplot) > 0 and len(depthplot) > 0:
 
-            #new depth correction settings
-            sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
-            maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
-            depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
-
-            if depthdelay > 0: #shifitng entire profile up if necessary
-                depthplot = depthplot - depthdelay
-                ind = depthplot >= 0
-                depthplot = depthplot[ind]
-                tempplot = tempplot[ind]
-
-            if sfcdepth > 0: #replacing surface temperatures
-                sfctemp = np.interp(sfcdepth,depthplot,tempplot)
-                ind = depthplot <= sfcdepth
-                tempplot[ind] = sfctemp
-
-            if maxdepth < np.max(depthplot): #truncating base of profile
-                ind = depthplot <= maxdepth
-                tempplot = tempplot[ind]
-                depthplot = depthplot[ind]
-
-            #replacing t/d profile values
-            alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
-            alltabdata[curtabstr]["profdata"]["depth_plot"] = depthplot
-
-            #re-plotting
-            del alltabdata[curtabstr]["ProfAx"].lines[-1]
-            alltabdata[curtabstr]["ProfAx"].plot(tempplot,depthplot,'r',linewidth=2,label='QC')
-            alltabdata[curtabstr]["ProfCanvas"].draw()
-
-            #Replace drop info
-            lon = alltabdata[curtabstr]["profdata"]["lon"]
-            lat = alltabdata[curtabstr]["profdata"]["lat"]
-            oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
-            if lon >= 0: #prepping coordinate string
-                ewhem = ' \xB0E'
-            else:
-                ewhem = ' \xB0W'
-            if lat >= 0:
-                nshem = ' \xB0N'
-            else:
-                nshem = ' \xB0S'
-            proftxt = ('Profile Data: ' + '\n'  # profile data
-                       + str(abs(round(lon, 3))) + ewhem + ', ' + str(abs(round(lat, 3))) + nshem + '\n'
-                       + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
-                       + 'QC Profile Depth: ' + str(int(maxdepth)) + ' m' + '\n'
-                       + 'QC SFC Correction: ' + str(sfcdepth) + ' m' + '\n'
-                       + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
-                       + '# Datapoints: ' + str(len(tempplot)) )
-            alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
+                #new depth correction settings
+                sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
+                maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
+                depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
+    
+                if depthdelay > 0: #shifitng entire profile up if necessary
+                    depthplot = depthplot - depthdelay
+                    ind = depthplot >= 0
+                    depthplot = depthplot[ind]
+                    tempplot = tempplot[ind]
+    
+                if sfcdepth > 0: #replacing surface temperatures
+                    sfctemp = np.interp(sfcdepth,depthplot,tempplot)
+                    ind = depthplot <= sfcdepth
+                    tempplot[ind] = sfctemp
+    
+                if maxdepth < np.max(depthplot): #truncating base of profile
+                    ind = depthplot <= maxdepth
+                    tempplot = tempplot[ind]
+                    depthplot = depthplot[ind]
+    
+                #replacing t/d profile values
+                alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
+                alltabdata[curtabstr]["profdata"]["depth_plot"] = depthplot
+    
+                #re-plotting
+                del alltabdata[curtabstr]["ProfAx"].lines[-1]
+                alltabdata[curtabstr]["ProfAx"].plot(tempplot,depthplot,'r',linewidth=2,label='QC')
+                alltabdata[curtabstr]["ProfCanvas"].draw()
+    
+                #Replace drop info
+                lon = alltabdata[curtabstr]["profdata"]["lon"]
+                lat = alltabdata[curtabstr]["profdata"]["lat"]
+                oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
+                if lon >= 0: #prepping coordinate string
+                    ewhem = ' \xB0E'
+                else:
+                    ewhem = ' \xB0W'
+                if lat >= 0:
+                    nshem = ' \xB0N'
+                else:
+                    nshem = ' \xB0S'
+                proftxt = ('Profile Data: ' + '\n'  # profile data
+                           + str(abs(round(lon, 3))) + ewhem + ', ' + str(abs(round(lat, 3))) + nshem + '\n'
+                           + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
+                           + 'QC Profile Depth: ' + str(int(maxdepth)) + ' m' + '\n'
+                           + 'QC SFC Correction: ' + str(sfcdepth) + ' m' + '\n'
+                           + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
+                           + '# Datapoints: ' + str(len(tempplot)) )
+                alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
+                
         except Exception:
             trace_error()
             self.posterror("Failed to update profile!")

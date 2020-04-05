@@ -64,14 +64,19 @@ def runningsmooth(data,halfwindow):
 #pulling climatology profile, creating polygon for shaded "climo match" region
 def getclimatologyprofile(lat,lon,month,climodata):
 
-    #pulling climatology data
+    #accessing climatology grid data
     clon = climodata["lon"]
     clat = climodata["lat"]
     depth = climodata["depth"]
-    temp_climo_gridded = climodata["temp_climo_gridded"]
-
-    #get current month of climo
-    temp_climo_curmonth = temp_climo_gridded[:,:,:,month-1]
+    
+    #pulling current month's temperatures + stdevs, converting to int64, correcting scale
+    #TODO: add lat/lon indexing so it only pulls a small spatial subset to reduce size
+    cmonthtemps = climodata["temp"][:,:,:,month-1].astype('int64')/100
+    cmonthdevs = climodata["stdev"][:,:,:,month-1].astype('int64')/100
+    
+    #correting fill values to NaN
+    cmonthtemps[cmonthtemps == -320] = np.NaN
+    cmonthdevs[cmonthdevs == 2.55] = np.NaN
 
     #convert profile longitude from degW<0 to degW>180 to match climo arrangement
     if lon < 0:
@@ -88,10 +93,10 @@ def getclimatologyprofile(lat,lon,month,climodata):
         lat = 89.5
 
     #interpolate to current latitude/longitude
-    climotemps = sint.interpn((depth,clat, clon), temp_climo_curmonth, (depth,lat, lon))
-
-    #introduce error range for fill- should be +/- 1 standard deviation when standard deviation data is available
-    climotemperrors = np.array([3.,3.,3.,3.,3.,3.,3.,3.,3.,3.,2.,2.,2.,2.,1.,1.,1.,1.,1.])
+    climotemps = sint.interpn((depth,clat, clon), cmonthtemps, (depth,lat, lon))
+    
+    #error margin for shading is +/- 1 standard deviation
+    climotemperrors = sint.interpn((depth,clat, clon), cmonthdevs, (depth,lat, lon))
     
     #generating fill vectors
     tempfill = np.append(climotemps-climotemperrors,np.flip(climotemps+climotemperrors))
@@ -99,6 +104,7 @@ def getclimatologyprofile(lat,lon,month,climodata):
     
     return [climotemps,depth,tempfill,depthfill]
 
+    
 
 #comparing current profile to climatology
 def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climodepthfill):
@@ -172,25 +178,24 @@ def getoceandepth(lat,lon,dcoord,bathydata):
     #pulling bathymetry data
     clon = bathydata['x']
     clat = bathydata['y']
-    z = bathydata['z']
-
-    #interpolate maximum ocean depth
-    maxoceandepth = -sint.interpn((clon,clat),z,(lon,lat))
-    maxoceandepth = maxoceandepth[0]
     
     #setting indices/pulling data within the wanted region
     isnearlatind = np.less_equal(clat,lat+dcoord+3)*np.greater_equal(clat,lat-dcoord-3)
     isnearlonind = np.less_equal(clon,lon+dcoord+3)*np.greater_equal(clon,lon-dcoord-3)
     exportlat = clat[isnearlatind]
     exportlon = clon[isnearlonind]
-    exportrelief = z[:,isnearlatind]
-    exportrelief = exportrelief[isnearlonind,:]
+    exportrelief = bathydata['z'][:,isnearlatind] #have to pull one index at a time (why Python?...)
+    exportrelief = exportrelief[isnearlonind,:].astype('int64')
+    
+    #interpolate maximum ocean depth
+    maxoceandepth = -sint.interpn((exportlon,exportlat),exportrelief,(lon,lat))
+    maxoceandepth = maxoceandepth[0]
     
     num = 2 #adjust this to pull every n elements for topographic data
     exportlat = exportlat[::num]
     exportlon = exportlon[::num]
     exportrelief = exportrelief[::num,::num]
-    exportrelief = exportrelief.transpose()
+    exportrelief = exportrelief.transpose() #transpose matrix
     
     return maxoceandepth,exportlat,exportlon,exportrelief
     

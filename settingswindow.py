@@ -148,14 +148,14 @@ class RunSettings(QMainWindow):
 
         sigsliderval = np.log10(self.settingsdict["minsiglev"])
         self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (log[x]): ' + str(np.round(self.settingsdict["sigsliderval"], 2)).ljust(4, '0'))  # 17
-        self.processortabwidgets["fftsiglev"].setValue(int(self.settingsdict["sigsliderval"] * 100))
+        self.processortabwidgets["fftsiglev"].setValue(int(sigsliderval * 100))
 
         self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.settingsdict["minfftratio"] * 100)))  # 19
         self.processortabwidgets["fftratio"].setValue(int(self.settingsdict["minfftratio"] * 100))
 
         trigsigsliderval = np.log10(self.settingsdict["triggersiglev"])
         self.processortabwidgets["triggersiglevlabel"].setText(
-            'Trigger Signal Level (log[x]): ' + str(np.round(self.settingsdict["trigsigsliderval"], 2)).ljust(4, '0'))  # 17
+            'Trigger Signal Level (log[x]): ' + str(np.round(trigsigsliderval, 2)).ljust(4, '0'))  # 17
         self.processortabwidgets["triggersiglev"].setValue(int(self.settingsdict["trigsigsliderval"] * 100))
 
         self.processortabwidgets["triggerratiolabel"].setText(
@@ -744,9 +744,9 @@ def setdefaultsettings():
     settingsdict["saveloc"] = True
     settingsdict["useoceanbottom"] = True  # use NTOPO1 bathymetry data to ID bottom strikes
     settingsdict["checkforgaps"] = True  # look for/correct gaps in profile due to false starts from VHF interference
-    settingsdict["smoothlev"] = 2  # Smoothing Window size (m)
+    settingsdict["smoothlev"] = 8  # Smoothing Window size (m)
     settingsdict["profres"] = 1 #profile minimum vertical resolution (m)
-    settingsdict["maxstdev"] = 1 #profile standard deviation coefficient for despiker (autoQC)
+    settingsdict["maxstdev"] = 1.5 #profile standard deviation coefficient for despiker (autoQC)
     settingsdict["originatingcenter"] = 62 #BUFR table code for NAVO
 
     settingsdict["comport"] = 'n' #default com port is none
