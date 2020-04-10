@@ -146,17 +146,17 @@ class RunSettings(QMainWindow):
         self.processortabwidgets["fftwindowlabel"].setText('FFT Window (s): ' + str(self.settingsdict["fftwindow"]))  # 15
         self.processortabwidgets["fftwindow"].setValue(int(self.settingsdict["fftwindow"] * 100))
 
-        sigsliderval = np.log10(self.settingsdict["minsiglev"])
-        self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (log[x]): ' + str(np.round(self.settingsdict["sigsliderval"], 2)).ljust(4, '0'))  # 17
-        self.processortabwidgets["fftsiglev"].setValue(int(sigsliderval * 100))
+        #sigsliderval = np.log10(self.settingsdict["minsiglev"])
+        self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (log[x]): ' + str(np.round(self.settingsdict["minsiglev"], 2)).ljust(4, '0'))  # 17
+        self.processortabwidgets["fftsiglev"].setValue(int(self.settingsdict["minsiglev"]*10))
 
         self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.settingsdict["minfftratio"] * 100)))  # 19
         self.processortabwidgets["fftratio"].setValue(int(self.settingsdict["minfftratio"] * 100))
 
-        trigsigsliderval = np.log10(self.settingsdict["triggersiglev"])
+        #trigsigsliderval = np.log10(self.settingsdict["triggersiglev"])
         self.processortabwidgets["triggersiglevlabel"].setText(
-            'Trigger Signal Level (log[x]): ' + str(np.round(trigsigsliderval, 2)).ljust(4, '0'))  # 17
-        self.processortabwidgets["triggersiglev"].setValue(int(self.settingsdict["trigsigsliderval"] * 100))
+            'Trigger Signal Level (log[x]): ' + str(np.round(self.settingsdict["triggersiglev"], 2)).ljust(4, '0'))  # 17
+        self.processortabwidgets["triggersiglev"].setValue(int(self.settingsdict["triggersiglev"]*10))
 
         self.processortabwidgets["triggerratiolabel"].setText(
             'Trigger Signal Ratio (%): ' + str(np.round(self.settingsdict["triggerfftratio"] * 100)))  # 19
@@ -200,10 +200,10 @@ class RunSettings(QMainWindow):
         self.settingsdict["autosave"] = self.processortabwidgets["autosave"].isChecked()
 
         self.settingsdict["fftwindow"] = float(self.processortabwidgets["fftwindow"].value())/100
-        self.settingsdict["minsiglev"] = 10**(float(self.processortabwidgets["fftsiglev"].value())/100)
+        self.settingsdict["minsiglev"] = float(self.processortabwidgets["fftsiglev"].value())/10
         self.settingsdict["minfftratio"] = float(self.processortabwidgets["fftratio"].value())/100
 
-        self.settingsdict["triggersiglev"] = 10**(float(self.processortabwidgets["triggersiglev"].value())/100)
+        self.settingsdict["triggersiglev"] = float(self.processortabwidgets["triggersiglev"].value())/10
         self.settingsdict["triggerfftratio"] = float(self.processortabwidgets["triggerratio"].value())/100
 
         self.settingsdict["platformID"] = self.processortabwidgets["IDedit"].text()
@@ -285,12 +285,12 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["fftwindow"].setMaximum(100)
             self.processortabwidgets["fftwindow"].valueChanged[int].connect(self.changefftwindow)
 
-            sigsliderval = np.log10(self.settingsdict["minsiglev"])
-            self.processortabwidgets["fftsiglevlabel"] = QLabel('Minimum Signal Level (log[x]): ' + str(np.round(sigsliderval,2)).ljust(4,'0'))  # 17
+            #sigsliderval = np.log10()
+            self.processortabwidgets["fftsiglevlabel"] = QLabel('Minimum Signal Level (log[x]): ' + str(np.round(self.settingsdict["minsiglev"],2)).ljust(4,'0'))  # 17
             self.processortabwidgets["fftsiglev"] = QSlider(Qt.Horizontal)  # 18
             self.processortabwidgets["fftsiglev"].setMinimum(400)
             self.processortabwidgets["fftsiglev"].setMaximum(900)
-            self.processortabwidgets["fftsiglev"].setValue(int(sigsliderval * 100))
+            self.processortabwidgets["fftsiglev"].setValue(int(self.settingsdict["minsiglev"] * 10))
             self.processortabwidgets["fftsiglev"].valueChanged[int].connect(self.changefftsiglev)
 
             self.processortabwidgets["fftratiolabel"] = QLabel('Minimum Signal Ratio (%): ' + str(np.round(self.settingsdict["minfftratio"]*100)).ljust(4,'0'))  # 19
@@ -300,13 +300,13 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["fftratio"].setMaximum(100)
             self.processortabwidgets["fftratio"].valueChanged[int].connect(self.changefftratio)
 
-            trigsigsliderval = np.log10(self.settingsdict["triggersiglev"])
+            #trigsigsliderval = np.log10(self.settingsdict["triggersiglev"])
             self.processortabwidgets["triggersiglevlabel"] = QLabel(
-                'Trigger Signal Level (log[x]): ' + str(np.round(trigsigsliderval, 2)).ljust(4, '0'))  # 17
+                'Trigger Signal Level (log[x]): ' + str(np.round(self.settingsdict["triggersiglev"], 2)).ljust(4, '0'))  # 17
             self.processortabwidgets["triggersiglev"] = QSlider(Qt.Horizontal)  # 18
             self.processortabwidgets["triggersiglev"].setMinimum(400)
             self.processortabwidgets["triggersiglev"].setMaximum(900)
-            self.processortabwidgets["triggersiglev"].setValue(int(trigsigsliderval * 100))
+            self.processortabwidgets["triggersiglev"].setValue(int(self.settingsdict["triggersiglev"] * 10))
             self.processortabwidgets["triggersiglev"].valueChanged[int].connect(self.changetriggersiglev)
 
             self.processortabwidgets["triggerratiolabel"] = QLabel(
@@ -649,18 +649,16 @@ class RunSettings(QMainWindow):
         self.processortabwidgets["fftwindowlabel"].setText('FFT Window (s): ' +str(self.settingsdict["fftwindow"]).ljust(4,'0'))
 
     def changefftsiglev(self, value):
-        sigsliderval = float(value) / 100
-        self.settingsdict["minsiglev"] = 10**sigsliderval
-        self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (log[x]): ' + str(np.round(sigsliderval,2)).ljust(4,'0'))
+        self.settingsdict["minsiglev"] = float(value) / 10
+        self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (log[x]): ' + str(np.round(self.settingsdict["minsiglev"],2)).ljust(4,'0'))
 
     def changefftratio(self, value):
         self.settingsdict["minfftratio"] = float(value) / 100
         self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.minfftratio*100)).ljust(4,'0'))
 
     def changetriggersiglev(self, value):
-        trigsigsliderval = float(value) / 100
-        self.settingsdict["triggersiglev"] = 10**trigsigsliderval
-        self.processortabwidgets["triggersiglevlabel"].setText('Trigger Signal Level (log[x]): ' + str(np.round(trigsigsliderval,2)).ljust(4,'0'))
+        self.settingsdict["triggersiglev"] = float(value) / 10
+        self.processortabwidgets["triggersiglevlabel"].setText('Trigger Signal Level (log[x]): ' + str(np.round(self.settingsdict["triggersiglev"],2)).ljust(4,'0'))
 
     def changetriggerratio(self, value):
         self.settingsdict["triggerfftratio"] = float(value) / 100
@@ -728,10 +726,10 @@ def setdefaultsettings():
     settingsdict["autosave"] = False  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
     settingsdict["fftwindow"] = 0.3  # window to run FFT (in seconds)
     settingsdict["minfftratio"] = 0.42  # minimum signal to noise ratio to ID data
-    settingsdict["minsiglev"] = 6.3E5  # minimum total signal level to receive data
+    settingsdict["minsiglev"] = 58  # minimum total signal level to receive data
 
     settingsdict["triggerfftratio"] = 0.8  # minimum signal to noise ratio to ID data
-    settingsdict["triggersiglev"] = 1E7  # minimum total signal level to receive data
+    settingsdict["triggersiglev"] = 70  # minimum total signal level to receive data
 
     #profeditorpreferences
     settingsdict["useclimobottom"] = True  # use climatology to ID bottom strikes

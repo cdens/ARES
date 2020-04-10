@@ -242,9 +242,9 @@ class ThreadProcessor(QRunnable):
         #FFT thresholds
         self.fftwindow = fftwindow
         self.minfftratio = minfftratio
-        self.minsiglev = minsiglev
+        self.minsiglev = 10 ** (minsiglev/10) #convert from dB to bits
         self.triggerfftratio = triggerfftratio
-        self.triggersiglev = triggersiglev
+        self.triggersiglev = 10 ** (triggersiglev/10) #convert from dB to bits
 
         #output file names
         self.txtfilename = tempdir + slash + "sigdata_" + str(self.curtabnum) + '.txt'
@@ -499,14 +499,16 @@ class ThreadProcessor(QRunnable):
 
     @pyqtSlot(float,float,int,float,int)
     def changethresholds(self,fftwindow,minfftratio,minsiglev,triggerfftratio,triggersiglev): #update data thresholds for FFT
+        print(f"Received Thresholds: {fftwindow}, {minfftratio}, {minsiglev}, {triggerfftratio}, {triggersiglev}")
         if fftwindow <= 1:
             self.fftwindow = fftwindow
         else:
             self.fftwindow = 1
         self.minfftratio = minfftratio
-        self.minsiglev = minsiglev
+        self.minsiglev = 10 ** (minsiglev/10) #convert from dB to bits
         self.triggerfftratio = triggerfftratio
-        self.triggersiglev = triggersiglev        
+        self.triggersiglev = 10 ** (triggersiglev/10) #convert from dB to bits       
+        
 
 #initializing signals for data to be passed back to main loop
 class ThreadProcessorSignals(QObject): 

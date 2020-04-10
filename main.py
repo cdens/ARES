@@ -337,6 +337,9 @@ class RunProgram(QMainWindow):
         #save settings to file
         swin.writesettings(self.settingsfile, self.settingsdict)
         
+        #update fft settings for actively processing tabs
+        self.updatefftsettings()
+        
 
 
     #slot to update main GUI loop if the preferences window has been closed
@@ -460,9 +463,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["idtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             
             #should be 19 entries 
-            widgetorder = ["datasourcetitle","refreshdataoptions","datasource","channeltitle","freqtitle","vhfchannel","vhffreq",
-            "startprocessing","stopprocessing","processprofile","datetitle","dateedit","timetitle","timeedit","lattitle","latedit",
-            "lontitle","lonedit","idtitle","idedit"]
+            widgetorder = ["datasourcetitle","refreshdataoptions","datasource","channeltitle","freqtitle","vhfchannel","vhffreq","startprocessing","stopprocessing","processprofile","datetitle","dateedit","timetitle","timeedit","lattitle","latedit","lontitle","lonedit","idtitle","idedit"]
             wrows     = [1,1,2,3,4,3,4,5,5,6,1,1,2,2,3,3,4,4,5,5]
             wcols     = [2,3,2,2,2,3,3,2,3,3,4,5,4,5,4,5,4,5,4,5]
             wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
