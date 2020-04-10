@@ -454,7 +454,7 @@ class ThreadProcessor(QRunnable):
                 cdepth = np.round(cdepth, 1)
                 cfreq = np.round(cfreq, 2)
                 ctime = np.round(ctime, 1)
-                actmax = np.round(np.log10(actmax),2)
+                actmax = np.round(10*np.log10(actmax),2)
                 ratiomax = np.round(100*ratiomax,1)
                 sigstrength = np.round(sigstrength, 2)
                 self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, cfreq, sigstrength, actmax, ratiomax, ctime, i)
