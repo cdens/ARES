@@ -35,7 +35,7 @@
 #                   data used in makeAXBTplots.makelocationplot()
 #
 # =============================================================================
-
+import scipy.io as sio
 import numpy as np
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
@@ -63,34 +63,31 @@ def runningsmooth(data,halfwindow):
 
 #pulling climatology profile, creating polygon for shaded "climo match" region
 def getclimatologyprofile(lat,lon,month,climodata):
-
-    #accessing climatology grid data
-    clon = climodata["lon"]
-    clat = climodata["lat"]
-    depth = climodata["depth"]
     
-    #pulling current month's temperatures + stdevs, converting to int64, correcting scale
-    #TODO: add lat/lon indexing so it only pulls a small spatial subset to reduce size
-    cmonthtemps = climodata["temp"][:,:,:,month-1].astype('int64')/100
-    cmonthdevs = climodata["stdev"][:,:,:,month-1].astype('int64')/100
-    
-    #correting fill values to NaN
-    cmonthtemps[cmonthtemps == -320] = np.NaN
-    cmonthdevs[cmonthdevs == 2.55] = np.NaN
-
     #convert profile longitude from degW<0 to degW>180 to match climo arrangement
     if lon < 0:
         lon = 360 + lon
         
-    #making sure coordinates are within interpolation area
-    if lon < 0.5:
-        lon = 0.5
-    elif lon > 359.5:
-        lon = 359.5
-    if lat < -89.5:
-        lat = -89.5
-    elif lat > 89.5:
-        lat = 89.5
+    #id relevant lon/lat
+    flon = np.floor(lon/10)*10
+    flat = np.floor(lat/10)*10
+    
+    #read file
+    curclimodata = sio.loadmat(f"qcdata/climo/c_M{int(month)}_N{int(flat)}_E{int(flon)}.mat")
+    
+    #accessing climatology grid data
+    clon = flon + climodata['vals']
+    clat = flat + climodata['vals']
+    depth = climodata["depth"]
+    
+    #pulling current month's temperatures + stdevs, converting to int64, correcting scale
+    #TODO: add lat/lon indexing so it only pulls a small spatial subset to reduce size
+    cmonthtemps = curclimodata["temp"].astype('int64')/100
+    cmonthdevs = curclimodata["stdev"].astype('int64')/100
+    
+    #correting fill values to NaN
+    cmonthtemps[cmonthtemps == -320] = np.NaN
+    cmonthdevs[cmonthdevs == 2.55] = np.NaN
 
     #interpolate to current latitude/longitude
     climotemps = sint.interpn((depth,clat, clon), cmonthtemps, (depth,lat, lon))
@@ -103,8 +100,7 @@ def getclimatologyprofile(lat,lon,month,climodata):
     depthfill = np.append(depth,np.flip(depth))
     
     return [climotemps,depth,tempfill,depthfill]
-
-    
+        
 
 #comparing current profile to climatology
 def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climodepthfill):
@@ -175,17 +171,32 @@ def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climod
 #Data source: NOAA-NGDC: https://www.ngdc.noaa.gov/mgg/global/global.html
 def getoceandepth(lat,lon,dcoord,bathydata):
 
-    #pulling bathymetry data
-    clon = bathydata['x']
-    clat = bathydata['y']
+    #get longitudes and latitudes to pull- the +/- 3 adds a little leeway so no white space appears on the plot after it is resized to correct for latitudinal contraction + plot aspect ratio
+    lonstopull = [d+lon for d in range(-dcoord-3,dcoord+3+1)]
+    latstopull = [d+lat for d in range(-dcoord-3,dcoord+3+1)]
     
-    #setting indices/pulling data within the wanted region
-    isnearlatind = np.less_equal(clat,lat+dcoord+3)*np.greater_equal(clat,lat-dcoord-3)
-    isnearlonind = np.less_equal(clon,lon+dcoord+3)*np.greater_equal(clon,lon-dcoord-3)
-    exportlat = clat[isnearlatind]
-    exportlon = clon[isnearlonind]
-    exportrelief = bathydata['z'][:,isnearlatind] #have to pull one index at a time (why Python?...)
-    exportrelief = exportrelief[isnearlonind,:].astype('int64')
+    #generate exportlon and exportlat
+    exportlon = []
+    for l in lonstopull:
+        exportlon.extend(l + bathydata["vals"])
+    exportlat = []
+    for l in latstopull:
+        exportlat.extend(l + bathydata["vals"])
+    
+    #generate exportrelief
+    nv = len(bathydata["vals"])
+    exportrelief = np.NaN*np.ones((nv*len(lonstopull),nv*len(latstopull))) #preallocate with NaN
+    
+    for (i,clon) in enumerate(lonstopull):
+        if clon >= 180:
+            clon = clon - 360
+        elif clon < -180:
+            clon = clon + 360
+        
+        for (j,clat) in enumerate(latstopull):
+            if clat >= -90 and clat < 90:
+                curbathydata = sio.loadmat(f"qcdata/bathy/b_N{int(clat)}_E{int(clon)}.mat")
+                exportrelief[i*nv:(i+1)*nv,j*nv:(j+1)*nv] = curbathydata["z"].astype('float64') #int16 -> float64
     
     #interpolate maximum ocean depth
     maxoceandepth = -sint.interpn((exportlon,exportlat),exportrelief,(lon,lat))
@@ -198,4 +209,5 @@ def getoceandepth(lat,lon,dcoord,bathydata):
     exportrelief = exportrelief.transpose() #transpose matrix
     
     return maxoceandepth,exportlat,exportlon,exportrelief
+    
     

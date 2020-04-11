@@ -139,7 +139,7 @@ class RunProgram(QMainWindow):
         try:
             self.initUI() #creates GUI window
             self.buildmenu() #Creates interactive menu, options to create tabs and start autoQC
-            self.loaddata() #loads climo and bathy data into program
+            self.loaddata() #loads climo and bathy data into program first if using the full datasets
             self.makenewprocessortab() #Opens first tab
 
         except Exception:
@@ -201,7 +201,7 @@ class RunProgram(QMainWindow):
         #setting up dictionary to store data for each tab
         global alltabdata
         alltabdata = {}
-
+        
         #loading default program settings
         self.settingsdict = swin.readsettings(self.settingsfile)
         self.settingsdict["comports"],self.settingsdict["comportdetails"] = gps.listcomports() #pulling available port info from OS
@@ -249,22 +249,19 @@ class RunProgram(QMainWindow):
 
     #loads climatology and bathymetry data 
     def loaddata(self):
-        climodata = sio.loadmat('qcdata/climo/GDEM_Climo.mat')
         self.climodata = {}
-        self.climodata["lon"] =  climodata['X'][:, 0]
-        self.climodata["lat"] = climodata['Y'][:, 0]
-        self.climodata["depth"] = climodata['Z'][:, 0]
-        self.climodata["temp"] = climodata['temp']
-        self.climodata["stdev"] = climodata['stdev']
-        del climodata
-
-        bathydata = sio.loadmat('qcdata/bathy/ETOPO1_bathymetry.mat')
         self.bathymetrydata = {}
-        self.bathymetrydata['x']= bathydata['x'][:,0]
-        self.bathymetrydata['y'] = bathydata['y'][:,0]
-        self.bathymetrydata['z'] = bathydata['z']
-        del bathydata
-
+        
+        climodata = sio.loadmat('qcdata/climo/indices.mat')
+        self.climodata["vals"] = climodata['vals'][:, 0]
+        self.climodata["depth"] = climodata['Z'][:, 0]
+        
+        bathydata = sio.loadmat('qcdata/bathy/indices.mat')
+        self.bathymetrydata["vals"] = bathydata['vals'][:, 0]
+            
+        del climodata, bathydata
+        
+        
     #builds file menu for GUI
     def buildmenu(self):
         #setting up primary menu bar
@@ -340,7 +337,6 @@ class RunProgram(QMainWindow):
         #update fft settings for actively processing tabs
         self.updatefftsettings()
         
-
 
     #slot to update main GUI loop if the preferences window has been closed
     @pyqtSlot(bool)
@@ -1358,22 +1354,13 @@ class RunProgram(QMainWindow):
 
             try:
                 # running QC, comparing to climo
-                temperature, depth = qc.autoqc(rawtemperature, rawdepth, sfc_correction, maxdepth, self.settingsdict["smoothlev"],
-                                               self.settingsdict["profres"], self.settingsdict["maxstdev"], self.settingsdict["checkforgaps"])
-                matchclimo, climobottomcutoff = oci.comparetoclimo(temperature, depth, climotemps, climodepths,
-                                                                   climotempfill, climodepthfill)
+                temperature, depth = qc.autoqc(rawtemperature, rawdepth, sfc_correction, maxdepth, self.settingsdict["smoothlev"],self.settingsdict["profres"], self.settingsdict["maxstdev"], self.settingsdict["checkforgaps"])
+                matchclimo, climobottomcutoff = oci.comparetoclimo(temperature, depth, climotemps, climodepths,climotempfill,climodepthfill)
             except Exception:
                 temperature = depth = matchclimo = climobottomcutoff = 0
                 trace_error()
                 self.posterror("Error raised in automatic profile QC")
                 
-            print(f"Ocean Depth: {oceandepth}")
-            print(f"Climo Temps: {climotemps}")
-            print(f"Climo Depths: {climodepths}")
-            print(f"QC Temps: {temperature}")
-            print(f"QC Depths: {depth}")
-            print(f"matchclimo: {matchclimo}")
-            print(f"climobottomcutoff: {climobottomcutoff}")
 
             # limit profile depth by climatology cutoff, ocean depth cutoff
             maxdepth = np.ceil(np.max(depth))
