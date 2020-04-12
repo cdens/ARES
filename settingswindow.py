@@ -3,7 +3,9 @@
 #     Author: ENS Casey R. Densmore, 25AUG2019
 #     
 #     Purpose: Creates window for advanced ARES settings, handles signals/slots
-#       with main event loop in order to update settings.
+#       with main event loop in order to update settings. All settings are stored within
+#       a dictionary (both in this script and in main.py) to improve readability and 
+#       simplify function calls.
 #
 #   Settings Tabs:
 #       o Signal Processor Settings: Contains all settings for the signal processor
@@ -22,6 +24,12 @@
 #       o closed(True): Notifies the main loop that the settings window was closed,
 #           so it will open a new window (vice bringing the current window to front)
 #           if the "Preferences" option is selected again
+#
+#   Functions outside of RunSettings class:
+#       o setdefaultsettings: returns a dictionary containing default ARES settings 
+#           hard-coded in the function (settings optimized based on research with AXBT data)
+#       o readsettings(file): returns a dictionary containing ARES settings stored in file
+#       o writesettings(settingdict,file): writes settings in dictionary to specified file
 #       
 # =============================================================================
 
@@ -120,7 +128,6 @@ class RunSettings(QMainWindow):
 
         
         
-        
     # =============================================================================
     #   FUNCTIONS TO UPDATE/EXPORT/RESET SETTINGS
     # =============================================================================
@@ -128,6 +135,7 @@ class RunSettings(QMainWindow):
         self.updatepreferences()
         self.signals.exported.emit(self.settingsdict)
 
+        
 
     def resetdefaults(self):
         
@@ -241,7 +249,6 @@ class RunSettings(QMainWindow):
         
     
     
-
 
     # =============================================================================
     #     SIGNAL PROCESSOR TAB AND INPUTS HERE
@@ -368,7 +375,6 @@ class RunSettings(QMainWindow):
     
     
 
-
     # =============================================================================
     #     GPS COM PORT SELECTION TAB AND INPUTS HERE
     # =============================================================================
@@ -449,6 +455,8 @@ class RunSettings(QMainWindow):
             trace_error()
             self.posterror("Failed to build new GPS tab")
 
+            
+            
     #updating the selected COM port from the menu
     def updatecomport(self):
         curcomnum = self.gpstabwidgets["comport"].currentIndex()
@@ -456,6 +464,8 @@ class RunSettings(QMainWindow):
             self.settingsdict["comport"] = self.settingsdict["comports"][curcomnum - 1]
         else:
             self.settingsdict["comport"] = 'n'
+            
+            
 
     #refreshing the list of available COM ports
     def updategpslist(self):
@@ -464,6 +474,8 @@ class RunSettings(QMainWindow):
         self.settingsdict["comports"],self.settingsdict["comportdetails"] = gps.listcomports()
         for curport in self.settingsdict["comportdetails"]:
             self.gpstabwidgets["comport"].addItem(curport)
+            
+            
 
     #attempt to refresh GPS data with currently selected COM port
     def refreshgpsdata(self):
@@ -489,7 +501,6 @@ class RunSettings(QMainWindow):
             self.gpstabwidgets["gpsdate"].setText("Date/Time:")
             self.gpstabwidgets["gpslat"].setText("Latitude:")
             self.gpstabwidgets["gpslon"].setText("Longitude:")
-    
     
     
 
@@ -627,6 +638,8 @@ class RunSettings(QMainWindow):
         else:
             curcentername = self.allcenters["xxx"]
         self.profeditortabwidgets["originatingcentername"].setText("Center " + ctrkey + ": " + curcentername)
+        
+        
 
     #lookup table for originating centers
     def buildcentertable(self):
@@ -650,6 +663,7 @@ class RunSettings(QMainWindow):
                            "xxx":"       Center ID not recognized!     "}
 
 
+                           
 
 
     # =============================================================================
@@ -658,25 +672,28 @@ class RunSettings(QMainWindow):
     def changefftwindow(self, value):
         self.settingsdict["fftwindow"] = float(value) / 100
         self.processortabwidgets["fftwindowlabel"].setText('FFT Window (s): ' +str(self.settingsdict["fftwindow"]).ljust(4,'0'))
+        
 
     def changefftsiglev(self, value):
         self.settingsdict["minsiglev"] = float(value) / 10
         self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (log[x]): ' + str(np.round(self.settingsdict["minsiglev"],2)).ljust(4,'0'))
 
+        
     def changefftratio(self, value):
         self.settingsdict["minfftratio"] = float(value) / 100
         self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.settingsdict["minfftratio"]*100)).ljust(4,'0'))
+        
 
     def changetriggersiglev(self, value):
         self.settingsdict["triggersiglev"] = float(value) / 10
         self.processortabwidgets["triggersiglevlabel"].setText('Trigger Signal Level (log[x]): ' + str(np.round(self.settingsdict["triggersiglev"],2)).ljust(4,'0'))
 
+        
     def changetriggerratio(self, value):
         self.settingsdict["triggerfftratio"] = float(value) / 100
         self.processortabwidgets["triggerratiolabel"].setText('Trigger Signal Ratio (%): ' + str(np.round(self.settingsdict["triggerfftratio"]*100)).ljust(4,'0'))
         
-    
-        
+
     
         
 
@@ -686,6 +703,7 @@ class RunSettings(QMainWindow):
     def whatTab(self):
         currentIndex = self.tabWidget.currentIndex()
         return currentIndex
+        
 
     @staticmethod
     def setnewtabcolor(tab):
@@ -696,11 +714,13 @@ class RunSettings(QMainWindow):
         p.setBrush(QPalette.Window, QBrush(gradient))
         tab.setAutoFillBackground(True)
         tab.setPalette(p)
+        
 
     # add warning message on exit
     def closeEvent(self, event):
         event.accept()
         self.signals.closed.emit(True)
+        
 
     @staticmethod
     def posterror(errortext):
@@ -711,12 +731,16 @@ class RunSettings(QMainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
 
+        
+        
 
 # SIGNAL SETUP HERE
 class SettingsSignals(QObject):
     exported = pyqtSignal(dict)
     closed = pyqtSignal(bool)
 
+    
+    
 
 #Default settings for program
 def setdefaultsettings():
@@ -764,6 +788,8 @@ def setdefaultsettings():
     return settingsdict
 
 
+    
+    
 #Read settings from txt file
 def readsettings(filename):
     try:
@@ -842,14 +868,14 @@ def readsettings(filename):
         writesettings(filename, settingsdict)
         trace_error() #report issue
 
-
     return settingsdict
 
 
+    
+    
 #Write settings from txt file
 def writesettings(filename,settingsdict):
     
-
     #overwrites file by deleting if it exists
     if path.exists(filename):
         remove(filename)

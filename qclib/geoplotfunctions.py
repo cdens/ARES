@@ -27,6 +27,9 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 from shapefile import Reader as shread
 
+
+
+
 def setgeoaxes(fig,ax,xrange,yrange,changeaxis):
     
     # set initial x and y axis limits
@@ -62,6 +65,7 @@ def setgeoaxes(fig,ax,xrange,yrange,changeaxis):
         ax.set_ylim(latrangenew)
     
 
+        
 
 def setgeotick(ax):
     
@@ -104,6 +108,7 @@ def setgeotick(ax):
     ax.set_yticklabels(yticklabels)
 
 
+    
     
 # determine ocean basin, localized region from latitude/longitude
 # region data from Natural Earth Physical Labels dataset

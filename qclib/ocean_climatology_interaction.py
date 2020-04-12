@@ -2,7 +2,21 @@
 #     Code: ocean_climatology_interaction.py
 #     Author: ENS Casey R. Densmore, 20JUN2019
 #     
-#     Purpose: Interaction with ocean climatology data
+#     Purpose: Interaction with ocean bathymetry and climatology data. These 
+#       functions are specifically written to interact with gridded bathymetry
+#       and climatology data broken into spatially/temporally organized chunks
+#       so ARES only has to pull small, relevant/localized data for each AXBT 
+#       rather than loading both datasets in full simultaneously (~ 1.1 GB)
+#       Segments are organized as follows:
+#           o Bathymetry data is organized by lat/lon into 1deg^2 grids for the 
+#               globe at a 1 arcminute resolution.
+#               File name format: qcdata/bathy/b_N(lat)_W(lon).mat, where lat 
+#               and lon are integers in degN and degE, respectively
+#           o Climatology data is organized by lat/lon into 10 deg^2 grids for the 
+#               globe at a 0.25 degree resolution for each month
+#               File name format: qcdata/climo/c_M_month_N(lat)_W(lon).mat, where lat 
+#               and lon are integers in degN and degE, respectively, and month is
+#               an integer from 1 to 12
 #
 #   Functions:
 #       o smoothdata = runningsmooth(data,halfwindow): Computes running mean
@@ -41,6 +55,9 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 import scipy.interpolate as sint
 
+
+
+
 def runningsmooth(data,halfwindow):
     
     #if the running filter is longer than the dataset, return an array with same length as dataset containing dataset mean
@@ -59,6 +76,8 @@ def runningsmooth(data,halfwindow):
                 smoothdata = np.append(smoothdata,np.mean(data[i-halfwindow:i+halfwindow]))
             
     return smoothdata
+    
+
 
 
 #pulling climatology profile, creating polygon for shaded "climo match" region
@@ -101,6 +120,9 @@ def getclimatologyprofile(lat,lon,month,climodata):
     
     return [climotemps,depth,tempfill,depthfill]
         
+    
+    
+    
 
 #comparing current profile to climatology
 def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climodepthfill):
@@ -168,6 +190,8 @@ def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climod
     return matchclimo,climobottomcutoff
 
 
+    
+    
 
 #pull ocean depth from ETOPO1 Grid-Registered Ice Sheet based global relief dataset 
 #Data source: NOAA-NGDC: https://www.ngdc.noaa.gov/mgg/global/global.html

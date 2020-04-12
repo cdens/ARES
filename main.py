@@ -29,7 +29,6 @@
 #           (start of file)
 #       o __init__: Calls functions to initialize GUI
 #       o initUI: Builds basic window, loads WiNRADIO DLL, configures thread handling
-#       o setdefaults: Sets default settings for program (could be reconfigured to read from/write to file)
 #       o loaddata: Loads ocean climatology, bathymetry data once on initialization for use during quality control checks
 #       o buildmenu: Builds file menu for main GUI
 #       o openpreferencesthread: Opens advanced settings window (or reopens if a window is already open)
@@ -37,6 +36,7 @@
 #       o settingsclosed: pyqtSlot to receive notice when the advanced settings window is closed
 #
 #           (end of file)
+#       o addnewtab: updates ARES tab-tracking system with information for new tab
 #       o whatTab: gets identifier for open tab
 #       o renametab: renames open tab
 #       o setnewtabcolor: sets the background color pattern for new tabs
@@ -54,6 +54,7 @@
 #       o checkwinradiooptions: interacts with WiNRADIO DLL to get a list of serial numbers for connected receivers
 #       o changefrequencytomatchchannel: uses VHF channel/frequency lookup to ensure the two fields match (pyqtSignal)
 #       o changechanneltomatchfrequency: uses VHF channel/frequency lookup to ensure the two fields match (pyqtSignal)
+#       o changechannelandfrequency: called by previous two functions to actually update channel/frequency in ARES
 #       o updatefftsettings: updates minimum thresholds, window size for FFT in thread for open tab (pyqtSignal)
 #       o startprocessor: starts a signal processor thread (pyqtSignal)
 #       o stopprocessor: stops/aborts a signal processor thread (pyqtSignal)
@@ -70,15 +71,25 @@
 #       o selectdatafile: enables user to browse/select a source data file
 #       o checkdatainputs_editorinput: checks validity of user inputs
 #       o continuetoqc: populates profile editor tab from either new file or signal processor tab
+#       o applychanges: updates profile preferences for surface correction, cutoff, and depth delay features
+#       o updateprofeditplots: updates profile plot and metadata text after user-specifed changes are applied
+#       o generateprofiledescription: generates text block with profile metadata displayed on GUI
+#       o runqc: Reruns the autoQC algorithm with current advanced preferences
 #       o addpoint: lets user add a point to the profile
 #       o removepoint: lets user remove a point from the profile
-#       o on_release: adds or removes user-selected point from profile
-#       o applychanges: updates profile preferences for surface correction, cutoff, and depth delay features
-#       o runqc: Reruns the autoQC algorithm with current advanced preferences
+#       o removerange: lets user select vertical range of points to remove
+#       o on_press_spike: gets point where user clicks to remove a range of points (executed when user first 
+#           clicks plot after selecting "remove range")
+#       o on_release: finds and adds or removes user-selected point or range of points from profile (executed
+#           after user releases mouse click when selecting points to add or remove)
 #       o toggleclimooverlay: toggles visibility of climatology profile on plot
-#       o parsestringinputs: checks validity of user inputs
+#       o parsestringinputs (at end of file): checks validity of user inputs
+#       o CustomToolbar (class, located outside of function): configures icons, functions, tooltips, etc. available 
+#           in matplotlib toolbar embedded in profile editor tab that enables users to change profile views 
+#           (pan, zoom, etc.)
 #
 # =============================================================================
+
 
 
 # =============================================================================
@@ -145,6 +156,8 @@ class RunProgram(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Failed to initialize the program.")
+            
+            
         
     def initUI(self):
 
@@ -247,7 +260,7 @@ class RunProgram(QMainWindow):
 #    LOAD DATA, BUILD MENU, GENERAL SETTINGS
 # =============================================================================
 
-    #loads climatology and bathymetry data 
+    #saves a tiny amount of time by loading climatology and bathymetry data indices once each on initialization
     def loaddata(self):
         self.climodata = {}
         self.bathymetrydata = {}
@@ -324,6 +337,7 @@ class RunProgram(QMainWindow):
             self.settingsthread.raise_()
             self.settingsthread.activateWindow()
 
+            
     #slot to receive/update changed settings from advanced preferences window
     @pyqtSlot(dict)
     def updatesettings(self,settingsdict):
@@ -346,6 +360,7 @@ class RunProgram(QMainWindow):
         
 
 
+            
 # =============================================================================
 #     SIGNAL PROCESSOR TAB AND INPUTS HERE
 # =============================================================================
@@ -502,6 +517,7 @@ class RunProgram(QMainWindow):
 # =============================================================================
 #         BUTTONS FOR PROCESSOR TAB
 # =============================================================================
+
     #refresh list of available receivers
     def datasourcerefresh(self): 
         try:
@@ -526,6 +542,8 @@ class RunProgram(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Failed to refresh available receivers")
+            
+            
 
     def datasourcechange(self):
         try:
@@ -560,7 +578,9 @@ class RunProgram(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Failed to change selected WiNRADIO receiver for current tab.")
+            
         
+            
     @staticmethod #have to change this if alltabdata is attached to self!
     def checkwinradiooptions(winradiooptions):
         isbusy = [0] * len(winradiooptions)
@@ -573,6 +593,7 @@ class RunProgram(QMainWindow):
         return isbusy
         
     
+        
     #these options use a lookup table for VHF channel vs frequency
     def changefrequencytomatchchannel(self,newchannel):
         try:
@@ -583,6 +604,7 @@ class RunProgram(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Frequency/channel mismatch (changing frequency to match channel)!")
+            
             
             
     #these options use a lookup table for VHF channel vs frequency
@@ -606,6 +628,7 @@ class RunProgram(QMainWindow):
             self.posterror("Frequency/channel mismatch (changing channel to match frequency)!")
             
             
+            
     def changechannelandfrequency(self,newchannel,newfrequency):
         try:
             
@@ -626,6 +649,7 @@ class RunProgram(QMainWindow):
             trace_error()
             self.posterror("Frequency/channel update error!")
             
+            
 
     #update FFT thresholds/window setting
     def updatefftsettings(self):
@@ -641,6 +665,7 @@ class RunProgram(QMainWindow):
             self.posterror("Error updating FFT settings!")
             
             
+            
     #starting signal processing thread
     def startprocessor(self):
         try:
@@ -649,7 +674,7 @@ class RunProgram(QMainWindow):
 
                 datasource = alltabdata[curtabstr]["datasource"]
                 #running processor here
-
+                
                 #if too many signal processor threads are already running
                 if self.threadpool.activeThreadCount() + 1 > self.threadpool.maxThreadCount():
                     self.postwarning("The maximum number of simultaneous processing threads has been exceeded. This processor will automatically begin collecting data when STOP is selected on another tab.")
@@ -693,7 +718,7 @@ class RunProgram(QMainWindow):
                 if alltabdata[curtabstr]["rawdata"]["starttime"] == 0:
                     starttime = dt.datetime.utcnow()
                     alltabdata[curtabstr]["rawdata"]["starttime"] = starttime
-
+                    
                     #autopopulating selected fields if possible
                     if datasource[:5] != 'Audio':
                         if self.settingsdict["autodtg"]:#populates date and time if requested
@@ -708,9 +733,10 @@ class RunProgram(QMainWindow):
                                 alltabdata[curtabstr]["tabwidgets"]["lonedit"].setText(str(lon))
                         if self.settingsdict["autoid"]:
                             alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.settingsdict["platformid"])
+                            
                 else:
                     starttime = alltabdata[curtabstr]["rawdata"]["starttime"]
-
+                    
                 #this should never happen (if there is no DLL loaded there shouldn't be any receivers detected), but just in case
                 if self.wrdll == 0 and datasource != 'Test' and datasource[:5] != 'Audio':
                     self.postwarning("The WiNRADIO driver was not successfully loaded! Please restart the program in order to initiate a processing tab with a connected WiNRADIO")
@@ -718,9 +744,7 @@ class RunProgram(QMainWindow):
 
                 #initializing thread, connecting signals/slots
                 vhffreq = alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
-                alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum, starttime,
-                         alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"],self.settingsdict["fftwindow"],
-                         self.settingsdict["minfftratio"],self.settingsdict["minsiglev"],self.settingsdict["triggerfftratio"],self.settingsdict["triggersiglev"],slash,self.tempdir)
+                alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum,  starttime, alltabdata[curtabstr]["rawdata"]["istriggered"], alltabdata[curtabstr]["rawdata"]["firstpointtime"], self.settingsdict["fftwindow"], self.settingsdict["minfftratio"],self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"],self.settingsdict["triggersiglev"],slash,self.tempdir)
                 alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
 
                 alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
@@ -730,17 +754,18 @@ class RunProgram(QMainWindow):
                 #connecting audio file-specific signal (to update progress bar on GUI)
                 if datasource[:5] == 'Audio':
                     alltabdata[curtabstr]["processor"].signals.updateprogress.connect(self.updateaudioprogressbar)
-
+                
                 #starting thread
                 self.threadpool.start(alltabdata[curtabstr]["processor"])
                 alltabdata[curtabstr]["isprocessing"] = True
-
+                
                 #the code is still running but data collection has at least been initialized. This allows self.savecurrenttab() to save raw data files
                 alltabdata[curtabstr]["tabtype"] = "SignalProcessor_completed"
-
+                
         except Exception:
             trace_error()
             self.posterror("Failed to start processor!")
+            
             
             
     #aborting processor
@@ -780,6 +805,8 @@ class RunProgram(QMainWindow):
             if alltabdata[tabname]["tabnum"] == tabnum:
                 return tabname
     
+                
+                
     #slot to notify main GUI that the thread has been triggered with AXBT data
     @pyqtSlot(int,float)
     def triggerUI(self,plottabnum,firstpointtime):
@@ -791,6 +818,8 @@ class RunProgram(QMainWindow):
             self.posterror("Failed to trigger temperature/depth profile in GUI!")
             trace_error()
 
+            
+            
     #slot to pass AXBT data from thread to main GUI
     @pyqtSlot(int,float,float,float,float,float,float,float,int)
     def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,cact,cratio,ctime,i):
@@ -864,6 +893,8 @@ class RunProgram(QMainWindow):
         except Exception:
             trace_error()
         
+            
+            
     #final update from thread after being aborted- restoring scroll bar, other info
     @pyqtSlot(int)
     def updateUIfinal(self,plottabnum):
@@ -885,6 +916,8 @@ class RunProgram(QMainWindow):
             self.posterror("Failed to complete final UI update!")
             trace_error()
 
+            
+            
     #posts message in main GUI if thread processor fails for some reason
     @pyqtSlot(int)
     def failedWRmessage(self,messagenum):
@@ -907,6 +940,8 @@ class RunProgram(QMainWindow):
         elif messagenum == 9:
             self.posterror("Selected audio file is too large! Please trim the audio file before processing")
 
+            
+            
     #updates on screen progress bar if thread is processing audio data
     @pyqtSlot(int,int)
     def updateaudioprogressbar(self,plottabnum,newprogress):
@@ -1062,6 +1097,8 @@ class RunProgram(QMainWindow):
             trace_error()
             self.posterror("Failed to build editor input tab!")
 
+            
+            
     #browse for raw data file to QC
     def selectdatafile(self):
         try:
@@ -1074,6 +1111,8 @@ class RunProgram(QMainWindow):
             trace_error()
             self.posterror("Failed to select file- please try again or manually enter full path to file in box below.")
 
+            
+            
     #Pull data, check to make sure it is valid before proceeding
     def checkdatainputs_editorinput(self):
         try:
@@ -1330,6 +1369,10 @@ class RunProgram(QMainWindow):
             self.posterror("Failed to build profile editor tab!")
         finally:
             QApplication.restoreOverrideCursor()
+            
+            
+            
+            
 
 # =============================================================================
 #         AUTOQC DRIVER CODE
@@ -1405,7 +1448,110 @@ class RunProgram(QMainWindow):
 # =============================================================================
 #         PROFILE EDITING FUNCTION CALLS
 # =============================================================================
+    #apply changes from sfc correction/max depth/depth delay spin boxes
+    def applychanges(self):
+        try:
+            curtabstr = "Tab " + str(self.whatTab())
+            #current t/d profile
+            tempplot = alltabdata[curtabstr]["profdata"]["temp_qc"].copy()
+            depthplot = alltabdata[curtabstr]["profdata"]["depth_qc"].copy()
+            
+            if len(tempplot) > 0 and len(depthplot) > 0:
 
+                #new depth correction settings
+                sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
+                maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
+                depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
+    
+                if depthdelay > 0: #shifitng entire profile up if necessary
+                    depthplot = depthplot - depthdelay
+                    ind = depthplot >= 0
+                    depthplot = depthplot[ind]
+                    tempplot = tempplot[ind]
+    
+                if sfcdepth > 0: #replacing surface temperatures
+                    sfctemp = np.interp(sfcdepth,depthplot,tempplot)
+                    ind = depthplot <= sfcdepth
+                    tempplot[ind] = sfctemp
+    
+                if maxdepth < np.max(depthplot): #truncating base of profile
+                    ind = depthplot <= maxdepth
+                    tempplot = tempplot[ind]
+                    depthplot = depthplot[ind]
+    
+                #replacing t/d profile values
+                alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
+                alltabdata[curtabstr]["profdata"]["depth_plot"] = depthplot
+    
+                #re-plotting, updating text
+                self.updateprofeditplots()
+                
+        except Exception:
+            trace_error()
+            self.posterror("Failed to update profile!")
+            
+
+            
+    def updateprofeditplots(self):
+        curtabstr = "Tab " + str(self.whatTab())
+
+        try:
+            tempplot = alltabdata[curtabstr]["profdata"]["temp_plot"]
+            depthplot = alltabdata[curtabstr]["profdata"]["depth_plot"]
+            
+            # Replace drop info
+            proftxt = self.generateprofiledescription(curtabstr,len(tempplot))
+            alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
+
+            # re-plotting (if not first pass through editor)
+            if alltabdata[curtabstr]["hasbeenprocessed"]:
+                del alltabdata[curtabstr]["ProfAx"].lines[-1]
+                alltabdata[curtabstr]["ProfAx"].plot(tempplot, depthplot, 'r', linewidth=2, label='QC')
+                alltabdata[curtabstr]["ProfCanvas"].draw()
+
+        except Exception:
+            trace_error()
+            self.posterror("Failed to update profile editor plots!")
+    
+            
+            
+    def generateprofiledescription(self,curtabstr,numpoints):
+        try:
+            sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
+            maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
+            depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
+            
+            lon = alltabdata[curtabstr]["profdata"]["lon"]
+            lat = alltabdata[curtabstr]["profdata"]["lat"]
+            oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
+            
+            if lon >= 0: #prepping coordinate string
+                ewhem = ' \xB0E'
+            else:
+                ewhem = ' \xB0W'
+            if lat >= 0:
+                nshem = ' \xB0N'
+            else:
+                nshem = ' \xB0S'
+            
+            #generating text string
+            proftxt = ("Profile Data: \n" #header
+               + f"{abs(round(lon, 3))}{ewhem}, {abs(round(lat, 3))}{nshem} \n" #lat/lon
+               + f"Ocean Depth: {np.round(oceandepth,1)} m\n" #ocean depth
+               + f"QC Profile Depth: {np.round(maxdepth,1)} m\n" #profile depth
+               + f"QC SFC Correction: {sfcdepth} m\n" #user-specified surface correction
+               + f"QC Depth Delay: {depthdelay} m\n" #user-added depth delay
+               + f"# Datapoints: {numpoints}")
+            
+            return proftxt
+        
+        except Exception:
+            trace_error()
+            self.posterror("Failed to update profile!")
+            return "Unable to generate text!"
+
+
+            
     #add point on profile
     def addpoint(self):
         curtabstr = "Tab " + str(self.whatTab())
@@ -1418,6 +1564,8 @@ class RunProgram(QMainWindow):
             except Exception:
                 trace_error()
                 self.posterror("Failed to add point")
+                
+                
             
     #remove point on profile
     def removepoint(self):
@@ -1431,6 +1579,8 @@ class RunProgram(QMainWindow):
             except Exception:
                 trace_error()
                 self.posterror("Failed to remove point")
+                
+                
 
     #remove range of points (e.g. profile spike)
     def removerange(self):
@@ -1445,9 +1595,13 @@ class RunProgram(QMainWindow):
             except Exception:
                 trace_error()
                 self.posterror("Failed to remove point")
+                
+                
 
     def on_press_spike(self,event):
         self.y1_spike = event.ydata #gets first depth argument
+        
+        
             
     #update profile with selected point to add or remove
     def on_release(self,event):
@@ -1523,108 +1677,8 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["pt_type"] = 0 #reset
 
             
-
-    #apply changes from sfc correction/max depth/depth delay spin boxes
-    def applychanges(self):
-        try:
-            curtabstr = "Tab " + str(self.whatTab())
-            #current t/d profile
-            tempplot = alltabdata[curtabstr]["profdata"]["temp_qc"].copy()
-            depthplot = alltabdata[curtabstr]["profdata"]["depth_qc"].copy()
             
-            if len(tempplot) > 0 and len(depthplot) > 0:
-
-                #new depth correction settings
-                sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
-                maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
-                depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
-    
-                if depthdelay > 0: #shifitng entire profile up if necessary
-                    depthplot = depthplot - depthdelay
-                    ind = depthplot >= 0
-                    depthplot = depthplot[ind]
-                    tempplot = tempplot[ind]
-    
-                if sfcdepth > 0: #replacing surface temperatures
-                    sfctemp = np.interp(sfcdepth,depthplot,tempplot)
-                    ind = depthplot <= sfcdepth
-                    tempplot[ind] = sfctemp
-    
-                if maxdepth < np.max(depthplot): #truncating base of profile
-                    ind = depthplot <= maxdepth
-                    tempplot = tempplot[ind]
-                    depthplot = depthplot[ind]
-    
-                #replacing t/d profile values
-                alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
-                alltabdata[curtabstr]["profdata"]["depth_plot"] = depthplot
-    
-                #re-plotting, updating text
-                self.updateprofeditplots()
-                
-        except Exception:
-            trace_error()
-            self.posterror("Failed to update profile!")
             
-
-    def updateprofeditplots(self):
-        curtabstr = "Tab " + str(self.whatTab())
-
-        try:
-            tempplot = alltabdata[curtabstr]["profdata"]["temp_plot"]
-            depthplot = alltabdata[curtabstr]["profdata"]["depth_plot"]
-            
-            # Replace drop info
-            proftxt = self.generateprofiledescription(curtabstr,len(tempplot))
-            alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
-
-            # re-plotting (if not first pass through editor)
-            if alltabdata[curtabstr]["hasbeenprocessed"]:
-                del alltabdata[curtabstr]["ProfAx"].lines[-1]
-                alltabdata[curtabstr]["ProfAx"].plot(tempplot, depthplot, 'r', linewidth=2, label='QC')
-                alltabdata[curtabstr]["ProfCanvas"].draw()
-
-        except Exception:
-            trace_error()
-            self.posterror("Failed to update profile editor plots!")
-    
-            
-    def generateprofiledescription(self,curtabstr,numpoints):
-        try:
-            sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
-            maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
-            depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
-            
-            lon = alltabdata[curtabstr]["profdata"]["lon"]
-            lat = alltabdata[curtabstr]["profdata"]["lat"]
-            oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
-            
-            if lon >= 0: #prepping coordinate string
-                ewhem = ' \xB0E'
-            else:
-                ewhem = ' \xB0W'
-            if lat >= 0:
-                nshem = ' \xB0N'
-            else:
-                nshem = ' \xB0S'
-            
-            #generating text string
-            proftxt = ("Profile Data: \n" #header
-               + f"{abs(round(lon, 3))}{ewhem}, {abs(round(lat, 3))}{nshem} \n" #lat/lon
-               + f"Ocean Depth: {np.round(oceandepth,1)} m\n" #ocean depth
-               + f"QC Profile Depth: {np.round(maxdepth,1)} m\n" #profile depth
-               + f"QC SFC Correction: {sfcdepth} m\n" #user-specified surface correction
-               + f"QC Depth Delay: {depthdelay} m\n" #user-added depth delay
-               + f"# Datapoints: {numpoints}")
-            
-            return proftxt
-        
-        except Exception:
-            trace_error()
-            self.posterror("Failed to update profile!")
-            return "Unable to generate text!"
-        
-
     #toggle visibility of climatology profile
     def toggleclimooverlay(self,pressed):
         try:
@@ -1652,10 +1706,14 @@ class RunProgram(QMainWindow):
         newtabnum = self.tabWidget.count()
         curtabstr = "Tab "+str(self.totaltabs) #pointable string for alltabdata dict
         return newtabnum,curtabstr
+        
+        
 
     #gets index of open tab in GUI
     def whatTab(self):
         return self.tabnumbers[self.tabWidget.currentIndex()]
+        
+        
     
     #renames tab (only user-visible name, not alltabdata dict key)
     def renametab(self):
@@ -1667,6 +1725,8 @@ class RunProgram(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Failed to rename the current tab")
+            
+            
     
     #sets default color scheme for tabs
     @staticmethod
@@ -1679,6 +1739,8 @@ class RunProgram(QMainWindow):
         p.setBrush(QPalette.Window, QBrush(gradient))
         tab.setAutoFillBackground(True)
         tab.setPalette(p)
+        
+        
             
     #closes a tab
     def closecurrenttab(self):
@@ -1723,6 +1785,9 @@ class RunProgram(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Failed to close the current tab")
+            
+            
+            
                 
     #save data in open tab        
     def savedataincurtab(self):
@@ -1929,6 +1994,8 @@ class RunProgram(QMainWindow):
             QApplication.restoreOverrideCursor()
             return True
         
+            
+            
     #warning message
     @staticmethod
     def postwarning(warningtext):
@@ -1939,6 +2006,8 @@ class RunProgram(QMainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
         
+        
+        
     #error message
     @staticmethod
     def posterror(errortext):
@@ -1948,6 +2017,8 @@ class RunProgram(QMainWindow):
         msg.setWindowTitle("Error")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
+        
+        
     
     #warning message with options (Okay or Cancel)
     @staticmethod
@@ -1965,6 +2036,8 @@ class RunProgram(QMainWindow):
             option = 'cancel'
         return option
     
+        
+        
     #add warning message before closing GUI
     def closeEvent(self, event):
         reply = QMessageBox.question(self, 'Message',
@@ -2000,6 +2073,8 @@ class RunProgram(QMainWindow):
         else:
             event.ignore() 
     
+            
+            
     
 # =============================================================================
 #    PARSE STRING INPUTS/CHECK VALIDITY WHEN TRANSITIONING TO PROFILE EDITOR
@@ -2108,6 +2183,7 @@ class RunProgram(QMainWindow):
             return
 
 
+            
 #class to customize nagivation toolbar in profile editor tab
 class CustomToolbar(NavigationToolbar):
     def __init__(self,canvas_,parent_):
@@ -2119,6 +2195,10 @@ class CustomToolbar(NavigationToolbar):
             ('Pan', 'Click and Drag to Pan', 'move', 'pan'),
             ('Zoom', 'Select Region to Zoon', 'zoom_to_rect', 'zoom'),)
         NavigationToolbar.__init__(self,canvas_,parent_)
+        
+        
+        
+        
     
 # =============================================================================
 # EXECUTE PROGRAM

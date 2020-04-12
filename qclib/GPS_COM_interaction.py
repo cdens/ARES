@@ -25,6 +25,9 @@ from pynmea2 import parse
 from traceback import print_exc as trace_error
 from time import sleep
 
+
+
+
 def listcomports():
     portnums = []
     portinfo = []
@@ -34,6 +37,9 @@ def listcomports():
         portinfo.append(f"{pnum}: {sdesc}") #short description
         # portinfo.append("{}: {} [{}]".format(port, desc, details)) #long description
     return portnums,portinfo
+    
+    
+    
 
 def listcomports_verbose():
     portnums = []
@@ -47,6 +53,7 @@ def listcomports_verbose():
     
 
 
+    
 def streamgpsdata(port):
     try:
 

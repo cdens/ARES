@@ -39,6 +39,9 @@ import qclib.geoplotfunctions as gplt
 import numpy as np
 from matplotlib.colors import ListedColormap
 
+
+
+
 def makeprofileplot(ax,rawtemperature,rawdepth,temperature,depth,climotempfill,climodepthfill,dtg,matchclimo):
     climohandle = ax.fill(climotempfill,climodepthfill,color='b',alpha=0.3,label='Climo') #fill climo, save handle
     climohandle = climohandle[0]
@@ -58,6 +61,8 @@ def makeprofileplot(ax,rawtemperature,rawdepth,temperature,depth,climotempfill,c
     ax.invert_yaxis()
     
     return climohandle
+    
+    
     
 
 def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord):

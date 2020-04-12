@@ -52,6 +52,8 @@
 import numpy as np
 from datetime import date
 
+
+
 #read raw temperature/depth profile from LOGXX.DTA file
 def readlogfile(logfile):
 
@@ -79,7 +81,9 @@ def readlogfile(logfile):
     temperature = np.asarray(temperature)
     
     return [temperature,depth]
+    
 
+    
 
 #read raw temperature/depth profile with all other data from LOGXX.DTA file
 def readlogfile_alldata(logfile):
@@ -122,6 +126,8 @@ def readlogfile_alldata(logfile):
     return [temperature,depth,time,frequency]
     
     
+    
+    
 def writelogfile(logfile,initdatestr,inittimestr,timefromstart,depth,frequency,tempc):
     with open(logfile,'w') as f_out:
 
@@ -156,7 +162,7 @@ def writelogfile(logfile,initdatestr,inittimestr,timefromstart,depth,frequency,t
             line = tstr.rjust(7) + dstr.rjust(10) + fstr.rjust(11) + tcstr.rjust(10) + tfstr.rjust(10) + '\n'
             f_out.write(line)
     
-    
+            
 
     
 def readedffile(edffile):
@@ -219,6 +225,7 @@ def readedffile(edffile):
     
     return rawtemperature,rawdepth,year,month,day,hour,minute,second,lat,lon
 
+    
     
     
 def writeedffile(edffile,rawtemperature,rawdepth,year,month,day,hour,minute,second,lat,lon):
@@ -301,7 +308,7 @@ Depth (m)  - Temperature (°C)\n"""
             line = str(round(d,1)).zfill(5) +"\t"+str(round(t,2)).zfill(4)+"\n"
             line = bytes(line,'utf-8')
             f_out.write(line)
-    
+
     
     
     
@@ -370,7 +377,6 @@ def readjjvvfile(jjvvfile,decade):
     temperature = np.asarray(temperature)
     
     return [temperature,depth,day,month,year,time,lat,lon,identifier]
-
 
 
 
@@ -447,7 +453,6 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
 
 
 
-
 #read data from FIN file
 def readfinfile(finfile):
     
@@ -487,8 +492,6 @@ def readfinfile(finfile):
     temperature = np.asarray(temperature)
     
     return [temperature,depth,day,month,year,time,lat,lon,num]
-
-
 
 
 

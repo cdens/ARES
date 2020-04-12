@@ -18,7 +18,7 @@
 #       WiNRADIO receiver data if the criteria are met.
 #
 #       **NOTE 2**: This module works with both WiNRADIOs and audio data. The "test"
-#       option that may be selected simply reads an audio file and reprocesses that
+#       option that may be selected simply reads a hard-coded audio file and reprocesses that
 #       data with a normal time delay, configured to replicate the datastream one
 #       would receive from the WiNRADIO. The same functions are used to process data
 #       from both WiNRADIOs and audio files, with occasional if/else statements to 
@@ -130,6 +130,7 @@ from sys import getsizeof
 from ctypes import (Structure, pointer, c_int, c_ulong, c_char, c_uint32,
                     c_char_p, c_void_p, POINTER, c_int16, cast, CFUNCTYPE)
 
+                    
 #convert time(s) into depth (m)
 def timetodepth(time):
     depth = 1.52*time
@@ -176,6 +177,8 @@ def dofft(pcmdata,fs):
     return freq, maxsig, maxratio
     
     
+    
+    
 #table lookup for VHF channels and frequencies
 def channelandfrequencylookup(value,direction):
     
@@ -217,6 +220,9 @@ def channelandfrequencylookup(value,direction):
     return outval,correctedval
 
 
+    
+    
+    
 # =============================================================================
 #  READ SIGNAL FROM WINRADIO, OUTPUT TO PLOT, TABLE, AND DATA
 # =============================================================================
@@ -330,6 +336,7 @@ class ThreadProcessor(QRunnable):
             shcopy(self.audiofile, self.wavfilename) #copying audio file if datasource = Test or Audio
 
 
+            
     @pyqtSlot()
     def run(self):
 
@@ -467,6 +474,7 @@ class ThreadProcessor(QRunnable):
             self.kill(5)
             
             
+            
     def kill(self,reason):
         curtabnum = self.curtabnum
         self.keepgoing = False  # kills while loop
@@ -484,17 +492,20 @@ class ThreadProcessor(QRunnable):
         return
 
         
+        
     @pyqtSlot()
     def abort(self): #executed when user selects "Stop" button
         self.kill(0) #tell processor to terminate with 0 (success) exit code
         
 
+        
     @pyqtSlot(float)
     def changecurrentfrequency(self, newfreq): #update VHF frequency for WiNRADIO
         # change frequency- kill if failed
         self.vhffreq_2WR = c_ulong(int(newfreq * 1E6))
         if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
             self.kill(4)
+            
             
 
     @pyqtSlot(float,float,int,float,int)
@@ -510,6 +521,8 @@ class ThreadProcessor(QRunnable):
         self.triggersiglev = 10 ** (triggersiglev/10) #convert from dB to bits       
         
 
+        
+        
 #initializing signals for data to be passed back to main loop
 class ThreadProcessorSignals(QObject): 
     iterated = pyqtSignal(int,float,float,float,float,float,float,float,int) #signal to add another entry to raw data arrays
@@ -520,9 +533,12 @@ class ThreadProcessorSignals(QObject):
 
 
 
+    
 # =============================================================================
 # C++ INTEGRATED FUNCTIONS FOR WINRADIO:
 # =============================================================================
+
+
 # initialize radioinfo structure
 class Features(Structure):
     _pack_ = 1
@@ -530,6 +546,8 @@ class Features(Structure):
 class RADIO_INFO2(Structure):
     _pack_ = 1
     _fields_ = [("bLength", c_uint32), ("szSerNum", c_char*9), ("szProdName", c_char*9), ("MinFreq", c_uint32),("MaxFreq", c_uint32), ("Features", Features)]
+    
+    
 
 #gets list of current winradios
 def listwinradios(wrdll):
