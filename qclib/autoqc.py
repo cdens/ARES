@@ -3,35 +3,26 @@
 #     Author: ENS Casey R. Densmore, 18JUN2019
 #    
 #     Purpose: This function quality controls a raw temperature-depth profile 
-#     (rawtemp, rawdepth) determining inflection points with curvature >= reslev,
-#     isothermal above sfc_correction (mitigate erroneous sfc spikes), and cut 
-#     off at z = maxdepth. 
+#     (rawtemp, rawdepth)
 #     Additional considerations incorporated to remove the effects of VHF 
-#     interference triggering false starts and other issues associated with
+#     interference triggering false starts, spike removal and other issues associated with
 #     AXBT data transmission.
 #
 #   Inputs:
 #       o rawtemp, rawdepth: unedited temperature-depth profile
-#       o sfc_correction: depth above which profile should be corrected 
-#           to isothermal (removes surface errors)
-#       o maxdepth: depth below which profile is truncated
-#       o maxderiv: threshold for a datapoint to be saved as an inflection point
-#           using the second derivative of the T-D profile (degC/m^2)
+#       o smoothlev: smoothing window length
 #       o profres: minimum vertical resolution of profile (m)
+#       o maxdev: maximum point deviation threshold for despiker
 #       o checkforgaps: logical flag to check for and correct VHF false starts
 # =============================================================================
 
 
 import numpy as np
 
-def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,smoothlev,profres,maxdev,checkforgaps):
+def autoqc(rawtemp,rawdepth,smoothlev,profres,maxdev,checkforgaps):
     
-    #Step 1: cut off all values below maximum depth
-    index = rawdepth <= maxdepth
-    rawtemp = rawtemp[index]
-    rawdepth = rawdepth[index]
 
-    #Step 2: Find and remove gaps due to VHF interference kicking off early Mk21 start
+    #Step 1: Find and remove gaps due to VHF interference kicking off early Mk21 start
     if checkforgaps:
         donegapcheck = False
         while not donegapcheck:
@@ -53,7 +44,7 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,smoothlev,profres,maxdev,che
             else: #otherwise, exit loop
                 donegapcheck = True
     
-    #Step 3: remove spikes using running standard deviation filter
+    #Step 2: remove spikes using running standard deviation filter
     temp_despike = np.array([])
     depth_despike = np.array([])
     for n in range(0,len(rawdepth)):
@@ -76,7 +67,7 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,smoothlev,profres,maxdev,che
             temp_despike = np.append(temp_despike,rawtemp[n])
     
     
-    #Step 4: smooth the despiked profile
+    #Step 3: smooth the despiked profile
     temp_smooth = np.array([])
     depth_smooth = depth_despike.copy()
     smoothint = smoothlev #smoothing range in meters
@@ -91,16 +82,9 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,smoothlev,profres,maxdev,che
             
             goodindex = np.all([ge,le],axis=0)
             temp_smooth = np.append(temp_smooth,np.mean(temp_despike[goodindex]))
-    
-    
-    #Step 5: Set all values above sfc_correction to equal t(z=sfc_correction)
-    if sfc_correction > 0:
-        t_corrected = np.interp(sfc_correction,depth_smooth,temp_smooth)
-        temp_smooth[depth_smooth <= sfc_correction] = t_corrected
-    
-    
-    
-    #Step 6: pull critical points from profile to save
+            
+        
+    #Step 4: pull critical points from profile to save
     dTdz = [] #first derivative calc
     dT2dz2 = [] #second derivative calc
     for i in range(1,len(temp_smooth)-1):
@@ -116,13 +100,11 @@ def autoqc(rawtemp,rawdepth,sfc_correction,maxdepth,smoothlev,profres,maxdev,che
     temperature = []
     lastdepth = -15
     for i in range(len(dT2dz2)):
-        if dTdz[i] <= 0.5: #constraint on first derivative of temp with depth (no unrealistic spikes)
-
-            #if the point is a critical value given the selected resolution level, append to output profile
-            if depth_smooth[i+1]-lastdepth >= profres:
-                depth.append(depth_smooth[i+1])
-                temperature.append(temp_smooth[i+1])
-                lastdepth = depth_smooth[i+1]
+        #constraint on first derivative of temp with depth (no unrealistic spikes), if the point is a critical value given the selected resolution level, append to output profile
+        if dTdz[i] <= 0.5 and depth_smooth[i+1]-lastdepth >= profres:
+            depth.append(depth_smooth[i+1])
+            temperature.append(temp_smooth[i+1])
+            lastdepth = depth_smooth[i+1]
 
     #add surface value if one doesn't exist
     if depth[0] != 0:

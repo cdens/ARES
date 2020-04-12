@@ -89,6 +89,8 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     
     #plot formatting
     gplt.setgeoaxes(fig,ax,lonrange,latrange,'x')
+    dx = 3 #setting x tick spacing farther apart (every 3 degrees) so plot looks better
+    ax.set_xticks([d for d in range(lonrange[0]-dx,lonrange[1]+dx,dx)]) 
     gplt.setgeotick(ax)
     ax.grid()
     ax.set_title(' Region: ' + region,fontweight="bold")

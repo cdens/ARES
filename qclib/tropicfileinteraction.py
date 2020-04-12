@@ -549,7 +549,7 @@ def writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
 
 
 
-def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identifier,originatingcenter,hasoptionalsection,optionalinfo):
+def writebufrfile(bufrfile, temperature, depth, year, month, day, time, lon, lat, identifier, originatingcenter, hasoptionalsection, optionalinfo):
 
     #convert time into hours and minutes
     hour = int(np.floor(time / 100))
@@ -560,11 +560,9 @@ def writebufrfile(bufrfile,temperature,depth,year,month,day,time,lon,lat,identif
     version = 4  # BUFR version number (3 or 4 supported)
 
     # section 1 info
-    if version == 3:
-        sxn1len = 18
-    elif version == 4:
+    if version == 4:
         sxn1len = 22
-    else:
+    else: #including versions 1-3
         sxn1len = 18
 
     mastertable = 0  # For standard WMO FM 94-IX BUFR table

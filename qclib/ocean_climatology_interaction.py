@@ -154,7 +154,9 @@ def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climod
             if depth[i] <= maxd:
                 curpoint = Point(temperature[i], depth[i])
                 isinclimo.append(int(climopolygon.contains(curpoint)))
-        if sum(isinclimo)/len(isinclimo) >= 0.9: #this is where the 90% statistic is set
+            
+        minpctmatch = 0.5 #checks if prof matches climo: more than (minpctmatch*100) percent of profile must be within +/1 one standard deviation of climatology profile to be considered a match (0 <= minpctmatch <= 1)
+        if sum(isinclimo)/len(isinclimo) >= minpctmatch: 
             matchclimo = 1
         else:
             matchclimo = 0

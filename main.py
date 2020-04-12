@@ -447,7 +447,7 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["tabwidgets"]["lontitle"] = QLabel('Longitude (E>0): ') #17
             alltabdata[curtabstr]["tabwidgets"]["lonedit"] = QLineEdit('XX.XXX') #18
             alltabdata[curtabstr]["tabwidgets"]["idtitle"] = QLabel('Platform ID/Tail#: ') #19
-            alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit(self.settingsdict["platformID"]) #20
+            alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit(self.settingsdict["platformid"]) #20
             
             #formatting widgets
             alltabdata[curtabstr]["tabwidgets"]["channeltitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -571,28 +571,19 @@ class RunProgram(QMainWindow):
                     if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == wr:
                         isbusy[wri] = 1
         return isbusy
+        
     
     #these options use a lookup table for VHF channel vs frequency
     def changefrequencytomatchchannel(self,newchannel):
         try:
             curtabstr = "Tab " + str(self.whatTab())
             newfrequency,newchannel = vsp.channelandfrequencylookup(newchannel,'findfrequency')
-            alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setValue(newchannel)
-            alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setValue(newfrequency)
-
-            curdatasource = alltabdata[curtabstr]["datasource"]
-            #checks to make sure all other tabs with same receiver are set to the same channel/freq
-            for ctab in alltabdata:
-                if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
-                    if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == curdatasource:
-                        alltabdata[ctab]["tabwidgets"]["vhfchannel"].setValue(newchannel)
-                        alltabdata[ctab]["tabwidgets"]["vhffreq"].setValue(newfrequency)
-
-            if alltabdata[curtabstr]["isprocessing"] and alltabdata[curtabstr]["datasource"] != 'Audio' and alltabdata[curtabstr]["datasource"] != 'Test':
-                alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
+            self.changechannelandfrequency(newchannel,newfrequency)
+            
         except Exception:
             trace_error()
-            self.posterror("Frequency/channel mismatch!")
+            self.posterror("Frequency/channel mismatch (changing frequency to match channel)!")
+            
             
     #these options use a lookup table for VHF channel vs frequency
     def changechanneltomatchfrequency(self,newfrequency):
@@ -607,6 +598,17 @@ class RunProgram(QMainWindow):
                 else:
                     newfrequency = 162.25
             newchannel,newfrequency = vsp.channelandfrequencylookup(newfrequency,'findchannel')
+            
+            self.changechannelandfrequency(newchannel,newfrequency)
+            
+        except Exception:
+            trace_error()
+            self.posterror("Frequency/channel mismatch (changing channel to match frequency)!")
+            
+            
+    def changechannelandfrequency(self,newchannel,newfrequency):
+        try:
+            
             alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setValue(newchannel)
             alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setValue(newfrequency)
 
@@ -622,7 +624,8 @@ class RunProgram(QMainWindow):
                 alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
         except Exception:
             trace_error()
-            self.posterror("Frequency/channel mismatch!")
+            self.posterror("Frequency/channel update error!")
+            
 
     #update FFT thresholds/window setting
     def updatefftsettings(self):
@@ -636,6 +639,7 @@ class RunProgram(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Error updating FFT settings!")
+            
             
     #starting signal processing thread
     def startprocessor(self):
@@ -703,7 +707,7 @@ class RunProgram(QMainWindow):
                                 alltabdata[curtabstr]["tabwidgets"]["latedit"].setText(str(lat))
                                 alltabdata[curtabstr]["tabwidgets"]["lonedit"].setText(str(lon))
                         if self.settingsdict["autoid"]:
-                            alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.settingsdict["platformID"])
+                            alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.settingsdict["platformid"])
                 else:
                     starttime = alltabdata[curtabstr]["rawdata"]["starttime"]
 
@@ -737,6 +741,7 @@ class RunProgram(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Failed to start processor!")
+            
             
     #aborting processor
     def stopprocessor(self):
@@ -791,12 +796,12 @@ class RunProgram(QMainWindow):
     def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,cact,cratio,ctime,i):
         try:
             plottabstr = self.gettabstrfromnum(plottabnum)
-
+            
+            #defaults so the last depth will be different unless otherwise explicitly stored (z > 0 here)
+            lastdepth = -1
             if len(alltabdata[plottabstr]["rawdata"]["depth"]) > 0:
                 lastdepth = alltabdata[plottabstr]["rawdata"]["depth"][-1]
-            else:
-                lastdepth = -1
-
+                
             #only appending a datapoint if depths are different
             if cdepth != lastdepth:
                 #writing data to tab dictionary
@@ -1344,17 +1349,12 @@ class RunProgram(QMainWindow):
             oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
             
 
-            # resetting depth correction data
-            sfc_correction = 0
-            maxdepth = 10000
-            #don't need to specify depth delay as autoQC will run it
-
             # TODO: Integrate this into the settings window
             self.settingsdict["maxstdev"] = 1
 
             try:
                 # running QC, comparing to climo
-                temperature, depth = qc.autoqc(rawtemperature, rawdepth, sfc_correction, maxdepth, self.settingsdict["smoothlev"],self.settingsdict["profres"], self.settingsdict["maxstdev"], self.settingsdict["checkforgaps"])
+                temperature, depth = qc.autoqc(rawtemperature, rawdepth, self.settingsdict["smoothlev"],self.settingsdict["profres"], self.settingsdict["maxstdev"], self.settingsdict["checkforgaps"])
                 matchclimo, climobottomcutoff = oci.comparetoclimo(temperature, depth, climotemps, climodepths,climotempfill,climodepthfill)
             except Exception:
                 temperature = depth = matchclimo = climobottomcutoff = 0
@@ -1504,31 +1504,8 @@ class RunProgram(QMainWindow):
             alltabdata[curtabstr]["profdata"]["depth_qc"] = depthplot
             alltabdata[curtabstr]["profdata"]["temp_qc"] = tempplot
             
-            #new depth correction settings
-            sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
-            maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
-            depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
-
-            #Reapplying user-input corrections to new profile
-            if depthdelay > 0:  # shifitng entire profile up if necessary
-                depthplot = depthplot - depthdelay
-                ind = depthplot >= 0
-                depthplot = depthplot[ind]
-                tempplot = tempplot[ind]
-            if sfcdepth > 0: #replacing surface temperatures
-                sfctemp = np.interp(sfcdepth,depthplot,tempplot)
-                ind = depthplot <= sfcdepth
-                tempplot[ind] = sfctemp
-            if maxdepth < np.max(depthplot):
-                ind = depthplot <= maxdepth
-                tempplot = tempplot[ind]
-                depthplot = depthplot[ind]
-                
-            #replacing t/d profile values
-            alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
-            alltabdata[curtabstr]["profdata"]["depth_plot"] = depthplot
-
-            self.updateprofeditplots()
+            #applying user corrections
+            self.applychanges()
 
 
         except Exception:
@@ -1545,47 +1522,7 @@ class RunProgram(QMainWindow):
                 del alltabdata[curtabstr]["ptspike"]
             alltabdata[curtabstr]["pt_type"] = 0 #reset
 
-    def updateprofeditplots(self):
-        curtabstr = "Tab " + str(self.whatTab())
-
-        try:
-            sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
-            maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
-            depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
-            tempplot = alltabdata[curtabstr]["profdata"]["temp_plot"]
-            depthplot = alltabdata[curtabstr]["profdata"]["depth_plot"]
-
-            # Replace drop info
-            lon = alltabdata[curtabstr]["profdata"]["lon"]
-            lat = alltabdata[curtabstr]["profdata"]["lat"]
-            oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
-            if lon >= 0:  # prepping coordinate string
-                ewhem = ' \xB0E'
-            else:
-                ewhem = ' \xB0W'
-            if lat >= 0:
-                nshem = ' \xB0N'
-            else:
-                nshem = ' \xB0S'
-            proftxt = ('Profile Data: ' + '\n'  # profile data
-                       + str(abs(round(lon, 3))) + ewhem + ', ' + str(abs(round(lat, 3))) + nshem + '\n'
-                       + 'Ocean Depth: ' + str(np.round(oceandepth, 1)) + ' m' + '\n'
-                       + 'QC Profile Depth: ' + str(int(maxdepth)) + ' m' + '\n'
-                       + 'QC SFC Correction: ' + str(sfcdepth) + ' m' + '\n'
-                       + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
-                       + '# Datapoints: ' + str(len(tempplot)))
-            alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
-
-            # re-plotting (if not first pass through editor)
-            if alltabdata[curtabstr]["hasbeenprocessed"]:
-                del alltabdata[curtabstr]["ProfAx"].lines[-1]
-                alltabdata[curtabstr]["ProfAx"].plot(tempplot, depthplot, 'r', linewidth=2, label='QC')
-                alltabdata[curtabstr]["ProfCanvas"].draw()
-
-        except Exception:
-            trace_error()
-            self.posterror("Failed to update profile editor plots!")
-
+            
 
     #apply changes from sfc correction/max depth/depth delay spin boxes
     def applychanges(self):
@@ -1622,35 +1559,70 @@ class RunProgram(QMainWindow):
                 alltabdata[curtabstr]["profdata"]["temp_plot"] = tempplot
                 alltabdata[curtabstr]["profdata"]["depth_plot"] = depthplot
     
-                #re-plotting
-                del alltabdata[curtabstr]["ProfAx"].lines[-1]
-                alltabdata[curtabstr]["ProfAx"].plot(tempplot,depthplot,'r',linewidth=2,label='QC')
-                alltabdata[curtabstr]["ProfCanvas"].draw()
-    
-                #Replace drop info
-                lon = alltabdata[curtabstr]["profdata"]["lon"]
-                lat = alltabdata[curtabstr]["profdata"]["lat"]
-                oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
-                if lon >= 0: #prepping coordinate string
-                    ewhem = ' \xB0E'
-                else:
-                    ewhem = ' \xB0W'
-                if lat >= 0:
-                    nshem = ' \xB0N'
-                else:
-                    nshem = ' \xB0S'
-                proftxt = ('Profile Data: ' + '\n'  # profile data
-                           + str(abs(round(lon, 3))) + ewhem + ', ' + str(abs(round(lat, 3))) + nshem + '\n'
-                           + 'Ocean Depth: ' + str(np.round(oceandepth,1)) + ' m' + '\n'
-                           + 'QC Profile Depth: ' + str(int(maxdepth)) + ' m' + '\n'
-                           + 'QC SFC Correction: ' + str(sfcdepth) + ' m' + '\n'
-                           + 'QC Depth Delay: ' + str(depthdelay) + ' m' + '\n'
-                           + '# Datapoints: ' + str(len(tempplot)) )
-                alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
+                #re-plotting, updating text
+                self.updateprofeditplots()
                 
         except Exception:
             trace_error()
             self.posterror("Failed to update profile!")
+            
+
+    def updateprofeditplots(self):
+        curtabstr = "Tab " + str(self.whatTab())
+
+        try:
+            tempplot = alltabdata[curtabstr]["profdata"]["temp_plot"]
+            depthplot = alltabdata[curtabstr]["profdata"]["depth_plot"]
+            
+            # Replace drop info
+            proftxt = self.generateprofiledescription(curtabstr,len(tempplot))
+            alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
+
+            # re-plotting (if not first pass through editor)
+            if alltabdata[curtabstr]["hasbeenprocessed"]:
+                del alltabdata[curtabstr]["ProfAx"].lines[-1]
+                alltabdata[curtabstr]["ProfAx"].plot(tempplot, depthplot, 'r', linewidth=2, label='QC')
+                alltabdata[curtabstr]["ProfCanvas"].draw()
+
+        except Exception:
+            trace_error()
+            self.posterror("Failed to update profile editor plots!")
+    
+            
+    def generateprofiledescription(self,curtabstr,numpoints):
+        try:
+            sfcdepth = alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
+            maxdepth = alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
+            depthdelay = alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
+            
+            lon = alltabdata[curtabstr]["profdata"]["lon"]
+            lat = alltabdata[curtabstr]["profdata"]["lat"]
+            oceandepth = alltabdata[curtabstr]["profdata"]["oceandepth"]
+            
+            if lon >= 0: #prepping coordinate string
+                ewhem = ' \xB0E'
+            else:
+                ewhem = ' \xB0W'
+            if lat >= 0:
+                nshem = ' \xB0N'
+            else:
+                nshem = ' \xB0S'
+            
+            #generating text string
+            proftxt = ("Profile Data: \n" #header
+               + f"{abs(round(lon, 3))}{ewhem}, {abs(round(lat, 3))}{nshem} \n" #lat/lon
+               + f"Ocean Depth: {np.round(oceandepth,1)} m\n" #ocean depth
+               + f"QC Profile Depth: {np.round(maxdepth,1)} m\n" #profile depth
+               + f"QC SFC Correction: {sfcdepth} m\n" #user-specified surface correction
+               + f"QC Depth Delay: {depthdelay} m\n" #user-added depth delay
+               + f"# Datapoints: {numpoints}")
+            
+            return proftxt
+        
+        except Exception:
+            trace_error()
+            self.posterror("Failed to update profile!")
+            return "Unable to generate text!"
         
 
     #toggle visibility of climatology profile
@@ -1665,7 +1637,6 @@ class RunProgram(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Failed to toggle climatology overlay")
-        
         
         
         

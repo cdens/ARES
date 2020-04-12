@@ -102,16 +102,20 @@ class RunSettings(QMainWindow):
         self.mainWidget.setLayout(self.mainLayout)
         self.tabWidget = QTabWidget()
 
-        #adding widgets to main tab
-        self.mainLayout.addWidget(self.tabWidget,0,0,1,5)
+        #adding widgets to main tab, setting spacing
+        self.mainLayout.addWidget(self.tabWidget,1,1,1,5)
         self.applysettings = QPushButton('Apply Changes')
         self.applysettings.clicked.connect(self.applychanges)
         self.resetchanges = QPushButton('Reset Defaults')
         self.resetchanges.clicked.connect(self.resetdefaults)
-        self.mainLayout.addWidget(self.applysettings,1,1,1,1)
-        self.mainLayout.addWidget(self.resetchanges,1,3,1,1)
-        for i in range(0,5):
-            self.mainLayout.setRowStretch(i,1)
+        self.mainLayout.addWidget(self.applysettings,2,2,1,1)
+        self.mainLayout.addWidget(self.resetchanges,2,4,1,1)
+        colstretches = [3,1,1,1,1,1,3]
+        rowstretches = [3,1,1,3]
+        for i,r in enumerate(rowstretches):
+            self.mainLayout.setRowStretch(i,r)
+        for i,c in enumerate(colstretches):
+            self.mainLayout.setColumnStretch(i,c)
         self.show()
 
         
@@ -126,8 +130,15 @@ class RunSettings(QMainWindow):
 
 
     def resetdefaults(self):
-        #pull default settings
+        
+        #pull default settings, but preserve selected serial port (for GPS) and list of available ports
+        comport = self.settingsdict["comport"] #selected port
+        comports = self.settingsdict["comports"] #list of available ports
+        comportdetails = self.settingsdict["comportdetails"] #list of available port details
         self.settingsdict = setdefaultsettings()
+        self.settingsdict["comport"] = comport
+        self.settingsdict["comports"] = comports
+        self.settingsdict["comportdetails"] = comportdetails
         
         
         self.processortabwidgets["autodtg"].setChecked(self.settingsdict["autodtg"])
@@ -206,7 +217,7 @@ class RunSettings(QMainWindow):
         self.settingsdict["triggersiglev"] = float(self.processortabwidgets["triggersiglev"].value())/10
         self.settingsdict["triggerfftratio"] = float(self.processortabwidgets["triggerratio"].value())/100
 
-        self.settingsdict["platformID"] = self.processortabwidgets["IDedit"].text()
+        self.settingsdict["platformid"] = self.processortabwidgets["IDedit"].text()
 
         self.settingsdict["useclimobottom"] = self.profeditortabwidgets["useclimobottom"].isChecked()
         self.settingsdict["comparetoclimo"] =  self.profeditortabwidgets["comparetoclimo"].isChecked()
@@ -259,7 +270,7 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["autoID"] = QCheckBox('Autopopulate Platform Identifier') #4
             self.processortabwidgets["autoID"].setChecked(self.settingsdict["autoid"])
             self.processortabwidgets["IDlabel"] = QLabel('Platform Identifier:') #5
-            self.processortabwidgets["IDedit"] = QLineEdit(self.settingsdict["platformID"]) #6
+            self.processortabwidgets["IDedit"] = QLineEdit(self.settingsdict["platformid"]) #6
 
             self.processortabwidgets["filesavetypes"] = QLabel('Filetypes to save:       ') #7
             self.processortabwidgets["savelog"] = QCheckBox('LOG File') #8
@@ -654,7 +665,7 @@ class RunSettings(QMainWindow):
 
     def changefftratio(self, value):
         self.settingsdict["minfftratio"] = float(value) / 100
-        self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.minfftratio*100)).ljust(4,'0'))
+        self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.settingsdict["minfftratio"]*100)).ljust(4,'0'))
 
     def changetriggersiglev(self, value):
         self.settingsdict["triggersiglev"] = float(value) / 10
@@ -716,7 +727,7 @@ def setdefaultsettings():
     settingsdict["autodtg"] = True  # auto determine profile date/time as system date/time on clicking "START"
     settingsdict["autolocation"] = True #auto determine location with GPS
     settingsdict["autoid"] = True #autopopulate platform ID
-    settingsdict["platformID"] = 'AFNNN'
+    settingsdict["platformid"] = 'AFNNN'
     settingsdict["savelog"] = True
     settingsdict["saveedf"] = False
     settingsdict["savewav"] = True
@@ -768,7 +779,7 @@ def readsettings(filename):
             line = file.readline()
             settingsdict["autoid"] = bool(line.strip().split()[1]) 
             line = file.readline()
-            settingsdict["platformID"] = str(line.strip().split()[1]) 
+            settingsdict["platformid"] = str(line.strip().split()[1]) 
             line = file.readline()
             settingsdict["savelog"] = bool(line.strip().split()[1]) 
             line = file.readline()
@@ -848,7 +859,7 @@ def writesettings(filename,settingsdict):
         file.write('autodtg: '+str(settingsdict["autodtg"]) + '\n')
         file.write('autolocation: '+str(settingsdict["autolocation"]) + '\n')
         file.write('autoid: '+str(settingsdict["autoid"]) + '\n')
-        file.write('platformID: '+str(settingsdict["platformID"]) + '\n')
+        file.write('platformid: '+str(settingsdict["platformid"]) + '\n')
         file.write('savelog: '+str(settingsdict["savelog"]) + '\n')
         file.write('saveedf: '+str(settingsdict["saveedf"]) + '\n')
         file.write('savewav: '+str(settingsdict["savewav"]) + '\n')

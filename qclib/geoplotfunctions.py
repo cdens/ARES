@@ -72,22 +72,32 @@ def setgeotick(ax):
     yticklabels = ax.get_yticklabels()
     
     # xticklabel correction
-    for i in range(len(xticklabels)):
-        if xticks[i] >= 0: # hemisphere of current tick
+    for i,ctick in enumerate(xticks):
+        if ctick >= 0 and ctick <= 180: #eastern hemisphere
             hem = 'E'
-        else:
+        elif ctick < 0 and ctick > -180: #western hemisphere
             hem = 'W'
-        clab = str(abs(xticks[i])) + '$^\circ$' + hem # pull current tick label
+            ctick = abs(ctick)
+        elif ctick <= -180: #WH plot overlap into EH
+            ctick = ctick + 360
+            hem = 'E'
+        elif ctick > 180: #EH plot overlap into WH
+            ctick = abs(ctick - 360)
+            hem = 'W'
+        clab = f"{ctick}$^\circ${hem}" # set current tick label
         xticklabels[i]._text = clab
         
     # yticklabel correction
-    for i in range(len(yticklabels)):
-        if yticks[i] >= 0: # hemisphere of current tick
+    for i,ctick in enumerate(yticks):
+        if ctick >= 0: # hemisphere of current tick
             hem = 'N'
         else:
             hem = 'S'
-        clab = str(abs(yticks[i])) + '$^\circ$' + hem # pull current tick label
-        yticklabels[i]._text = clab
+        clab = f"{ctick}$^\circ${hem}" # set current tick label
+        if abs(ctick) <= 90:
+            yticklabels[i]._text = clab
+        else:
+            yticklabels[i]._text = ''
         
     # applying corrections
     ax.set_xticklabels(xticklabels)

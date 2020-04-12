@@ -13,7 +13,7 @@ qclib/__pycache__/
 *.ARESsettings
 
 #any zipped folders with data
-*.gz
+*.zip
 
 #Mac stuff
 .DS_Store
