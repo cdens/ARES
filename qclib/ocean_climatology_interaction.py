@@ -198,8 +198,8 @@ def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climod
 def getoceandepth(lat,lon,dcoord,bathydata):
 
     #get longitudes and latitudes to pull- the +/- 3 adds a little leeway so no white space appears on the plot after it is resized to correct for latitudinal contraction + plot aspect ratio
-    lonstopull = [d+lon for d in range(-dcoord-3,dcoord+3+1)]
-    latstopull = [d+lat for d in range(-dcoord-3,dcoord+3+1)]
+    lonstopull = [d+lon for d in range(-dcoord-4,dcoord+4+1)]
+    latstopull = [d+lat for d in range(-dcoord-1,dcoord+1+1)]
     
     #generate exportlon and exportlat
     exportlon = []
