@@ -1,0 +1,41 @@
+Bundling and Installer Generation Instructions:
+1. Bundle Python dependencies using PyInstaller and .spec file
+2. Add back in required data + supporting functions with bundled code
+3. Generate installer using Inno Script Setup and .iss file
+
+
+-----
+Bundling Python dependencies with PyInstaller
+
+PyInstaller pulls all necessary code from Python module dependencies and Python base into a generated directory and creates an executable that can be used to launch the program. If pointed to a python file (e.g. 'pyinstaller main.py'), PyInstaller autogenerates a .spec file containing the specifications for bundling and executable generation. PyInstaller can be instead directed to run from an existing .spec file (in this case, main.spec) using the syntax 'pyinstaller main.spec'
+
+This generates a couple directories, but the directory of concern is main/dist/ as this contains the executable and code necessary to run the Python code in a standalone environment. However, supporting functions and data are not automatically copied into this directory, and that must be done manually (described in next section)
+
+**NOTE: The generated executable/directory will only work on similar operating systems (e.g. for a bundled program to run on Windows 10 64-bit, it must be generated on a Windows 10 64-bit machine)**
+
+
+-------
+The following files + folders must be copied over to the main/dist directory:
+> settingswindow.py (file)
+> qclib (folder)
+> qcdata (folder)
+> testdata (folder)
+
+Check to ensure that main.py was automatically placed in main/dist by PyInstaller
+
+Now, the main/dist directory can be renamed and moved somewhere else (e.g. C:\\Program Files\ARES\) to run main.exe as a standalone program.
+
+In order to simplify transfer of ARES between computers, a single executable installer file can be generated (described in the next section)
+
+
+
+------
+Generating an executable installer with Inno Script Studio:
+
+Inno Script Studio (https://www.kymoto.org/products/inno-script-studio/) is one good option to generate an executable installer file. This system allows one to set the icon for the installer, password protect it, set the target installation location and require or remove need for administrator access during installation, etc.
+
+To run it, one must use an Inno Script Setup (.iss) script that specifies characteristics for the installer. In this case, the setup script is ares_installer_setup.iss
+
+The .iss script must be changed to point to the directory where ARES was bundled (originally main/dist from PyInstaller). For example, if the bundled directory is C:\\Users\MyUserName\Documents\ARES, every instance of "PATH_TO_DIRECTORY" in the .iss file should be replaced with "Users\MyUserName\Documents".
+
+There are also options to configure the drop icon, installer PIN protection, driver installation, and other features that can be adjusted. Running the program will generate an executable with the base filename specified by the OutputBaseFilename in the [Setup] section of the script.
