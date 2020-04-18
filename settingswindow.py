@@ -165,14 +165,12 @@ class RunSettings(QMainWindow):
         self.processortabwidgets["fftwindowlabel"].setText('FFT Window (s): ' + str(self.settingsdict["fftwindow"]))  # 15
         self.processortabwidgets["fftwindow"].setValue(int(self.settingsdict["fftwindow"] * 100))
 
-        #sigsliderval = np.log10(self.settingsdict["minsiglev"])
         self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (log[x]): ' + str(np.round(self.settingsdict["minsiglev"], 2)).ljust(4, '0'))  # 17
         self.processortabwidgets["fftsiglev"].setValue(int(self.settingsdict["minsiglev"]*10))
 
         self.processortabwidgets["fftratiolabel"].setText('Minimum Signal Ratio (%): ' + str(np.round(self.settingsdict["minfftratio"] * 100)))  # 19
         self.processortabwidgets["fftratio"].setValue(int(self.settingsdict["minfftratio"] * 100))
 
-        #trigsigsliderval = np.log10(self.settingsdict["triggersiglev"])
         self.processortabwidgets["triggersiglevlabel"].setText(
             'Trigger Signal Level (log[x]): ' + str(np.round(self.settingsdict["triggersiglev"], 2)).ljust(4, '0'))  # 17
         self.processortabwidgets["triggersiglev"].setValue(int(self.settingsdict["triggersiglev"]*10))
@@ -303,7 +301,6 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["fftwindow"].setMaximum(100)
             self.processortabwidgets["fftwindow"].valueChanged[int].connect(self.changefftwindow)
 
-            #sigsliderval = np.log10()
             self.processortabwidgets["fftsiglevlabel"] = QLabel('Minimum Signal Level (log[x]): ' + str(np.round(self.settingsdict["minsiglev"],2)).ljust(4,'0'))  # 17
             self.processortabwidgets["fftsiglev"] = QSlider(Qt.Horizontal)  # 18
             self.processortabwidgets["fftsiglev"].setMinimum(400)
@@ -318,7 +315,6 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["fftratio"].setMaximum(100)
             self.processortabwidgets["fftratio"].valueChanged[int].connect(self.changefftratio)
 
-            #trigsigsliderval = np.log10(self.settingsdict["triggersiglev"])
             self.processortabwidgets["triggersiglevlabel"] = QLabel(
                 'Trigger Signal Level (log[x]): ' + str(np.round(self.settingsdict["triggersiglev"], 2)).ljust(4, '0'))  # 17
             self.processortabwidgets["triggersiglev"] = QSlider(Qt.Horizontal)  # 18

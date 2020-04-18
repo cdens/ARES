@@ -353,8 +353,6 @@ class ThreadProcessor(QRunnable):
                 del self.audiostream[:bufferlength] #remove data from start
                 wave.Wave_write.writeframes(self.wavfile,bytearray(bufferdata))
 
-            curtabnum = self.curtabnum
-
             # initializes audio callback function
             if self.wrdll.SetupStreams(self.hradio, None, None, updateaudiobuffer, c_int(self.curtabnum)) == 0:
                 self.kill(7)

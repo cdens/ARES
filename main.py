@@ -226,6 +226,9 @@ class RunProgram(QMainWindow):
         # creating threadpool
         self.threadpool = QThreadPool()
         self.threadpool.setMaxThreadCount(6)
+        
+        # variable to prevent recursion errors when updating VHF channel/frequency across multiple tabs
+        self.changechannelunlocked = True
 
         # delete all temporary files
         allfilesanddirs = listdir(self.tempdir)
@@ -597,9 +600,13 @@ class RunProgram(QMainWindow):
     #these options use a lookup table for VHF channel vs frequency
     def changefrequencytomatchchannel(self,newchannel):
         try:
-            curtabstr = "Tab " + str(self.whatTab())
-            newfrequency,newchannel = vsp.channelandfrequencylookup(newchannel,'findfrequency')
-            self.changechannelandfrequency(newchannel,newfrequency)
+            if self.changechannelunlocked: #to prevent recursion
+                self.changechannelunlocked = False 
+                
+                curtabstr = "Tab " + str(self.whatTab())
+                newfrequency,newchannel = vsp.channelandfrequencylookup(newchannel,'findfrequency')
+                self.changechannelandfrequency(newchannel,newfrequency,curtabstr)
+                self.changechannelunlocked = True 
             
         except Exception:
             trace_error()
@@ -610,18 +617,22 @@ class RunProgram(QMainWindow):
     #these options use a lookup table for VHF channel vs frequency
     def changechanneltomatchfrequency(self,newfrequency):
         try:
-            curtabstr = "Tab " + str(self.whatTab())
-            #special step to skip invalid frequencies!
-            if newfrequency == 161.5 or newfrequency == 161.875:
-                oldchannel = alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].value()
-                oldfrequency,_ = vsp.channelandfrequencylookup(oldchannel,'findfrequency')
-                if oldfrequency >= 161.6:
-                    newfrequency = 161.125
-                else:
-                    newfrequency = 162.25
-            newchannel,newfrequency = vsp.channelandfrequencylookup(newfrequency,'findchannel')
-            
-            self.changechannelandfrequency(newchannel,newfrequency)
+            if self.changechannelunlocked: #to prevent recursion
+                self.changechannelunlocked = False 
+                
+                curtabstr = "Tab " + str(self.whatTab())
+                #special step to skip invalid frequencies!
+                if newfrequency == 161.5 or newfrequency == 161.875:
+                    oldchannel = alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].value()
+                    oldfrequency,_ = vsp.channelandfrequencylookup(oldchannel,'findfrequency')
+                    if oldfrequency >= 161.6:
+                        newfrequency = 161.125
+                    else:
+                        newfrequency = 162.25
+                        
+                newchannel,newfrequency = vsp.channelandfrequencylookup(newfrequency,'findchannel')
+                self.changechannelandfrequency(newchannel,newfrequency,curtabstr)
+                self.changechannelunlocked = True 
             
         except Exception:
             trace_error()
@@ -629,22 +640,25 @@ class RunProgram(QMainWindow):
             
             
             
-    def changechannelandfrequency(self,newchannel,newfrequency):
+    def changechannelandfrequency(self,newchannel,newfrequency,curtabstr):
         try:
-            
-            alltabdata[curtabstr]["tabwidgets"]["vhfchannel"].setValue(newchannel)
-            alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setValue(newfrequency)
 
             curdatasource = alltabdata[curtabstr]["datasource"]
-            # checks to make sure all other tabs with same receiver are set to the same channel/freq
+            
+            # sets all tabs with the current receiver to the same channel/freq
             for ctab in alltabdata:
                 if alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
+                    
+                    #changes channel+frequency values for all tabs set to current data source
+                    #NOTE: this requires the tab to be actively processing to update it, so users can "stage" new tabs set to the same receiver on a different channel during high frequency AXBT deployments
                     if alltabdata[ctab]["isprocessing"] and alltabdata[ctab]["datasource"] == curdatasource:
-                        alltabdata[ctab]["tabwidgets"]["vhfchannel"].setValue(newchannel)
-                        alltabdata[ctab]["tabwidgets"]["vhffreq"].setValue(newfrequency)
-
-            if alltabdata[curtabstr]["isprocessing"] and alltabdata[curtabstr]["datasource"] != 'Audio' and alltabdata[curtabstr]["datasource"] != 'Test':
-                alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
+                        alltabdata[ctab]["tabwidgets"]["vhfchannel"].setValue(int(newchannel))
+                        alltabdata[ctab]["tabwidgets"]["vhffreq"].setValue(int(newfrequency))
+                        
+                        #sends signal to processor thread to change demodulation VHF frequency for any actively processing non-test/non-audio tabs
+                        if curdatasource != 'Audio' and curdatasource != 'Test':
+                            alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
+                
         except Exception:
             trace_error()
             self.posterror("Frequency/channel update error!")
@@ -1341,29 +1355,30 @@ class RunProgram(QMainWindow):
 
             #run autoQC code, pull variables from alltabdata dict
             alltabdata[curtabstr]["hasbeenprocessed"] = False
-            self.runqc()
-            depth = alltabdata[curtabstr]["profdata"]["depth_qc"]
-            temperature = alltabdata[curtabstr]["profdata"]["temp_qc"]
-            matchclimo = alltabdata[curtabstr]["profdata"]["matchclimo"]
-
-            # plot data, refresh plots on window
-            alltabdata[curtabstr]["climohandle"] = tplot.makeprofileplot(alltabdata[curtabstr]["ProfAx"],
-                                                                         rawtemperature,
-                                                                         rawdepth, temperature, depth,
-                                                                         climotempfill,
-                                                                         climodepthfill, dtg, matchclimo)
-            tplot.makelocationplot(alltabdata[curtabstr]["LocFig"],alltabdata[curtabstr]["LocAx"],lat,lon,dtg,exportlon,exportlat,exportrelief,6)
-            alltabdata[curtabstr]["ProfCanvas"].draw() #update figure canvases
-            alltabdata[curtabstr]["LocCanvas"].draw()
-            alltabdata[curtabstr]["pt_type"] = 0  # sets that none of the point selector buttons have been pushed
-            alltabdata[curtabstr]["hasbeenprocessed"] = True #note that the autoQC driver has run at least once
-
-            #configure spinboxes to run "applychanges" function after being changed
-            alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].valueChanged.connect(self.applychanges)
-            alltabdata[curtabstr]["tabwidgets"]["maxdepth"].valueChanged.connect(self.applychanges)
-            alltabdata[curtabstr]["tabwidgets"]["depthdelay"].valueChanged.connect(self.applychanges)
-
-            alltabdata[curtabstr]["tabtype"] = "ProfileEditor"
+            
+            if self.runqc(): #only executes following code if autoQC runs sucessfully
+                depth = alltabdata[curtabstr]["profdata"]["depth_qc"]
+                temperature = alltabdata[curtabstr]["profdata"]["temp_qc"]
+                matchclimo = alltabdata[curtabstr]["profdata"]["matchclimo"]
+    
+                # plot data, refresh plots on window
+                alltabdata[curtabstr]["climohandle"] = tplot.makeprofileplot(alltabdata[curtabstr]["ProfAx"],
+                                                                             rawtemperature,
+                                                                             rawdepth, temperature, depth,
+                                                                             climotempfill,
+                                                                             climodepthfill, dtg, matchclimo)
+                tplot.makelocationplot(alltabdata[curtabstr]["LocFig"],alltabdata[curtabstr]["LocAx"],lat,lon,dtg,exportlon,exportlat,exportrelief,6)
+                alltabdata[curtabstr]["ProfCanvas"].draw() #update figure canvases
+                alltabdata[curtabstr]["LocCanvas"].draw()
+                alltabdata[curtabstr]["pt_type"] = 0  # sets that none of the point selector buttons have been pushed
+                alltabdata[curtabstr]["hasbeenprocessed"] = True #note that the autoQC driver has run at least once
+    
+                #configure spinboxes to run "applychanges" function after being changed
+                alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].valueChanged.connect(self.applychanges)
+                alltabdata[curtabstr]["tabwidgets"]["maxdepth"].valueChanged.connect(self.applychanges)
+                alltabdata[curtabstr]["tabwidgets"]["depthdelay"].valueChanged.connect(self.applychanges)
+    
+                alltabdata[curtabstr]["tabtype"] = "ProfileEditor"
         except Exception:
             trace_error()
             self.posterror("Failed to build profile editor tab!")
@@ -1400,7 +1415,9 @@ class RunProgram(QMainWindow):
                 temperature, depth = qc.autoqc(rawtemperature, rawdepth, self.settingsdict["smoothlev"],self.settingsdict["profres"], self.settingsdict["maxstdev"], self.settingsdict["checkforgaps"])
                 matchclimo, climobottomcutoff = oci.comparetoclimo(temperature, depth, climotemps, climodepths,climotempfill,climodepthfill)
             except Exception:
-                temperature = depth = matchclimo = climobottomcutoff = 0
+                temperature = np.array([np.NaN])
+                depth = np.array([0])
+                matchclimo = climobottomcutoff = 0
                 trace_error()
                 self.posterror("Error raised in automatic profile QC")
                 
@@ -1437,10 +1454,14 @@ class RunProgram(QMainWindow):
                 alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].setChecked(False)
 
             self.updateprofeditplots() #update profile plot, data on window
+            
+            return True #return true if autoQC runs successfully
 
         except Exception:
             trace_error()
             self.posterror("Failed to run autoQC")
+            
+            return False #return false if autoQC fails
 
 
 
