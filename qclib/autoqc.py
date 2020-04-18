@@ -150,20 +150,20 @@ def runsmoother(depth_despike,temp_despike,smoothlev):
 #subsample profile
 def subsample_profile(depth_smooth,temp_smooth,profres):
     
-    dTdz = [] #calculating profile slope (append 0 at start and end so length matches that of depth_smooth)
-    dTdz.append(0)
+    dtdz = [] #calculating profile slope (append 0 at start and end so length matches that of depth_smooth)
+    dtdz.append(0)
     for i in range(1,len(temp_smooth)-1): #need to use range here because we are only interested in a subset of indices
-        #dTdz = (t3 - t1)/(z3 - z1): centered on z2
-        dTdz.append(((temp_smooth[i+1] - temp_smooth[i-1])/ 
+        #dtdz = (t3 - t1)/(z3 - z1): centered on z2
+        dtdz.append(((temp_smooth[i+1] - temp_smooth[i-1])/ 
               (depth_smooth[i+1]-depth_smooth[i-1])))
-    dTdz.append(0)
+    dtdz.append(0)
 
     depth = []
     temperature = []
     lastdepth = -100000 #large enough value so subsampler will always grab first datapoint
     for i,cdepth in enumerate(depth_smooth):
         #constraint on first derivative of temp with depth (no unrealistic spikes), if the point is a critical value given the selected resolution level, append to output profile
-        if dTdz[i] <= 0.5 and cdepth-lastdepth >= profres:
+        if dtdz[i] <= 0.5 and cdepth-lastdepth >= profres:
             depth.append(cdepth)
             temperature.append(temp_smooth[i])
             lastdepth = cdepth
