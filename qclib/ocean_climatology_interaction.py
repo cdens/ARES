@@ -114,6 +114,12 @@ def getclimatologyprofile(lat,lon,month,climodata):
     #error margin for shading is +/- 1 standard deviation
     climotemperrors = sint.interpn((depth,clat, clon), cmonthdevs, (depth,lat, lon))
     
+    #find/remove NaNs
+    notnanind = ~np.isnan(climotemps*climotemperrors*depth)
+    climotemps = climotemps[notnanind]
+    climotemperrors = climotemperrors[notnanind]
+    depth = depth[notnanind]
+    
     #generating fill vectors
     tempfill = np.append(climotemps-climotemperrors,np.flip(climotemps+climotemperrors))
     depthfill = np.append(depth,np.flip(depth))

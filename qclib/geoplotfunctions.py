@@ -117,7 +117,7 @@ def getoceanregion(lon,lat):
     
     #set point, initialize region output
     droppoint = Point(lon, lat)
-    region = 'Region Unassigned'
+    region = 'Unassigned'
     
     #load shape file data
     regioninput = shread("qcdata/regions/World_Seas_IHO_v3.shp")
