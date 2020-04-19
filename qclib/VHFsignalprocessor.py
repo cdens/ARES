@@ -508,7 +508,7 @@ class ThreadProcessor(QRunnable):
     #terminate the audio file recording (for WINRADIO processor tabs) if it exceeds a certain length set by maxframenum
     def killaudiorecording(self):
         wave.Wave_write.close(self.wavfile) #close WAV file
-        self.signals.failed.emit(reason) #pass warning message back to GUI
+        self.signals.failed.emit(10) #pass warning message back to GUI
 
         
         

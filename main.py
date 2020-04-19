@@ -51,7 +51,6 @@
 #       o makenewprocessortab: builds signal processing tab
 #       o datasourcerefresh: refreshes list of connected receivers
 #       o datasourcechange: update function when a different receiver is selected
-#       o checkwinradiooptions: interacts with WiNRADIO DLL to get a list of serial numbers for connected receivers
 #       o changefrequencytomatchchannel: uses VHF channel/frequency lookup to ensure the two fields match (pyqtSignal)
 #       o changechanneltomatchfrequency: uses VHF channel/frequency lookup to ensure the two fields match (pyqtSignal)
 #       o changechannelandfrequency: called by previous two functions to actually update channel/frequency in ARES
@@ -590,20 +589,7 @@ class RunProgram(QMainWindow):
             trace_error()
             self.posterror("Failed to change selected WiNRADIO receiver for current tab.")
             
-        
             
-    
-    def checkwinradiooptions(self,winradiooptions):
-        isbusy = [0] * len(winradiooptions)
-        for wri in range(len(winradiooptions)):
-            wr = winradiooptions[wri]
-            for ctab in self.alltabdata:
-                if self.alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or self.alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
-                    if self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == wr:
-                        isbusy[wri] = 1
-        return isbusy
-        
-    
         
     #these options use a lookup table for VHF channel vs frequency
     def changefrequencytomatchchannel(self,newchannel):
@@ -660,7 +646,6 @@ class RunProgram(QMainWindow):
                 if self.alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or self.alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
                     
                     #changes channel+frequency values for all tabs set to current data source
-                    #NOTE: this requires the tab to be actively processing to update it, so users can "stage" new tabs set to the same receiver on a different channel during high frequency AXBT deployments
                     if self.alltabdata[ctab]["datasource"] == curdatasource:
                         self.alltabdata[ctab]["tabwidgets"]["vhfchannel"].setValue(int(newchannel))
                         self.alltabdata[ctab]["tabwidgets"]["vhffreq"].setValue(newfrequency)
@@ -1201,7 +1186,7 @@ class RunProgram(QMainWindow):
                 elif logfile[-4:].lower() == '.edf':
                     rawtemperature,rawdepth,year,month,day,hour,minute,second,lat,lon = tfio.readedffile(logfile)
                     time = hour*100 + second
-                elif logfile[-4:].lower() == '.fin' or logfile[-4:].lower() == '.nvo' or logfile[-4:].lower() == '.txt': #assumes .txt are fin/nvo format
+                elif logfile[-4:].lower() in ['.fin','.nvo','.txt']: #assumes .txt are fin/nvo format
                     rawtemperature,rawdepth,day,month,year,time,lat,lon,_ = tfio.readfinfile(logfile)
                 elif logfile[-5:].lower() == '.jjvv':
                     rawtemperature,rawdepth,day,month,year,time,lat,lon,identifier = tfio.readjjvvfile(logfile,round(year,-1))
@@ -1209,7 +1194,7 @@ class RunProgram(QMainWindow):
                     QApplication.restoreOverrideCursor()
                     self.postwarning('Invalid Data File Format (must be .dta,.edf,.nvo,.fin, or .jjvv)!')
                     return
-                    
+                                        
                 #removing NaNs
                 notnanind = ~np.isnan(rawtemperature*rawdepth)
                 rawtemperature = rawtemperature[notnanind]
@@ -1229,7 +1214,7 @@ class RunProgram(QMainWindow):
             self.posterror("Failed to read profile input data")
             QApplication.restoreOverrideCursor()
             return
-        
+        print(f"lat:{lat}, lon:{lon}")
         #only gets here if all inputs are good- this function switches the tab to profile editor view
         self.continuetoqc(curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,time,logfile,identifier)
         

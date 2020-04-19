@@ -71,8 +71,8 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     region = gplt.getoceanregion(lon,lat)
     
     #set inital axis limits
-    lonrange = [round(lon)-dcoord,round(lon)+dcoord]
-    latrange = [round(lat)-dcoord,round(lat)+dcoord]
+    lonrange = [int(round(lon)-dcoord),int(round(lon)+dcoord)]
+    latrange = [int(round(lat)-dcoord),int(round(lat)+dcoord)]
 
     #read/generate topography colormap
     topo = np.genfromtxt('qclib/topocolors.txt',delimiter=',')
