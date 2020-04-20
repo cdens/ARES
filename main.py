@@ -188,9 +188,12 @@ class RunProgram(QMainWindow):
         mainLayout = QVBoxLayout()
         mainWidget.setLayout(mainLayout)
         self.tabWidget = QTabWidget()
+        tabfont = QFont()
+        tabfont.setPointSize(16)
+        self.tabWidget.setFont(tabfont)
         mainLayout.addWidget(self.tabWidget)
-        self.myBoxLayout = QVBoxLayout()
-        self.tabWidget.setLayout(self.myBoxLayout)
+        self.vBoxLayout = QVBoxLayout()
+        self.tabWidget.setLayout(self.vBoxLayout)
         self.show()
 
         #track whether preferences tab is opened
@@ -485,30 +488,36 @@ class RunProgram(QMainWindow):
             
             #should be 19 entries 
             widgetorder = ["datasourcetitle","refreshdataoptions","datasource","channeltitle","freqtitle","vhfchannel","vhffreq","startprocessing","stopprocessing","processprofile","datetitle","dateedit","timetitle","timeedit","lattitle","latedit","lontitle","lonedit","idtitle","idedit"]
-            wrows     = [1,1,2,3,4,3,4,5,5,6,1,1,2,2,3,3,4,4,5,5]
-            wcols     = [2,3,2,2,2,3,3,2,3,3,4,5,4,5,4,5,4,5,4,5]
+            wrows     = [1,1,2,3,4,3,4,5,6,6,1,1,2,2,3,3,4,4,5,5]
+            wcols     = [3,4,3,3,3,4,4,3,3,6,6,7,6,7,6,7,6,7,6,7]
             wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-            wcolext   = [1,1,2,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1]
+            wcolext   = [1,1,2,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1]
+            
+            labelfont = QFont()
+            labelfont.setPointSize(16)
     
             #adding user inputs
             for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
+                self.alltabdata[curtabstr]["tabwidgets"][i].setFont(labelfont)
                 self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
                     
             #adding table widget after all other buttons populated
             self.alltabdata[curtabstr]["tabwidgets"]["table"] = QTableWidget() #19
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setColumnCount(7)
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setRowCount(0) 
-            self.alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalHeaderLabels(('Time (s)', 'Frequency (Hz)', 'Strength (dBm)', 'FFT Level', 'FFT Ratio (%)' ,'Depth (m)','Temperature (C)'))
+            self.alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalHeaderLabels(('Time (s)', 'Freq (Hz)', 'ChS (dBm)', 'Sp (dB)', 'Rp (%)' ,'Depth (m)','Temp (C)'))
+            self.alltabdata[curtabstr]["tabwidgets"]["table"].setFont(labelfont)
             self.alltabdata[curtabstr]["tabwidgets"]["table"].verticalHeader().setVisible(False)
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) #removes scroll bars
             header = self.alltabdata[curtabstr]["tabwidgets"]["table"].horizontalHeader() 
+            header.setFont(labelfont)
             for ii in range(0,7):
                 header.setSectionResizeMode(ii, QHeaderView.Stretch)  
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setEditTriggers(QTableWidget.NoEditTriggers)
-            self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"]["table"],8,2,2,4)
+            self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"]["table"],8,2,2,7)
 
             #adjusting stretch factors for all rows/columns
-            colstretch = [5,1,1,1,1,1,1]
+            colstretch = [8,0,1,1,1,1,1,1,1]
             for col,cstr in zip(range(0,len(colstretch)),colstretch):
                 self.alltabdata[curtabstr]["tablayout"].setColumnStretch(col,cstr)
             rowstretch = [1,1,1,1,1,1,1,1,10]
@@ -624,9 +633,7 @@ class RunProgram(QMainWindow):
                     else:
                         newfrequency = 162.25
                         
-                print(f"New Frequency Before: {newfrequency}")
                 newchannel,newfrequency = vsp.channelandfrequencylookup(newfrequency,'findchannel')
-                print(f"New Frequency After: {newfrequency}, New Channel: {newchannel}")
                 self.changechannelandfrequency(newchannel,newfrequency,curtabstr)
                 self.changechannelunlocked = True 
             
@@ -643,16 +650,14 @@ class RunProgram(QMainWindow):
             
             # sets all tabs with the current receiver to the same channel/freq
             for ctab in self.alltabdata:
-                if self.alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or self.alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
+                #changes channel+frequency values for all tabs set to current data source
+                if self.alltabdata[ctab]["datasource"] == curdatasource:
+                    self.alltabdata[ctab]["tabwidgets"]["vhfchannel"].setValue(int(newchannel))
+                    self.alltabdata[ctab]["tabwidgets"]["vhffreq"].setValue(newfrequency)
                     
-                    #changes channel+frequency values for all tabs set to current data source
-                    if self.alltabdata[ctab]["datasource"] == curdatasource:
-                        self.alltabdata[ctab]["tabwidgets"]["vhfchannel"].setValue(int(newchannel))
-                        self.alltabdata[ctab]["tabwidgets"]["vhffreq"].setValue(newfrequency)
-                        
-                        #sends signal to processor thread to change demodulation VHF frequency for any actively processing non-test/non-audio tabs
-                        if self.alltabdata[ctab]["isprocessing"] and curdatasource != 'Audio' and curdatasource != 'Test':
-                            self.alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
+                    #sends signal to processor thread to change demodulation VHF frequency for any actively processing non-test/non-audio tabs
+                    if self.alltabdata[ctab]["isprocessing"] and curdatasource != 'Audio' and curdatasource != 'Test':
+                        self.alltabdata[curtabstr]["processor"].changecurrentfrequency(newfrequency)
                 
         except Exception:
             trace_error()
@@ -666,9 +671,8 @@ class RunProgram(QMainWindow):
             curtabstr = "Tab " + str(self.whatTab())
             #updates fft settings for any active tabs
             for ctab in self.alltabdata:
-                if self.alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or self.alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
-                    if self.alltabdata[ctab]["isprocessing"]: # and self.alltabdata[ctab]["datasource"] != 'Test' and self.alltabdata[ctab]["datasource"] != 'Audio':
-                        self.alltabdata[curtabstr]["processor"].changethresholds(self.settingsdict["fftwindow"],self.settingsdict["minfftratio"],self.settingsdict["minsiglev"],self.settingsdict["triggerfftratio"],self.settingsdict["triggersiglev"])
+                if self.alltabdata[ctab]["isprocessing"]: 
+                    self.alltabdata[curtabstr]["processor"].changethresholds(self.settingsdict["fftwindow"], self.settingsdict["minfftratio"], self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"], self.settingsdict["triggersiglev"])
         except Exception:
             trace_error()
             self.posterror("Error updating FFT settings!")
@@ -714,11 +718,9 @@ class RunProgram(QMainWindow):
 
                     #checks to make sure current receiver isn't busy
                     for ctab in self.alltabdata:
-                        if ctab != curtabstr and (self.alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or
-                                                  self.alltabdata[ctab]["tabtype"] == "SignalProcessor_completed"):
-                            if self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == datasource:
-                                self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
-                                return
+                        if ctab != curtabstr and self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == datasource:
+                            self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
+                            return
 
                 #finds current tab, gets rid of scroll bar on table
                 curtabnum = self.alltabdata[curtabstr]["tabnum"]
@@ -793,11 +795,10 @@ class RunProgram(QMainWindow):
                 # checks to make sure all other tabs with same receiver are stopped (because the radio device is stopped)
                 if datasource != 'Test' and datasource != 'Audio':
                     for ctab in self.alltabdata:
-                        if self.alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or self.alltabdata[ctab]["tabtype"] == "SignalProcessor_completed":
-                            if self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == datasource:
-                                self.alltabdata[ctab]["processor"].abort()
-                                self.alltabdata[ctab]["isprocessing"] = False  # processing is done
-                                self.alltabdata[ctab]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+                        if self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == datasource:
+                            self.alltabdata[ctab]["processor"].abort()
+                            self.alltabdata[ctab]["isprocessing"] = False  # processing is done
+                            self.alltabdata[ctab]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
                     
         except Exception:
             trace_error()
@@ -1020,8 +1021,6 @@ class RunProgram(QMainWindow):
                     return
                     
             #prevent processor from continuing if there is no data
-            print(rawdepth)
-            print(rawtemperature)
             if len(rawdepth) == 0:
                 self.postwarning("No valid signal was identified in this profile! Please reprocess from the .wav file with lower minimum signal thresholds to generate a valid profile.")
                 return
@@ -1055,7 +1054,7 @@ class RunProgram(QMainWindow):
             #tab indexing update
             newtabnum,curtabstr = self.addnewtab()
     
-            self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"tabtype":"ProfileEditorInput"}
+            self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"tabtype":"ProfileEditorInput", "isprocessing":False, "datasource":"None"} #isprocessing and datasource are only relevant for processor tabs
             self.alltabdata[curtabstr]["tablayout"].setSpacing(10)
             
             self.setnewtabcolor(self.alltabdata[curtabstr]["tab"])
@@ -1103,8 +1102,12 @@ class RunProgram(QMainWindow):
             wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
             wcolext   = [2,1,1,1,1,1,1,1,1,1,1,1,1,2,2]    
             
+            labelfont = QFont()
+            labelfont.setPointSize(16)
+            
             #adding user inputs
             for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
+                self.alltabdata[curtabstr]["tabwidgets"][i].setFont(labelfont)
                 self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
             
             #forces grid info to top/center of window
@@ -1214,7 +1217,6 @@ class RunProgram(QMainWindow):
             self.posterror("Failed to read profile input data")
             QApplication.restoreOverrideCursor()
             return
-        print(f"lat:{lat}, lon:{lon}")
         #only gets here if all inputs are good- this function switches the tab to profile editor view
         self.continuetoqc(curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,time,logfile,identifier)
         
@@ -1354,12 +1356,14 @@ class RunProgram(QMainWindow):
             #formatting widgets
             self.alltabdata[curtabstr]["tabwidgets"]["proftxt"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             self.alltabdata[curtabstr]["tabwidgets"]["rcodetitle"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
-            titlefont = QFont()
-            titlefont.setBold(True)
-            self.alltabdata[curtabstr]["tabwidgets"]["rcodetitle"].setFont(titlefont)
             self.alltabdata[curtabstr]["tabwidgets"]["depthdelaytitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.alltabdata[curtabstr]["tabwidgets"]["sfccorrectiontitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.alltabdata[curtabstr]["tabwidgets"]["maxdepthtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            
+            
+            #formatting for other labels
+            labelfont = QFont()
+            labelfont.setPointSize(16)
             
             #should be 15 entries
             widgetorder = ["toggleclimooverlay","addpoint","removepoint","removerange","sfccorrectiontitle","sfccorrection",
@@ -1373,7 +1377,9 @@ class RunProgram(QMainWindow):
             
             #adding user inputs
             for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
+                self.alltabdata[curtabstr]["tabwidgets"][i].setFont(labelfont)
                 self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
+                
 
             #adjusting stretch factors for all rows/columns
             colstretch = [13,1,1,1,1,1,1,1,1]
@@ -1847,7 +1853,6 @@ class RunProgram(QMainWindow):
     def savedataincurtab(self):
         try:
             #getting directory to save files from QFileDialog
-            print(self.defaultfilewritedir)
             try:
                 outdir = str(QFileDialog.getExistingDirectory(self, "Select Directory to Save File(s)",self.defaultfilewritedir,QFileDialog.DontUseNativeDialog))
             except Exception:

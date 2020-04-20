@@ -529,7 +529,6 @@ class ThreadProcessor(QRunnable):
 
     @pyqtSlot(float,float,int,float,int)
     def changethresholds(self,fftwindow,minfftratio,minsiglev,triggerfftratio,triggersiglev): #update data thresholds for FFT
-        print(f"Received Thresholds: {fftwindow}, {minfftratio}, {minsiglev}, {triggerfftratio}, {triggersiglev}")
         if fftwindow <= 1:
             self.fftwindow = fftwindow
         else:
