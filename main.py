@@ -1285,7 +1285,7 @@ class RunProgram(QMainWindow):
 
             #adding toolbar
             self.alltabdata[curtabstr]["ProfToolbar"] = CustomToolbar(self.alltabdata[curtabstr]["ProfCanvas"], self) #changed from NavigationToolbar to customize w/ class @ end of file
-            self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["ProfToolbar"],1,3,1,3)
+            self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["ProfToolbar"],2,2,1,2)
 
             #Create widgets for UI populated with test example
             self.alltabdata[curtabstr]["tabwidgets"] = {}
