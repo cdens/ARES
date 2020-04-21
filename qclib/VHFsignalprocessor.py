@@ -412,15 +412,17 @@ class ThreadProcessor(QRunnable):
                     currentdata = self.audiostream[-int(self.f_s * self.fftwindow):]
                 else:
 
+
+                    #kill test/audio threads once time exceeds the max time of the audio file
+                    if (self.isfromtest and ctime > self.maxtime) or (self.isfromaudio and i >= len(self.sampletimes)):
+                        self.kill(0)
+                        
+                        
                     #getting current time to sample from audio file
                     if self.isfromaudio:
                         ctime = self.sampletimes[i]
                         if i % 10 == 0: #updates progress every 10 data points
-                            self.signals.updateprogress.emit(self.curtabnum,int(ctime / self.maxtime * 100))
-
-                    #kill test threads once time exceeds the max time of the audio file
-                    if self.isfromtest and ctime > self.maxtime:
-                        self.kill(0)
+                        self.signals.updateprogress.emit(self.curtabnum,int(ctime / self.maxtime * 100))
 
                     #getting current data to sample from audio file
                     ind = np.all([np.greater_equal(self.alltimes,ctime-self.fftwindow/2),np.less_equal(self.alltimes,ctime + self.fftwindow/2)],axis=0)
@@ -483,7 +485,7 @@ class ThreadProcessor(QRunnable):
                     timemodule.sleep(0.1)  # pauses before getting next point when processing in realtime
 
         except Exception: #if the thread encounters an error, terminate
-            traceback.print_exc()  # if there is an error, terminates processing
+            trace_error()  # if there is an error, terminates processing
             self.kill(5)
             
             
