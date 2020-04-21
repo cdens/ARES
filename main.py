@@ -176,21 +176,20 @@ class RunProgram(QMainWindow):
             myappid = 'ARES_v1.0'  # arbitrary string
             windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
-        #changing font size
-        font = QFont()
-        font.setPointSize(11)
-        font.setFamily("Arial")
-        self.setFont(font)
-
+        #changing default font appearance for program
+        self.fontsize = 14
+        self.labelfont = QFont()
+        self.labelfont.setFamily("Arial")
+        self.labelfont.setPointSize(self.fontsize)
+        self.setFont(self.labelfont)
+        
         # prepping to include tabs
         mainWidget = QWidget()
         self.setCentralWidget(mainWidget)
         mainLayout = QVBoxLayout()
         mainWidget.setLayout(mainLayout)
         self.tabWidget = QTabWidget()
-        tabfont = QFont()
-        tabfont.setPointSize(16)
-        self.tabWidget.setFont(tabfont)
+        self.tabWidget.setFont(self.labelfont)
         mainLayout.addWidget(self.tabWidget)
         self.vBoxLayout = QVBoxLayout()
         self.tabWidget.setLayout(self.vBoxLayout)
@@ -329,7 +328,6 @@ class RunProgram(QMainWindow):
         openpreferences.setShortcut('Ctrl+T')
         openpreferences.triggered.connect(self.openpreferencesthread)
         FileMenu.addAction(openpreferences)
-
 
 
 # =============================================================================
@@ -493,12 +491,10 @@ class RunProgram(QMainWindow):
             wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
             wcolext   = [1,1,2,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1]
             
-            labelfont = QFont()
-            labelfont.setPointSize(16)
     
             #adding user inputs
             for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
-                self.alltabdata[curtabstr]["tabwidgets"][i].setFont(labelfont)
+                self.alltabdata[curtabstr]["tabwidgets"][i].setFont(self.labelfont)
                 self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
                     
             #adding table widget after all other buttons populated
@@ -506,11 +502,11 @@ class RunProgram(QMainWindow):
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setColumnCount(7)
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setRowCount(0) 
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalHeaderLabels(('Time (s)', 'Freq (Hz)', 'ChS (dBm)', 'Sp (dB)', 'Rp (%)' ,'Depth (m)','Temp (C)'))
-            self.alltabdata[curtabstr]["tabwidgets"]["table"].setFont(labelfont)
+            self.alltabdata[curtabstr]["tabwidgets"]["table"].setFont(self.labelfont)
             self.alltabdata[curtabstr]["tabwidgets"]["table"].verticalHeader().setVisible(False)
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) #removes scroll bars
             header = self.alltabdata[curtabstr]["tabwidgets"]["table"].horizontalHeader() 
-            header.setFont(labelfont)
+            header.setFont(self.labelfont)
             for ii in range(0,7):
                 header.setSectionResizeMode(ii, QHeaderView.Stretch)  
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setEditTriggers(QTableWidget.NoEditTriggers)
@@ -1102,12 +1098,10 @@ class RunProgram(QMainWindow):
             wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
             wcolext   = [2,1,1,1,1,1,1,1,1,1,1,1,1,2,2]    
             
-            labelfont = QFont()
-            labelfont.setPointSize(16)
             
             #adding user inputs
             for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
-                self.alltabdata[curtabstr]["tabwidgets"][i].setFont(labelfont)
+                self.alltabdata[curtabstr]["tabwidgets"][i].setFont(self.labelfont)
                 self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
             
             #forces grid info to top/center of window
@@ -1361,10 +1355,6 @@ class RunProgram(QMainWindow):
             self.alltabdata[curtabstr]["tabwidgets"]["maxdepthtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             
             
-            #formatting for other labels
-            labelfont = QFont()
-            labelfont.setPointSize(16)
-            
             #should be 15 entries
             widgetorder = ["toggleclimooverlay","addpoint","removepoint","removerange","sfccorrectiontitle","sfccorrection",
                            "maxdepthtitle","maxdepth","depthdelaytitle","depthdelay",
@@ -1377,7 +1367,7 @@ class RunProgram(QMainWindow):
             
             #adding user inputs
             for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
-                self.alltabdata[curtabstr]["tabwidgets"][i].setFont(labelfont)
+                self.alltabdata[curtabstr]["tabwidgets"][i].setFont(self.labelfont)
                 self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
                 
 
