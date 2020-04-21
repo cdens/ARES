@@ -422,7 +422,7 @@ class ThreadProcessor(QRunnable):
                     if self.isfromaudio:
                         ctime = self.sampletimes[i]
                         if i % 10 == 0: #updates progress every 10 data points
-                        self.signals.updateprogress.emit(self.curtabnum,int(ctime / self.maxtime * 100))
+                            self.signals.updateprogress.emit(self.curtabnum,int(ctime / self.maxtime * 100))
 
                     #getting current data to sample from audio file
                     ind = np.all([np.greater_equal(self.alltimes,ctime-self.fftwindow/2),np.less_equal(self.alltimes,ctime + self.fftwindow/2)],axis=0)
