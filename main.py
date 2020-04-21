@@ -177,7 +177,7 @@ class RunProgram(QMainWindow):
             windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
         #changing default font appearance for program
-        self.fontsize = 14
+        self.fontsize = 16
         self.labelfont = QFont()
         self.labelfont.setFamily("Arial")
         self.labelfont.setPointSize(self.fontsize)
@@ -1375,7 +1375,7 @@ class RunProgram(QMainWindow):
             colstretch = [13,1,1,1,1,1,1,1,1]
             for col,cstr in zip(range(0,len(colstretch)),colstretch):
                 self.alltabdata[curtabstr]["tablayout"].setColumnStretch(col,cstr)
-            rowstretch = [1,1,1,1,1,1,1,1,0,1,1,5]
+            rowstretch = [0,1,1,1,1,1,1,1,0,1,1,5]
             for row,rstr in zip(range(0,len(rowstretch)),rowstretch):
                 self.alltabdata[curtabstr]["tablayout"].setRowStretch(row,rstr)
 
