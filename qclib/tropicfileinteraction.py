@@ -551,8 +551,8 @@ def writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
 
 
 
-
-def writebufrfile(bufrfile, temperature, depth, year, month, day, time, lon, lat, identifier, originatingcenter, hasoptionalsection, optionalinfo):
+            
+def writebufrfile(bufrfile, temperature, depth, year, month, day, time, lon, lat,identifier, originatingcenter, hasoptionalsection, optionalinfo):
 
     #convert time into hours and minutes
     hour = int(np.floor(time / 100))
@@ -563,10 +563,10 @@ def writebufrfile(bufrfile, temperature, depth, year, month, day, time, lon, lat
     version = 4  # BUFR version number (3 or 4 supported)
 
     # section 1 info
-    if version == 4:
-        sxn1len = 22
-    else: #including versions 1-3
+    if version == 3:
         sxn1len = 18
+    elif version == 4:
+        sxn1len = 22
 
     mastertable = 0  # For standard WMO FM 94-IX BUFR table
     originatingsubcenter = 0
@@ -588,12 +588,14 @@ def writebufrfile(bufrfile, temperature, depth, year, month, day, time, lon, lat
         sxn2len = 0
 
     # Section 3 info
-    sxn3len = 9  # 3 length + 1 reserved + 2 numsubsets + 1 flag + 2 FXY = 9 octets
+    sxn3len = 25  # 3 length + 1 reserved + 2 numsubsets + 1 flag + 2 FXY = 9 octets
     numdatasubsets = 1
     # whether data is observed, compressed (bits 1/2), bits 3-8 reserved (=0)
     s3oct7 = int('10000000', 2)
     # FXY = 3,15,001 (base 10) = 11, 001111, 00000001 (binary) corresponds to underwater sounding w/t optional fields
-    fxy = int('1100111100000001', 2)
+    #fxy = int('1100111100000001', 2)
+    
+    fxy_all = [int('0000000100001011', 2),int('1100000100001011', 2),int('1100000100001100', 2),int('1100000100010111', 2),int('0000001000100000', 2),int('0100001000000000', 2),int('0001111100000010', 2),int('0000011100111110', 2),int('0001011000101010', 2),] #WITH DELAYED (8-bit) REPLICATION
 
     # Section 4 info (data)
     identifier = identifier[:9] #concatenates identifier if necessary
@@ -620,14 +622,14 @@ def writebufrfile(bufrfile, temperature, depth, year, month, day, time, lon, lat
 
     # temperature-depth profile (3,06,001)
     bufrarray = bufrarray + '00'  # indicator for digitization (0,02,032): 'values at selected depths' = 0
-    bufrarray = bufrarray + format(len(temperature),'08b')  # delayed descripter replication factor(0,31,001) = length
-
+    bufrarray = bufrarray + format(len(temperature),'16b')  # delayed descripter replication factor(0,31,001) = length
+    
     #converting temperature and depth and writing
     for t,d in zip(temperature,depth):
-        d = int(np.round(d*10)) # depth (0,07,062)
-        bufrarray = bufrarray + format(d,'017b')
-        t = int(np.round(10 * (t + 273.15)))  # temperature (0,22,042)
-        bufrarray = bufrarray + format(t,'012b')
+        d_in = int(np.round(d*10)) # depth (0,07,062)
+        bufrarray = bufrarray + format(d_in,'017b')
+        t_in = int(np.round(10 * (t + 273.15)))  # temperature (0,22,042)
+        bufrarray = bufrarray + format(t_in,'012b')
 
     #padding zeroes to get even octet number, determining total length
     bufrrem = len(bufrarray)%8
@@ -635,7 +637,7 @@ def writebufrfile(bufrfile, temperature, depth, year, month, day, time, lon, lat
         bufrarray = bufrarray + '0'
     bufrarraylen = int(len(bufrarray)/8)
     sxn4len = 4 + 9 + bufrarraylen  # length/reserved + identifier + bufrarraylen (lat/lon, dtg, t/d profile)
-
+    
     # total length of file in octets
     num_octets = 8 + sxn1len + sxn2len + sxn3len + sxn4len + 4  # sxn's 0 and 5 always have 8 and 4 octets, respectively
 
@@ -685,7 +687,8 @@ def writebufrfile(bufrfile, temperature, depth, year, month, day, time, lon, lat
         bufr.write(reserved.to_bytes(1, byteorder=binarytype, signed=False))
         bufr.write(numdatasubsets.to_bytes(2, byteorder=binarytype, signed=False))
         bufr.write(s3oct7.to_bytes(1, byteorder=binarytype, signed=False))
-        bufr.write(fxy.to_bytes(2, byteorder=binarytype, signed=False))
+        for fxy in fxy_all:
+            bufr.write(fxy.to_bytes(2, byteorder=binarytype, signed=False))
 
         # Section 4
         bufr.write(sxn4len.to_bytes(3, byteorder=binarytype, signed=False))
