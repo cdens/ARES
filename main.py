@@ -370,9 +370,10 @@ class RunProgram(QMainWindow):
         #getting current option (defaults to size=14 if option fails)
         try: 
             self.fontindex = self.fontoptions.index(self.settingsdict["fontsize"])
-        except:
+            
+        except: #if error- set default font size to 14 !!Must also change this in settingswindow.setdefaultsettings()
             self.fontindex = 2
-            self.settingsdict["fontsize"] = self.fontoptions[self.fontindex] #returns 14
+            self.settingsdict["fontsize"] = self.fontoptions[self.fontindex] 
                     
         #applying font size to general font
         self.labelfont.setPointSize(self.settingsdict["fontsize"])

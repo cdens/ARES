@@ -301,7 +301,7 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["fftwindow"].setMaximum(100)
             self.processortabwidgets["fftwindow"].valueChanged[int].connect(self.changefftwindow)
 
-            self.processortabwidgets["fftsiglevlabel"] = QLabel('Minimum Signal Level (log[x]): ' + str(np.round(self.settingsdict["minsiglev"],2)).ljust(4,'0'))  # 17
+            self.processortabwidgets["fftsiglevlabel"] = QLabel('Minimum Signal Level (dB): ' + str(np.round(self.settingsdict["minsiglev"],2)).ljust(4,'0'))  # 17
             self.processortabwidgets["fftsiglev"] = QSlider(Qt.Horizontal)  # 18
             self.processortabwidgets["fftsiglev"].setMinimum(400)
             self.processortabwidgets["fftsiglev"].setMaximum(900)
@@ -316,7 +316,7 @@ class RunSettings(QMainWindow):
             self.processortabwidgets["fftratio"].valueChanged[int].connect(self.changefftratio)
 
             self.processortabwidgets["triggersiglevlabel"] = QLabel(
-                'Trigger Signal Level (log[x]): ' + str(np.round(self.settingsdict["triggersiglev"], 2)).ljust(4, '0'))  # 17
+                'Trigger Signal Level (dB): ' + str(np.round(self.settingsdict["triggersiglev"], 2)).ljust(4, '0'))  # 17
             self.processortabwidgets["triggersiglev"] = QSlider(Qt.Horizontal)  # 18
             self.processortabwidgets["triggersiglev"].setMinimum(400)
             self.processortabwidgets["triggersiglev"].setMaximum(900)
@@ -672,7 +672,7 @@ class RunSettings(QMainWindow):
 
     def changefftsiglev(self, value):
         self.settingsdict["minsiglev"] = float(value) / 10
-        self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (log[x]): ' + str(np.round(self.settingsdict["minsiglev"],2)).ljust(4,'0'))
+        self.processortabwidgets["fftsiglevlabel"].setText('Minimum Signal Level (dB): ' + str(np.round(self.settingsdict["minsiglev"],2)).ljust(4,'0'))
 
         
     def changefftratio(self, value):
@@ -682,7 +682,7 @@ class RunSettings(QMainWindow):
 
     def changetriggersiglev(self, value):
         self.settingsdict["triggersiglev"] = float(value) / 10
-        self.processortabwidgets["triggersiglevlabel"].setText('Trigger Signal Level (log[x]): ' + str(np.round(self.settingsdict["triggersiglev"],2)).ljust(4,'0'))
+        self.processortabwidgets["triggersiglevlabel"].setText('Trigger Signal Level (dB): ' + str(np.round(self.settingsdict["triggersiglev"],2)).ljust(4,'0'))
 
         
     def changetriggerratio(self, value):
@@ -779,6 +779,8 @@ def setdefaultsettings():
     settingsdict["originatingcenter"] = 62 #BUFR table code for NAVO
 
     settingsdict["comport"] = 'n' #default com port is none
+    
+    settingsdict["fontsize"] = 14 #font size for general UI
     
 
     return settingsdict
