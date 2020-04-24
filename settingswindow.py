@@ -856,6 +856,8 @@ def readsettings(filename):
             settingsdict["originatingcenter"] = int(line.strip().split()[1]) 
             line = file.readline()
             settingsdict["comport"] = str(line.strip().split()[1]) 
+            line = file.readline()
+            settingsdict["fontsize"] = int(line.strip().split()[1]) 
             
     #if settings file doesn't exist or is invalid, rewrites file with default settings
     except:
@@ -908,6 +910,7 @@ def writesettings(filename,settingsdict):
         file.write('maxstdev: '+str(settingsdict["maxstdev"]) + '\n')
         file.write('originatingcenter: '+str(settingsdict["originatingcenter"]) + '\n')
         file.write('comport: '+str(settingsdict["comport"]) + '\n')
+        file.write('fontsize: '+str(settingsdict["fontsize"]) + '\n')
         
         
 

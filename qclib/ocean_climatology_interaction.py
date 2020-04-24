@@ -97,7 +97,7 @@ def getclimatologyprofile(lat,lon,month,climodata):
     #accessing climatology grid data
     clon = flon + climodata['vals']
     clat = flat + climodata['vals']
-    depth = climodata["depth"]
+    depth = np.float64(climodata["depth"])
     
     #pulling current month's temperatures + stdevs, converting to int64, correcting scale
     #TODO: add lat/lon indexing so it only pulls a small spatial subset to reduce size

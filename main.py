@@ -110,7 +110,7 @@ from tempfile import gettempdir
 from PyQt5.QtWidgets import (QMainWindow, QAction, QApplication, QLineEdit, QLabel, QSpinBox, QCheckBox,
     QPushButton, QMessageBox, QWidget, QFileDialog, QComboBox, QTextEdit, QTabWidget, QVBoxLayout, QInputDialog, 
     QGridLayout, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QDesktopWidget, 
-    QStyle, QStyleOptionTitleBar)
+    QStyle, QStyleOptionTitleBar, QMenu, QActionGroup)
 from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot
 from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
 from PyQt5.Qt import QThreadPool
@@ -172,32 +172,6 @@ class RunProgram(QMainWindow):
         p.setColor(self.backgroundRole(), QColor(255,255,255))
         self.setPalette(p)
 
-        if cursys() == 'Windows':
-            myappid = 'ARES_v1.0'  # arbitrary string
-            windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
-
-        #changing default font appearance for program
-        self.fontsize = 16
-        self.labelfont = QFont()
-        self.labelfont.setFamily("Arial")
-        self.labelfont.setPointSize(self.fontsize)
-        self.setFont(self.labelfont)
-        
-        # prepping to include tabs
-        mainWidget = QWidget()
-        self.setCentralWidget(mainWidget)
-        mainLayout = QVBoxLayout()
-        mainWidget.setLayout(mainLayout)
-        self.tabWidget = QTabWidget()
-        self.tabWidget.setFont(self.labelfont)
-        mainLayout.addWidget(self.tabWidget)
-        self.vBoxLayout = QVBoxLayout()
-        self.tabWidget.setLayout(self.vBoxLayout)
-        self.show()
-
-        #track whether preferences tab is opened
-        self.preferencesopened = False
-
         #setting slash dependent on OS
         global slash
         if cursys() == 'Windows':
@@ -227,6 +201,29 @@ class RunProgram(QMainWindow):
         #changes default com port to 'none' if previous default from settings isn't detected
         if not self.settingsdict["comport"] in self.settingsdict["comports"]:
             self.settingsdict["comport"] = 'n'
+            
+        #changing default font appearance for program- REPLACE WITH SETFONT FUNCTION
+        self.configureGuiFont()
+        
+        if cursys() == 'Windows':
+            myappid = 'ARES_v1.0'  # arbitrary string
+            windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+
+            
+        # prepping to include tabs
+        mainWidget = QWidget()
+        self.setCentralWidget(mainWidget)
+        mainLayout = QVBoxLayout()
+        mainWidget.setLayout(mainLayout)
+        self.tabWidget = QTabWidget()
+        self.tabWidget.setFont(self.labelfont)
+        mainLayout.addWidget(self.tabWidget)
+        self.vBoxLayout = QVBoxLayout()
+        self.tabWidget.setLayout(self.vBoxLayout)
+        self.show()
+
+        #track whether preferences tab is opened
+        self.preferencesopened = False
 
         #tab tracking
         self.totaltabs = 0
@@ -269,9 +266,9 @@ class RunProgram(QMainWindow):
         
         
 # =============================================================================
-#    LOAD DATA, BUILD MENU, GENERAL SETTINGS
+#    LOAD DATA, BUILD MENU, GENERAL SETTINGS 
 # =============================================================================
-
+    
     #saves a tiny amount of time by loading climatology and bathymetry data indices once each on initialization
     def loaddata(self):
         self.climodata = {}
@@ -328,7 +325,100 @@ class RunProgram(QMainWindow):
         openpreferences.setShortcut('Ctrl+T')
         openpreferences.triggered.connect(self.openpreferencesthread)
         FileMenu.addAction(openpreferences)
-
+        
+        #GUI font size control- !!this requires that self.configureGuiFont() has already been run to set self.fontoptions, self.fonttitles, and self.fontindex
+        self.fontMenu = QMenu("Font Size") #making menu, action group
+        self.fontMenuActionGroup = QActionGroup(self,exclusive=True)
+        
+        try: #getting current option (defaults to size=14 if option fails)
+            curind = self.fontoptions.index(self.settingsdict["fontsize"])
+        except:
+            curind = 2
+            self.settingsdict["fontsize"] = 14
+            self.labelfont = QFont()
+            self.labelfont.setFamily("Arial")
+            self.labelfont.setPointSize(self.settingsdict["fontsize"])
+            self.setFont(self.labelfont)
+        
+        #adding options to menu bar, checking current option
+        for i,option in enumerate(self.fonttitles):
+            curaction = self.fontMenuActionGroup.addAction(QAction(option, self, checkable=True))
+            self.fontMenu.addAction(curaction)
+            if i == self.fontindex:
+                curaction.setChecked(True)
+            
+        self.fontMenuActionGroup.triggered.connect(self.changeGuiFont)
+        FileMenu.addMenu(self.fontMenu)
+        
+        
+        
+# =============================================================================
+#    ARES FONT SIZE CONTROL
+# =============================================================================
+        
+        
+    def configureGuiFont(self):
+        
+        #font options and corresponding menu entires (options saved to self for later access)
+        self.fontoptions = [8,12,14,16,20] 
+        self.fonttitles = ["Very Small (8)", "Small (12)", "Medium (14)", "Large (16)", "Very Large (20)"]
+        
+        #initializing font
+        self.labelfont = QFont()
+        self.labelfont.setFamily("Arial")
+        
+        #getting current option (defaults to size=14 if option fails)
+        try: 
+            self.fontindex = self.fontoptions.index(self.settingsdict["fontsize"])
+        except:
+            self.fontindex = 2
+            self.settingsdict["fontsize"] = self.fontoptions[self.fontindex] #returns 14
+                    
+        #applying font size to general font
+        self.labelfont.setPointSize(self.settingsdict["fontsize"])
+        self.setFont(self.labelfont)
+        
+        
+        #list of widgets to be updated for each type:
+        daswidgets = ["datasourcetitle", "refreshdataoptions", "datasource","channeltitle", "freqtitle","vhfchannel", "vhffreq", "startprocessing", "stopprocessing","processprofile", "datetitle","dateedit", "timetitle","timeedit", "lattitle", "latedit", "lontitle","lonedit", "idtitle","idedit", "table", "tableheader"] #signal processor (data acquisition system)
+        peinputwidgets = ["title", "lattitle", "latedit", "lontitle", "lonedit", "datetitle", "dateedit", "timetitle", "timeedit", "idtitle", "idedit", "logtitle", "logedit", "logbutton", "submitbutton"]
+        pewidgets = ["toggleclimooverlay", "addpoint", "removepoint", "removerange", "sfccorrectiontitle", "sfccorrection", "maxdepthtitle", "maxdepth", "depthdelaytitle", "depthdelay", "runqc", "proftxt", "isbottomstrike", "rcodetitle", "rcode"]
+        
+        
+        
+        #applying updates to all tabs- method dependent on which type each tab is
+        for ctab in self.alltabdata:
+            ctabtype = self.alltabdata[ctab]["tabtype"]
+            
+            if ctabtype[:15] == "SignalProcessor": #data acquisition
+                curwidgets = daswidgets
+            elif ctabtype == "ProfileEditorInput": #prompt to select ASCII file
+                curwidgets = peinputwidgets
+            elif ctabtype == "ProfileEditor": #profile editor
+                curwidgets = pewidgets
+            else:
+                self.posterror(f"Unable to identify tab type when updating font: {ctabtype}")
+                curwidgets = []
+                
+            #updating font sizes for all widgets
+            for widget in curwidgets:
+                self.alltabdata[ctab]["tabwidgets"][widget].setFont(self.labelfont)
+                
+                
+    def changeGuiFont(self): 
+        try:
+            curind = self.fontoptions.index(self.settingsdict["fontsize"])
+            for i,action in enumerate(self.fontMenuActionGroup.actions()):
+                if action.isChecked():
+                    curind = i
+                    
+            self.settingsdict["fontsize"] = self.fontoptions[curind]
+            self.configureGuiFont()
+        
+        except Exception:
+            trace_error()
+            self.posterror("Failed to update GUI font!")
+            
 
 # =============================================================================
 #     PREFERENCES THREAD CONNECTION AND SLOT
@@ -505,10 +595,10 @@ class RunProgram(QMainWindow):
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setFont(self.labelfont)
             self.alltabdata[curtabstr]["tabwidgets"]["table"].verticalHeader().setVisible(False)
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) #removes scroll bars
-            header = self.alltabdata[curtabstr]["tabwidgets"]["table"].horizontalHeader() 
-            header.setFont(self.labelfont)
+            self.alltabdata[curtabstr]["tabwidgets"]["tableheader"] = self.alltabdata[curtabstr]["tabwidgets"]["table"].horizontalHeader() 
+            self.alltabdata[curtabstr]["tabwidgets"]["tableheader"].setFont(self.labelfont)
             for ii in range(0,7):
-                header.setSectionResizeMode(ii, QHeaderView.Stretch)  
+                self.alltabdata[curtabstr]["tabwidgets"]["tableheader"].setSectionResizeMode(ii, QHeaderView.Stretch)  
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setEditTriggers(QTableWidget.NoEditTriggers)
             self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"]["table"],8,2,2,7)
 
@@ -1356,9 +1446,7 @@ class RunProgram(QMainWindow):
             
             
             #should be 15 entries
-            widgetorder = ["toggleclimooverlay","addpoint","removepoint","removerange","sfccorrectiontitle","sfccorrection",
-                           "maxdepthtitle","maxdepth","depthdelaytitle","depthdelay",
-                           "runqc","proftxt","isbottomstrike","rcodetitle","rcode"]
+            widgetorder = ["toggleclimooverlay", "addpoint", "removepoint", "removerange", "sfccorrectiontitle", "sfccorrection", "maxdepthtitle", "maxdepth", "depthdelaytitle", "depthdelay", "runqc", "proftxt", "isbottomstrike", "rcodetitle", "rcode"]
             
             wrows     = [3,4,4,5,6,6,7,7,8,8,9,5,3,3,4]
             wcols     = [2,2,3,2,2,3,2,3,2,3,2,5,6,5,5]
