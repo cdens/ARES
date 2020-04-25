@@ -331,9 +331,9 @@ class RunProgram(QMainWindow):
         self.fontMenuActionGroup = QActionGroup(self,exclusive=True)
         
         try: #getting current option (defaults to size=14 if option fails)
-            curind = self.fontoptions.index(self.settingsdict["fontsize"])
+            self.fontindex = self.fontoptions.index(self.settingsdict["fontsize"])
         except:
-            curind = 2
+            self.fontindex = 2
             self.settingsdict["fontsize"] = 14
             self.labelfont = QFont()
             self.labelfont.setFamily("Arial")
@@ -1151,12 +1151,7 @@ class RunProgram(QMainWindow):
             #delete Processor profile canvas (since it isn't in the tabwidgets sub-dict)
             self.alltabdata[curtabstr]["ProcessorCanvas"].deleteLater()
             
-            #removing NaNs from T-D profile
-            ind = []
-            for i in range(len(rawtemperature)):
-                ind.append(not np.isnan(rawtemperature[i]) and not np.isnan(rawdepth[i]))
-            rawdepth = rawdepth[ind]
-            rawtemperature = rawtemperature[ind]
+            
         except Exception:
             trace_error()
             self.posterror("Failed to read profile data")
