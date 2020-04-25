@@ -476,7 +476,7 @@ class RunProgram(QMainWindow):
     
             #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal processor to profile editor
             self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"ProcessorFig":plt.figure(),
-                      "tabtype":"SignalProcessor_incomplete","isprocessing":False}
+                      "tabtype":"SignalProcessor_incomplete","isprocessing":False, "source":"none"}
 
             self.setnewtabcolor(self.alltabdata[curtabstr]["tab"])
             
@@ -782,6 +782,27 @@ class RunProgram(QMainWindow):
                 if self.threadpool.activeThreadCount() + 1 > self.threadpool.maxThreadCount():
                     self.postwarning("The maximum number of simultaneous processing threads has been exceeded. This processor will automatically begin collecting data when STOP is selected on another tab.")
                     return
+                    
+                    
+                #checks to make sure that this tab hasn't been used to process from a different source (e.g. user is attempting to switch from "Test" to "Audio" or a receiver), raise error if so
+                if datasource == 'Audio':
+                    newsource = "audio"
+                elif datasource == "Test":
+                    newsource = "test"
+                else:
+                    newsource = "rf"
+                    
+                oldsource = self.alltabdata[curtabstr]["source"]
+                if oldsource == "none":
+                    self.alltabdata[curtabstr]["source"] = newsource #assign current source as processor if previously unassigned
+                    
+                elif oldsource == "audio": #once you have stopped an audio processing tab, ARES won't let you restart it
+                    self.postwarning(f"You cannot restart an audio processing instance after stopping. Please open a new tab to process additional audio files.")
+                    return
+                    
+                elif oldsource != newsource: #if "Start" has been selected previously and a source type (test, audio, or rf) was assigned
+                    self.postwarning(f"You cannot switch between Test, Audio, and RF data sources after starting processing. Please open a new tab to process a profile from a different source and reset this profile's source to {oldsource} to continue processing.")
+                    return
 
                 if datasource == 'Audio': #gets audio file to process
                     try:
@@ -795,7 +816,7 @@ class RunProgram(QMainWindow):
                             self.defaultfilereaddir = splitpath[0]
 
                         datasource = datasource + '_' + fname
-
+                        
                         # building progress bar
                         self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"] = QProgressBar()
                         self.alltabdata[curtabstr]["tablayout"].addWidget(
@@ -808,15 +829,18 @@ class RunProgram(QMainWindow):
                         trace_error()
 
                 elif datasource != "Test":
-
+                    
                     #checks to make sure current receiver isn't busy
                     for ctab in self.alltabdata:
                         if ctab != curtabstr and self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == datasource:
                             self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
                             return
-
-                #finds current tab, gets rid of scroll bar on table
+                            
+                            
+                #gets current tab number
                 curtabnum = self.alltabdata[curtabstr]["tabnum"]
+                
+                #gets rid of scroll bar on table
                 self.alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
                 #saving start time for current drop
@@ -824,8 +848,8 @@ class RunProgram(QMainWindow):
                     starttime = dt.datetime.utcnow()
                     self.alltabdata[curtabstr]["rawdata"]["starttime"] = starttime
                     
-                    #autopopulating selected fields if possible
-                    if datasource[:5] != 'Audio':
+                    #autopopulating selected fields
+                    if datasource[:5] != 'Audio': #but not if reprocessing from audio file
                         if self.settingsdict["autodtg"]:#populates date and time if requested
                             curdatestr = str(starttime.year) + str(starttime.month).zfill(2) + str(starttime.day).zfill(2)
                             self.alltabdata[curtabstr]["tabwidgets"]["dateedit"].setText(curdatestr)
@@ -1067,6 +1091,10 @@ class RunProgram(QMainWindow):
         try:
             #pulling and checking file input data
             curtabstr = "Tab " + str(self.whatTab())
+            
+            if self.alltabdata[curtabstr]["isprocessing"]:
+                self.postwarning("You cannot proceed to the Profile Editor while the tab is actively processing. Please select 'Stop' before continuing!")
+                return
             
             #pulling data from inputs
             latstr = self.alltabdata[curtabstr]["tabwidgets"]["latedit"].text()

@@ -757,10 +757,10 @@ def setdefaultsettings():
     settingsdict["autosave"] = False  # automatically save raw data before opening profile editor (otherwise brings up prompt asking if want to save)
     settingsdict["fftwindow"] = 0.3  # window to run FFT (in seconds)
     settingsdict["minfftratio"] = 0.42  # minimum signal to noise ratio to ID data
-    settingsdict["minsiglev"] = 58  # minimum total signal level to receive data
+    settingsdict["minsiglev"] = 58.  # minimum total signal level to receive data
 
     settingsdict["triggerfftratio"] = 0.8  # minimum signal to noise ratio to ID data
-    settingsdict["triggersiglev"] = 70  # minimum total signal level to receive data
+    settingsdict["triggersiglev"] = 70.  # minimum total signal level to receive data
 
     #profeditorpreferences
     settingsdict["useclimobottom"] = True  # use climatology to ID bottom strikes
@@ -773,8 +773,8 @@ def setdefaultsettings():
     settingsdict["saveloc"] = True
     settingsdict["useoceanbottom"] = True  # use NTOPO1 bathymetry data to ID bottom strikes
     settingsdict["checkforgaps"] = True  # look for/correct gaps in profile due to false starts from VHF interference
-    settingsdict["smoothlev"] = 8  # Smoothing Window size (m)
-    settingsdict["profres"] = 1 #profile minimum vertical resolution (m)
+    settingsdict["smoothlev"] = 8.  # Smoothing Window size (m)
+    settingsdict["profres"] = 1. #profile minimum vertical resolution (m)
     settingsdict["maxstdev"] = 1.5 #profile standard deviation coefficient for despiker (autoQC)
     settingsdict["originatingcenter"] = 62 #BUFR table code for NAVO
 
