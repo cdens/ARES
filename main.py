@@ -405,6 +405,9 @@ class RunProgram(QMainWindow):
             for widget in curwidgets:
                 self.alltabdata[ctab]["tabwidgets"][widget].setFont(self.labelfont)
                 
+        #save new font to settings file
+        swin.writesettings(self.settingsfile, self.settingsdict)
+                
                 
     def changeGuiFont(self): 
         try:
@@ -783,10 +786,13 @@ class RunProgram(QMainWindow):
                 if datasource == 'Audio': #gets audio file to process
                     try:
                         # getting filename
-                        fname, ok = QFileDialog.getOpenFileName(self, 'Open file','',"Source Data Files (*.WAV *.Wav *.wav *PCM *Pcm *pcm *MP3 *Mp3 *mp3)")
-                        if not ok:
+                        fname, ok = QFileDialog.getOpenFileName(self, 'Open file',self.defaultfilereaddir,"Source Data Files (*.WAV *.Wav *.wav *PCM *Pcm *pcm *MP3 *Mp3 *mp3)","",self.fileoptions)
+                        if not ok or fname == "":
                             self.alltabdata[curtabstr]["isprocessing"] = False
                             return
+                        else:
+                            splitpath = path.split(fname)
+                            self.defaultfilereaddir = splitpath[0]
 
                         datasource = datasource + '_' + fname
 
@@ -1037,6 +1043,8 @@ class RunProgram(QMainWindow):
         elif messagenum == 9:
             self.posterror("Selected audio file is too large! Please trim the audio file before processing")
         elif messagenum == 10:
+            self.posterror("Unspecified processing error raised during SignalProcessor.Run()")
+        elif messagenum == 11:
             self.postwarning("ARES has stopped audio recording as the WAV file has exceeded maximum allowed length. Please start a new processing tab to continue recording AXBT signal to a WAV file.")
 
             

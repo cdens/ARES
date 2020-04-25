@@ -377,9 +377,9 @@ class ThreadProcessor(QRunnable):
                 
         else: #if source is an audio file
             #configuring sample times for the audio file
-            self.alltimes = np.arange(0, len(self.audiostream), 1) / self.f_s
-            self.maxtime = np.max(self.alltimes)
-            self.sampletimes = np.arange(0,self.maxtime,0.1)
+            self.lensignal = len(self.audiostream)
+            self.maxtime = (self.lensignal-1)/self.f_s
+            self.sampletimes = np.arange(0.1,self.maxtime-0.1,0.1)
 
 
         try:
@@ -414,7 +414,10 @@ class ThreadProcessor(QRunnable):
 
 
                     #kill test/audio threads once time exceeds the max time of the audio file
-                    if (self.isfromtest and ctime > self.maxtime) or (self.isfromaudio and i >= len(self.sampletimes)):
+                    #NOTE: need to do this on the cycle before hitting the max time when processing from audio because
+                    #       the WAV file processes faster than the thread can kill itself
+                    if (self.isfromtest and ctime > self.maxtime) or (self.isfromaudio and i >= len(self.sampletimes)-1):
+                        self.keepgoing = False
                         self.kill(0)
                         
                         
@@ -424,9 +427,10 @@ class ThreadProcessor(QRunnable):
                         if i % 10 == 0: #updates progress every 10 data points
                             self.signals.updateprogress.emit(self.curtabnum,int(ctime / self.maxtime * 100))
 
-                    #getting current data to sample from audio file
-                    ind = np.all([np.greater_equal(self.alltimes,ctime-self.fftwindow/2),np.less_equal(self.alltimes,ctime + self.fftwindow/2)],axis=0)
-                    currentdata = self.audiostream[ind]
+                    #getting current data to sample from audio file !!using indices like this is much more efficient than calculating times and using logical arrays
+                    ctrind = int(np.round(ctime*self.f_s))
+                    pmind = int(np.min([np.round(self.f_s*self.fftwindow/2),ctrind,self.lensignal-ctrind-1])) #uses minimum value so no overflow
+                    currentdata = self.audiostream[ctrind-pmind:ctrind+pmind]
                     sigstrength = 0
 
 
@@ -481,12 +485,12 @@ class ThreadProcessor(QRunnable):
                 sigstrength = np.round(sigstrength, 2)
                 self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, cfreq, sigstrength, actmax, ratiomax, ctime, i)
 
-                if not self.isfromaudio and not self.isfromtest:
-                    timemodule.sleep(0.1)  # pauses before getting next point when processing in realtime
+                if not self.isfromaudio: #don't force audio reprocessing threads to share resources
+                    timemodule.sleep(0.1)  # pauses before getting next point when processing in realtime (share resources)
 
         except Exception: #if the thread encounters an error, terminate
             trace_error()  # if there is an error, terminates processing
-            self.kill(5)
+            self.kill(10)
             
             
             
@@ -510,7 +514,7 @@ class ThreadProcessor(QRunnable):
     #terminate the audio file recording (for WINRADIO processor tabs) if it exceeds a certain length set by maxframenum
     def killaudiorecording(self):
         wave.Wave_write.close(self.wavfile) #close WAV file
-        self.signals.failed.emit(10) #pass warning message back to GUI
+        self.signals.failed.emit(11) #pass warning message back to GUI
 
         
         
