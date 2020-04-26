@@ -12,8 +12,8 @@ AppVersion=1.0
 AppPublisher=Casey Densmore
 DefaultDirName={pf}\ARES
 DefaultGroupName=ARES
-OutputBaseFilename=ARES_win64
-SetupIconFile=C:\PATH_TO_DIRECTORY\ARES\qclib\dropicon.ico
+OutputBaseFilename=ARES_win64_installer
+SetupIconFile=C:\Users\cdens\Documents\autoQC\EXEgen_25APR\qclib\dropicon.ico
 Password=5309
 Compression=lzma
 SolidCompression=yes
@@ -24,11 +24,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 0,6.1
 
 [Files]
-Source: "C:\PATH_TO_DIRECTORY\ARES\ARES.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\PATH_TO_DIRECTORY\ARES\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "C:\Users\cdens\Documents\autoQC\EXEgen_25APR\ARES.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\cdens\Documents\autoQC\EXEgen_25APR\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Specify pathway to Win10 x64bit driver .inf and .sys files
-Source: "C:\PATH_TO_DIRECTORY\ARES\qcdata\Driver\Win10\WRG39WSB.inf"; DestDir: {app}\driver;
-Source: "C:\PATH_TO_DIRECTORY\ARES\qcdata\Driver\Win10\WRG39WSB_XP64.sys"; DestDir: {app}\driver;
+Source: "C:\Users\cdens\Documents\autoQC\EXEgen_25APR\qcdata\Driver\Win10\WRG39WSB.inf"; DestDir: {app}\driver;
+Source: "C:\Users\cdens\Documents\autoQC\EXEgen_25APR\qcdata\Driver\Win10\WRG39WSB_XP64.sys"; DestDir: {app}\driver;
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
@@ -40,4 +40,4 @@ Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\ARES"; Filename: "
 [Run]
 Filename: "{app}\ARES.exe"; Description: "{cm:LaunchProgram,ARES}"; Flags: nowait postinstall skipifsilent
 ; install driver using RUNDLL32.EXE (specify driver Win10 .inf file)
-Filename: {sys}\rundll32.exe; Parameters: "setupapi,InstallHinfSection DefaultInstall 128 {app}\qcdata\Driver\Win10\WRG39WSB.inf"; WorkingDir: {app}\qcdata\Driver\Win10;
+Filename: "{sys}\rundll32.exe"; Parameters: "setupapi,InstallHinfSection DefaultInstall 128 {app}\qcdata\Driver\Win10\WRG39WSB.inf"; WorkingDir: "{app}\qcdata\Driver\Win10";
