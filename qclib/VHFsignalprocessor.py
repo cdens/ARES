@@ -485,8 +485,10 @@ class ThreadProcessor(QRunnable):
                 sigstrength = np.round(sigstrength, 2)
                 self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, cfreq, sigstrength, actmax, ratiomax, ctime, i)
 
-                if not self.isfromaudio: #don't force audio reprocessing threads to share resources
-                    timemodule.sleep(0.1)  # pauses before getting next point when processing in realtime (share resources)
+                if not self.isfromaudio: 
+                    timemodule.sleep(0.1)  #pauses when processing in realtime (fs ~ 10 Hz)
+                else:
+                    timemodule.sleep(0.001) #slight pause to free some resources when processing from audio
 
         except Exception: #if the thread encounters an error, terminate
             trace_error()  # if there is an error, terminates processing

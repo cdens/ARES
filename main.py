@@ -202,8 +202,7 @@ class RunProgram(QMainWindow):
         if not self.settingsdict["comport"] in self.settingsdict["comports"]:
             self.settingsdict["comport"] = 'n'
             
-        #changing default font appearance for program- REPLACE WITH SETFONT FUNCTION
-        self.configureGuiFont()
+            
         
         if cursys() == 'Windows':
             myappid = 'ARES_v1.0'  # arbitrary string
@@ -216,11 +215,13 @@ class RunProgram(QMainWindow):
         mainLayout = QVBoxLayout()
         mainWidget.setLayout(mainLayout)
         self.tabWidget = QTabWidget()
-        self.tabWidget.setFont(self.labelfont)
         mainLayout.addWidget(self.tabWidget)
         self.vBoxLayout = QVBoxLayout()
         self.tabWidget.setLayout(self.vBoxLayout)
         self.show()
+        
+        #changing default font appearance for program- REPLACE WITH SETFONT FUNCTION
+        self.configureGuiFont()
 
         #track whether preferences tab is opened
         self.preferencesopened = False
@@ -376,16 +377,14 @@ class RunProgram(QMainWindow):
             self.settingsdict["fontsize"] = self.fontoptions[self.fontindex] 
                     
         #applying font size to general font
-        self.labelfont.setPointSize(self.settingsdict["fontsize"])
-        self.setFont(self.labelfont)
-        
+        self.labelfont.setPointSize(self.settingsdict["fontsize"])        
         
         #list of widgets to be updated for each type:
         daswidgets = ["datasourcetitle", "refreshdataoptions", "datasource","channeltitle", "freqtitle","vhfchannel", "vhffreq", "startprocessing", "stopprocessing","processprofile", "datetitle","dateedit", "timetitle","timeedit", "lattitle", "latedit", "lontitle","lonedit", "idtitle","idedit", "table", "tableheader"] #signal processor (data acquisition system)
         peinputwidgets = ["title", "lattitle", "latedit", "lontitle", "lonedit", "datetitle", "dateedit", "timetitle", "timeedit", "idtitle", "idedit", "logtitle", "logedit", "logbutton", "submitbutton"]
         pewidgets = ["toggleclimooverlay", "addpoint", "removepoint", "removerange", "sfccorrectiontitle", "sfccorrection", "maxdepthtitle", "maxdepth", "depthdelaytitle", "depthdelay", "runqc", "proftxt", "isbottomstrike", "rcodetitle", "rcode"]
         
-        
+        self.tabWidget.setFont(self.labelfont)
         
         #applying updates to all tabs- method dependent on which type each tab is
         for ctab in self.alltabdata:
@@ -401,7 +400,7 @@ class RunProgram(QMainWindow):
                 self.posterror(f"Unable to identify tab type when updating font: {ctabtype}")
                 curwidgets = []
                 
-            #updating font sizes for all widgets
+            #updating font sizes for tab and all widgets
             for widget in curwidgets:
                 self.alltabdata[ctab]["tabwidgets"][widget].setFont(self.labelfont)
                 
@@ -1059,7 +1058,7 @@ class RunProgram(QMainWindow):
         elif messagenum == 5:
             self.postwarning("Failed to adjust volume on the specified WiNRADIO!")
         elif messagenum == 6:
-            self.posterror("Error configuring with the current WiNRADIO device!")
+            self.posterror("Error configuring the current WiNRADIO device!")
         elif messagenum == 7:
             self.posterror("Failed to configure the WiNRADIO audio stream!")
         elif messagenum == 8:
@@ -1718,7 +1717,7 @@ class RunProgram(QMainWindow):
         except Exception:
             trace_error()
             self.posterror("Failed to update profile!")
-            return "Unable to generate text!"
+            return "Unable to\ngenerate text!"
 
 
             
@@ -1764,7 +1763,7 @@ class RunProgram(QMainWindow):
                 self.alltabdata[curtabstr]["pt"] = self.alltabdata[curtabstr]["ProfCanvas"].mpl_connect('button_release_event', self.on_release)
             except Exception:
                 trace_error()
-                self.posterror("Failed to remove point")
+                self.posterror("Failed to remove range")
                 
                 
 
@@ -2326,8 +2325,8 @@ class RunProgram(QMainWindow):
                     self.postwarning('Invalid Time Entered!')
                     return
 
-                if year < 1000:
-                    self.postwarning('Invalid Year Entered (< 1000 AD)!')
+                if year < 1938: #year the bathythermograph was invented
+                    self.postwarning('Invalid Year Entered (< 1938 AD)!')
                     return
 
                 #making sure the profile is within 12 hours and not in the future, warning if otherwise

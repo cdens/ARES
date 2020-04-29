@@ -234,7 +234,7 @@ def getoceandepth(lat,lon,dcoord,bathydata):
     maxoceandepth = -sint.interpn((exportlon,exportlat),exportrelief,(lon,lat))
     maxoceandepth = maxoceandepth[0]
     
-    num = 2 #adjust this to pull every n elements for topographic data
+    num = 4 #adjust this to pull every n elements for topographic data
     exportlat = exportlat[::num]
     exportlon = exportlon[::num]
     exportrelief = exportrelief[::num,::num]

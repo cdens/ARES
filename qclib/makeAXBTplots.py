@@ -81,8 +81,8 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     topomap = ListedColormap(topo)
 
     #contour bathymetry
-    c = ax.pcolormesh(exportlon,exportlat,exportrelief,vmin=-4000,vmax=10,cmap = topomap)
-    ax.contour(exportlon,exportlat,exportrelief,np.arange(-8000,-4000,1000),colors='white',linestyles='dashed',linewidths=0.5,alpha=0.5)
+    c = ax.pcolormesh(exportlon,exportlat,exportrelief,vmin=-4000,vmax=10,cmap = topomap, shading='gouraud')
+    ax.contour(exportlon, exportlat, exportrelief, np.arange(-8000,-4000,1000), colors='white',linestyles='dashed', linewidths=0.5,alpha=0.5)
     cbar = fig.colorbar(c,ax=ax)
     cbar.set_label('Elevation (m)')
     
