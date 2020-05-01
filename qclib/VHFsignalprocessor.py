@@ -235,7 +235,9 @@ class ThreadProcessor(QRunnable):
         fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,slash,tempdir, *args,**kwargs):
         super(ThreadProcessor, self).__init__()
 
-
+        
+        self.startthread = False #prevents Run() method from starting before init is finished
+        
         # UI inputs
         self.curtabnum = curtabnum
         self.starttime = starttime
@@ -264,12 +266,20 @@ class ThreadProcessor(QRunnable):
         # identifying whether tab is audio, test, or other format
         self.isfromaudio = False
         self.isfromtest = False
+        self.goodaudiofile = True #changes to false if the audio file being used is bad (for test and audio instances)
+        
+        
         if datasource[:5] == 'Audio':
             self.audiofile = datasource[6:]
             self.isfromaudio = True
             
             #checking file length- wont process files with more frames than max size
-            file_info = wave.open(self.audiofile)
+            try: #exception if unable to read audio file if it doesn't exist or isn't WAV formatted
+                file_info = wave.open(self.audiofile)
+            except:
+                self.goodaudiofile = False
+                return
+                
             if file_info.getnframes() > self.maxsavedframes:
                 self.kill(9)
             
@@ -278,11 +288,19 @@ class ThreadProcessor(QRunnable):
                 self.audiostream = snd[:, 0]
             except:
                 self.audiostream = snd
+                
         elif datasource == 'Test': #test run- use included audio file
             self.audiofile = 'testdata/MZ000006.WAV'
             self.isfromtest = True
-            self.f_s, snd = wavfile.read(self.audiofile)
+            
+            try: #exception if unable to read audio file if it doesn't exist or isn't WAV formatted
+                self.f_s, snd = wavfile.read(self.audiofile)
+            except:
+                self.goodaudiofile = False
+                return
+                
             self.audiostream = snd[:, 0]
+                
 
         #if thread is to be connected to a WiNRADIO
         if not self.isfromaudio and not self.isfromtest:
@@ -339,12 +357,27 @@ class ThreadProcessor(QRunnable):
                 self.kill(6)
         else:
             shcopy(self.audiofile, self.wavfilename) #copying audio file if datasource = Test or Audio
-
+        
+        self.startthread = True
 
             
     @pyqtSlot()
     def run(self):
+        
+        #barrier to prevent signal processor loop from starting before __init__ finishes
+        counts = 0
+        while not self.startthread:
+            counts += 1
+            if counts > 100 or not self.keepgoing: #give up and terminate after 10 seconds waiting for __init__
+                self.kill(12)
+                return
+            elif not self.goodaudiofile: #if the audio file couldn't be read in properly
+                self.kill(11)
+                return
+            timemodule.sleep(0.1)
+        #if the thread gets here, __init__ has completed successfully
 
+        
         if not self.isfromaudio and not self.isfromtest: #if source is a receiver
         
             #Declaring the callbuck function to update the audio buffer
@@ -497,8 +530,8 @@ class ThreadProcessor(QRunnable):
             
             
     def kill(self,reason):
-        curtabnum = self.curtabnum
         self.keepgoing = False  # kills while loop
+        curtabnum = self.curtabnum
         
         if reason != 0: #notify event loop that processor failed if non-zero exit code provided
             self.signals.failed.emit(reason)
@@ -516,7 +549,7 @@ class ThreadProcessor(QRunnable):
     #terminate the audio file recording (for WINRADIO processor tabs) if it exceeds a certain length set by maxframenum
     def killaudiorecording(self):
         wave.Wave_write.close(self.wavfile) #close WAV file
-        self.signals.failed.emit(11) #pass warning message back to GUI
+        self.signals.failed.emit(13) #pass warning message back to GUI
 
         
         

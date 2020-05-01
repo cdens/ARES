@@ -607,10 +607,10 @@ class RunProgram(QMainWindow):
 
             #adjusting stretch factors for all rows/columns
             colstretch = [8,0,1,1,1,1,1,1,1]
-            for col,cstr in zip(range(0,len(colstretch)),colstretch):
+            for col,cstr in enumerate(colstretch):
                 self.alltabdata[curtabstr]["tablayout"].setColumnStretch(col,cstr)
             rowstretch = [1,1,1,1,1,1,1,1,10]
-            for row,rstr in zip(range(0,len(rowstretch)),rowstretch):
+            for row,rstr in enumerate(rowstretch):
                 self.alltabdata[curtabstr]["tablayout"].setRowStretch(row,rstr)
 
             #making the current layout for the tab
@@ -873,8 +873,8 @@ class RunProgram(QMainWindow):
                 #initializing thread, connecting signals/slots
                 vhffreq = self.alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
                 self.alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum,  starttime, self.alltabdata[curtabstr]["rawdata"]["istriggered"], self.alltabdata[curtabstr]["rawdata"]["firstpointtime"], self.settingsdict["fftwindow"], self.settingsdict["minfftratio"],self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"],self.settingsdict["triggersiglev"],slash,self.tempdir)
+                
                 self.alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
-
                 self.alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
                 self.alltabdata[curtabstr]["processor"].signals.triggered.connect(self.triggerUI)
                 self.alltabdata[curtabstr]["processor"].signals.terminated.connect(self.updateUIfinal)
@@ -1068,6 +1068,10 @@ class RunProgram(QMainWindow):
         elif messagenum == 10:
             self.posterror("Unspecified processing error raised during SignalProcessor.Run()")
         elif messagenum == 11:
+            self.posterror("Unable to read audio file")
+        elif messagenum == 12:
+            self.posterror("Failed to initialize the signal processor thread")
+        elif messagenum == 13:
             self.postwarning("ARES has stopped audio recording as the WAV file has exceeded maximum allowed length. Please start a new processing tab to continue recording AXBT signal to a WAV file.")
 
             
@@ -1799,8 +1803,8 @@ class RunProgram(QMainWindow):
                         tempplot = np.insert(tempplot,ind,addtemp)
                     except: #if list
                         i = 0
-                        for i in range(len(depthplot)):
-                            if depthplot[i] > adddepth:
+                        for i,cdepth in enumerate(depthplot):
+                            if cdepth > adddepth:
                                 break
                         depthplot.insert(i,adddepth)
                         tempplot.insert(i,addtemp)
