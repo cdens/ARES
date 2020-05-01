@@ -260,7 +260,7 @@ class RunSettings(QMainWindow):
 
             self.processortablayout.setSpacing(10)
 
-            self.tabWidget.addTab(self.processortab,'Processor Settings')
+            self.tabWidget.addTab(self.processortab,'Data Acquisition System Settings')
             self.tabWidget.setCurrentIndex(0)
 
             # and add new buttons and other widgets
