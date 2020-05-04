@@ -275,15 +275,22 @@ class RunProgram(QMainWindow):
         self.climodata = {}
         self.bathymetrydata = {}
         
-        climodata = sio.loadmat('qcdata/climo/indices.mat')
-        self.climodata["vals"] = climodata['vals'][:, 0]
-        self.climodata["depth"] = climodata['Z'][:, 0]
+        try:
+            climodata = sio.loadmat('qcdata/climo/indices.mat')
+            self.climodata["vals"] = climodata['vals'][:, 0]
+            self.climodata["depth"] = climodata['Z'][:, 0]
+            del climodata
+        except:
+            self.posterror("Unable to find/load climatology data")
         
-        bathydata = sio.loadmat('qcdata/bathy/indices.mat')
-        self.bathymetrydata["vals"] = bathydata['vals'][:, 0]
+        try:
+            bathydata = sio.loadmat('qcdata/bathy/indices.mat')
+            self.bathymetrydata["vals"] = bathydata['vals'][:, 0]
+            del bathydata
+        except:
+            self.posterror("Unable to find/load bathymetry data")    
             
-        del climodata, bathydata
-        
+            
         
     #builds file menu for GUI
     def buildmenu(self):
@@ -292,7 +299,7 @@ class RunProgram(QMainWindow):
         FileMenu = menubar.addMenu('Options')
         
         #File>New Signal Processor (Mk21) Tab
-        newsigtab = QAction('&New Signal Processor Tab',self)
+        newsigtab = QAction('&New Data Acquisition System Tab',self)
         newsigtab.setShortcut('Ctrl+N')
         newsigtab.triggered.connect(self.makenewprocessortab)
         FileMenu.addAction(newsigtab)
@@ -1361,11 +1368,23 @@ class RunProgram(QMainWindow):
 
             # pull ocean depth from ETOPO1 Grid-Registered Ice Sheet based global relief dataset
             # Data source: NOAA-NGDC: https://www.ngdc.noaa.gov/mgg/global/global.html
-            oceandepth, exportlat, exportlon, exportrelief = oci.getoceandepth(lat, lon, 6, self.bathymetrydata)
+            try:
+                oceandepth, exportlat, exportlon, exportrelief = oci.getoceandepth(lat, lon, 6, self.bathymetrydata)
+            except:
+                oceandepth = np.NaN
+                exportlat = exportlon = np.array([0,1])
+                exportrelief = np.NaN*np.ones((2,2))
+                self.posterror("Unable to find/load bathymetry data for profile location!")
             
             #getting climatology
-            climotemps,climodepths,climotempfill,climodepthfill = oci.getclimatologyprofile(lat,lon,month,self.climodata)
-            
+            try:
+                climotemps,climodepths,climotempfill,climodepthfill = oci.getclimatologyprofile(lat,lon,month,self.climodata)
+            except:
+                climotemps = climodepths = np.array([np.NaN,np.NaN])
+                climotempfill = climodepthfill = np.array([np.NaN,np.NaN,np.NaN,np.NaN])
+                self.posterror("Unable to find/load climatology data for profile location!")
+                
+                
             self.alltabdata[curtabstr]["profdata"] = {"temp_raw": rawtemperature, "depth_raw": rawdepth,
                                                  "lat": lat, "lon": lon, "year": year, "month": month, "day": day,
                                                  "time": time, "DTG": dtg,

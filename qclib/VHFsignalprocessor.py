@@ -235,8 +235,8 @@ class ThreadProcessor(QRunnable):
         fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,slash,tempdir, *args,**kwargs):
         super(ThreadProcessor, self).__init__()
 
-        
-        self.startthread = False #prevents Run() method from starting before init is finished
+        #prevents Run() method from starting before init is finished (value must be changed to 100 at end of __init__)
+        self.startthread = 0 
         
         # UI inputs
         self.curtabnum = curtabnum
@@ -261,12 +261,11 @@ class ThreadProcessor(QRunnable):
         
         #to prevent ARES from consuming all computer's resources- this limits the size of WAV files used by the signal processor to a number of PCM datapoints corresponding to 1 hour of audio @ fs=64 kHz, that would produce a wav file of ~0.5 GB for 16-bit PCM data
         self.maxsavedframes = 2.5E8
-        self.isrecordingaudio = True
+        self.isrecordingaudio = True #initialized to True for all cases (RF, test, and audio) but only matters in the callback function assigned for RF receivers
 
         # identifying whether tab is audio, test, or other format
         self.isfromaudio = False
         self.isfromtest = False
-        self.goodaudiofile = True #changes to false if the audio file being used is bad (for test and audio instances)
         
         
         if datasource[:5] == 'Audio':
@@ -277,11 +276,12 @@ class ThreadProcessor(QRunnable):
             try: #exception if unable to read audio file if it doesn't exist or isn't WAV formatted
                 file_info = wave.open(self.audiofile)
             except:
-                self.goodaudiofile = False
+                self.startthread = 11
                 return
                 
             if file_info.getnframes() > self.maxsavedframes:
-                self.kill(9)
+                self.startthread = 9
+                return
             
             self.f_s, snd = wavfile.read(self.audiofile) #reading file
             try: #if left/right stereo
@@ -296,7 +296,7 @@ class ThreadProcessor(QRunnable):
             try: #exception if unable to read audio file if it doesn't exist or isn't WAV formatted
                 self.f_s, snd = wavfile.read(self.audiofile)
             except:
-                self.goodaudiofile = False
+                self.startthread = 11
                 return
                 
             self.audiostream = snd[:, 0]
@@ -332,33 +332,39 @@ class ThreadProcessor(QRunnable):
             #opening current WiNRADIO/establishing contact
             self.hradio = self.wrdll.Open(self.serialnum_2WR)
             if self.hradio == 0:
-                self.kill(1)
+                self.startthread = 1
+                return
 
             try:
                 # power on- kill if failed
                 if wrdll.SetPower(self.hradio, True) == 0:
-                    self.kill(2)
+                    self.startthread = 2
+                    return
 
                 # initialize demodulator- kill if failed
                 if wrdll.InitializeDemodulator(self.hradio) == 0:
-                    self.kill(3)
+                    self.startthread = 3
+                    return
 
                 # change frequency- kill if failed
                 self.vhffreq_2WR = c_ulong(int(vhffreq * 1E6))
                 if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
-                    self.kill(4)
+                    self.startthread = 4
+                    return
 
                 # set volume- warn if failed
                 if self.wrdll.SetVolume(self.hradio, 31) == 0:
-                    self.kill(5)
+                    self.startthread = 5
+                    return
 
             except Exception: #if any WiNRADIO comms/initialization attempts failed, terminate thread
                 traceback.print_exc()
-                self.kill(6)
+                self.startthread = 6
+                return
         else:
             shcopy(self.audiofile, self.wavfilename) #copying audio file if datasource = Test or Audio
         
-        self.startthread = True
+        self.startthread = 100
 
             
     @pyqtSlot()
@@ -366,16 +372,16 @@ class ThreadProcessor(QRunnable):
         
         #barrier to prevent signal processor loop from starting before __init__ finishes
         counts = 0
-        while not self.startthread:
+        while self.startthread != 100:
             counts += 1
             if counts > 100 or not self.keepgoing: #give up and terminate after 10 seconds waiting for __init__
                 self.kill(12)
                 return
-            elif not self.goodaudiofile: #if the audio file couldn't be read in properly
-                self.kill(11)
+            elif self.startthread != 0 and self.startthread != 100: #if the audio file couldn't be read in properly
+                self.kill(self.startthread) #waits to run kill commands due to errors raised in __init__ until run() since slots+signals may not be connected to parent thread during init
                 return
             timemodule.sleep(0.1)
-        #if the thread gets here, __init__ has completed successfully
+        #if the Run() method gets this far, __init__ has completed successfully (and set self.startthread = 100)
 
         
         if not self.isfromaudio and not self.isfromtest: #if source is a receiver
