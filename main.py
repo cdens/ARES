@@ -1581,7 +1581,12 @@ class RunProgram(QMainWindow):
             try:
                 # running QC, comparing to climo
                 temperature, depth = qc.autoqc(rawtemperature, rawdepth, self.settingsdict["smoothlev"],self.settingsdict["profres"], self.settingsdict["maxstdev"], self.settingsdict["checkforgaps"])
-                matchclimo, climobottomcutoff = oci.comparetoclimo(temperature, depth, climotemps, climodepths,climotempfill,climodepthfill)
+                if self.settingsdict["comparetoclimo"]:
+                    matchclimo, climobottomcutoff = oci.comparetoclimo(temperature, depth, climotemps, climodepths,climotempfill,climodepthfill)
+                else:
+                    matchclimo = True
+                    climobottomcutoff = np.NaN
+                    
             except Exception:
                 temperature = np.array([np.NaN])
                 depth = np.array([0])
@@ -2029,7 +2034,7 @@ class RunProgram(QMainWindow):
                     curtab = self.tabWidget.currentIndex()
                     filename = self.tabWidget.tabText(curtab)
                     
-                    if self.settingsdict["comparetoclimo"]:
+                    if self.settingsdict["overlayclimo"]:
                         matchclimo = self.alltabdata[curtabstr]["profdata"]["matchclimo"]
                     else:
                         matchclimo = 1
@@ -2350,6 +2355,18 @@ class RunProgram(QMainWindow):
 
                 if year < 1938: #year the bathythermograph was invented
                     self.postwarning('Invalid Year Entered (< 1938 AD)!')
+                    return
+                elif month == 0 or month > 12:
+                    self.postwarning("Invalid Month Entered (must be between 1 and 12)")
+                    return
+                elif day == 0 or day > 31:
+                    self.postwarning("Invalid Day Entered (must be between 1 and 31")
+                    return
+                elif hour > 23 or hour < 0:
+                    self.postwarning('Invalid Time Entered (hour must be between 0 and 23')
+                    return
+                elif minute >= 60:
+                    self.postwarning('Invalid Time Entered (minutes must be < 60')
                     return
 
                 #making sure the profile is within 12 hours and not in the future, warning if otherwise
