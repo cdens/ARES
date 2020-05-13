@@ -42,10 +42,10 @@ from traceback import print_exc as trace_error
 import numpy as np
 from os import remove, path
 
-from PyQt5.QtWidgets import (QMainWindow, QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton,
+from PySide2.QtWidgets import (QMainWindow, QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QPushButton,
     QMessageBox, QWidget, QTabWidget, QGridLayout, QSlider, QComboBox, QLineEdit)
-from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QObject
-from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
+from PySide2.QtCore import Qt, Slot, Signal, QObject
+from PySide2.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
 
 import qclib.GPS_COM_interaction as gps
 
@@ -732,8 +732,8 @@ class RunSettings(QMainWindow):
 
 # SIGNAL SETUP HERE
 class SettingsSignals(QObject):
-    exported = pyqtSignal(dict)
-    closed = pyqtSignal(bool)
+    exported = Signal(dict)
+    closed = Signal(bool)
 
     
     

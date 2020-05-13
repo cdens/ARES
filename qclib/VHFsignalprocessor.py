@@ -72,7 +72,7 @@
 #               > vhffreq: VHF radio frequency that the WiNRADIO receiver will demodulate and sample
 #                   for AXBT data. Only relevant if an actual WiNRADIO is selected
 #               > curtabnum: Unique tab number (doesn't change if tabs are opened and closed) corresponding
-#                   to the current thread that enables the GUI to update data sent back via a pyqtSignal in
+#                   to the current thread that enables the GUI to update data sent back via a Signal in
 #                   the appropriate tab
 #               > starttime: The start date/time of processing (DTG, UTC) which is used to calculate a dT (and 
 #                   depth) for all data in that thread
@@ -117,8 +117,7 @@ from scipy.signal import tukey #taper generation
 
 import wave #WAV file writing
 
-from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject
-from PyQt5.Qt import QRunnable
+from PySide2.QtCore import Slot, Signal, QObject, QRunnable
 
 import time as timemodule
 import datetime as dt
@@ -367,7 +366,7 @@ class ThreadProcessor(QRunnable):
         self.startthread = 100
 
             
-    @pyqtSlot()
+    @Slot()
     def run(self):
         
         #barrier to prevent signal processor loop from starting before __init__ finishes
@@ -559,13 +558,13 @@ class ThreadProcessor(QRunnable):
 
         
         
-    @pyqtSlot()
+    @Slot()
     def abort(self): #executed when user selects "Stop" button
         self.kill(0) #tell processor to terminate with 0 (success) exit code
         
 
         
-    @pyqtSlot(float)
+    @Slot(float)
     def changecurrentfrequency(self, newfreq): #update VHF frequency for WiNRADIO
         # change frequency- kill if failed
         self.vhffreq_2WR = c_ulong(int(newfreq * 1E6))
@@ -574,7 +573,7 @@ class ThreadProcessor(QRunnable):
             
             
 
-    @pyqtSlot(float,float,int,float,int)
+    @Slot(float,float,int,float,int)
     def changethresholds(self,fftwindow,minfftratio,minsiglev,triggerfftratio,triggersiglev): #update data thresholds for FFT
         if fftwindow <= 1:
             self.fftwindow = fftwindow
@@ -590,11 +589,11 @@ class ThreadProcessor(QRunnable):
         
 #initializing signals for data to be passed back to main loop
 class ThreadProcessorSignals(QObject): 
-    iterated = pyqtSignal(int,float,float,float,float,float,float,float,int) #signal to add another entry to raw data arrays
-    triggered = pyqtSignal(int,float) #signal that the first tone has been detected
-    terminated = pyqtSignal(int) #signal that the loop has been terminated (by user input or program error)
-    failed = pyqtSignal(int)
-    updateprogress = pyqtSignal(int,int) #signal to add another entry to raw data arrays
+    iterated = Signal(int,float,float,float,float,float,float,float,int) #signal to add another entry to raw data arrays
+    triggered = Signal(int,float) #signal that the first tone has been detected
+    terminated = Signal(int) #signal that the loop has been terminated (by user input or program error)
+    failed = Signal(int)
+    updateprogress = Signal(int,int) #signal to add another entry to raw data arrays
 
 
 

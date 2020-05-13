@@ -32,8 +32,8 @@
 #       o loaddata: Loads ocean climatology, bathymetry data once on initialization for use during quality control checks
 #       o buildmenu: Builds file menu for main GUI
 #       o openpreferencesthread: Opens advanced settings window (or reopens if a window is already open)
-#       o updatesettings: pyqtSlot to receive updated settings exported from advanced settings window
-#       o settingsclosed: pyqtSlot to receive notice when the advanced settings window is closed
+#       o updatesettings: Slot to receive updated settings exported from advanced settings window
+#       o settingsclosed: Slot to receive notice when the advanced settings window is closed
 #
 #           (end of file)
 #       o addnewtab: updates ARES tab-tracking system with information for new tab
@@ -58,11 +58,11 @@
 #       o startprocessor: starts a signal processor thread (pyqtSignal)
 #       o stopprocessor: stops/aborts a signal processor thread (pyqtSignal)
 #       o gettabstrfromnum: gets the self.alltabdata key for the current tab to access that tab's information
-#       o triggerUI: updates tab information when that tab is triggered with signal from an AXBT (pyqtSlot)
-#       o updateUIinfo: updates user interface/tab data with information from connected thread (pyqtSlot)
-#       o updateUIfinal: updates user interface for the final time after signal processing thread is terminated (pyqtSlot)
-#       o failedWRmessage: posts a message in the GUI if the signal processor thread encounters an error (pyqtSlot)
-#       o updateaudioprogressbar: updates progress bar with progress of signal processing thread using an audio file source (pyqtSlot)
+#       o triggerUI: updates tab information when that tab is triggered with signal from an AXBT (Slot)
+#       o updateUIinfo: updates user interface/tab data with information from connected thread (Slot)
+#       o updateUIfinal: updates user interface for the final time after signal processing thread is terminated (Slot)
+#       o failedWRmessage: posts a message in the GUI if the signal processor thread encounters an error (Slot)
+#       o updateaudioprogressbar: updates progress bar with progress of signal processing thread using an audio file source (Slot)
 #
 #   Profile Editor functions within main.py "RunProgram" class of QMainWindow:
 #       o processprofile: handles initial transition from signal processor to profile editor tab
@@ -107,13 +107,12 @@ from shutil import copy as shcopy
 
 from tempfile import gettempdir
 
-from PyQt5.QtWidgets import (QMainWindow, QAction, QApplication, QLineEdit, QLabel, QSpinBox, QCheckBox,
+from PySide2.QtWidgets import (QMainWindow, QAction, QApplication, QLineEdit, QLabel, QSpinBox, QCheckBox,
     QPushButton, QMessageBox, QWidget, QFileDialog, QComboBox, QTextEdit, QTabWidget, QVBoxLayout, QInputDialog, 
     QGridLayout, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QDesktopWidget, 
     QStyle, QStyleOptionTitleBar, QMenu, QActionGroup)
-from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot
-from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
-from PyQt5.Qt import QThreadPool
+from PySide2.QtCore import Qt, Slot, QThreadPool
+from PySide2.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -399,17 +398,20 @@ class RunProgram(QMainWindow):
             
             if ctabtype[:15] == "SignalProcessor": #data acquisition
                 curwidgets = daswidgets
+                widgetname = "tabwidgets"
             elif ctabtype == "ProfileEditorInput": #prompt to select ASCII file
                 curwidgets = peinputwidgets
+                widgetname = "tabwidgets"
             elif ctabtype == "ProfileEditor": #profile editor
                 curwidgets = pewidgets
+                widgetname = "tabwidgets2"
             else:
                 self.posterror(f"Unable to identify tab type when updating font: {ctabtype}")
                 curwidgets = []
                 
             #updating font sizes for tab and all widgets
             for widget in curwidgets:
-                self.alltabdata[ctab]["tabwidgets"][widget].setFont(self.labelfont)
+                self.alltabdata[ctab][widgetname][widget].setFont(self.labelfont)
                 
         #save new font to settings file
         swin.writesettings(self.settingsfile, self.settingsdict)
@@ -450,7 +452,7 @@ class RunProgram(QMainWindow):
 
             
     #slot to receive/update changed settings from advanced preferences window
-    @pyqtSlot(dict)
+    @Slot(dict)
     def updatesettings(self,settingsdict):
 
         #save settings to class
@@ -464,7 +466,7 @@ class RunProgram(QMainWindow):
         
 
     #slot to update main GUI loop if the preferences window has been closed
-    @pyqtSlot(bool)
+    @Slot(bool)
     def settingsclosed(self,isclosed):
         if isclosed:
             self.preferencesopened = False
@@ -622,6 +624,7 @@ class RunProgram(QMainWindow):
 
             #making the current layout for the tab
             self.alltabdata[curtabstr]["tab"].setLayout(self.alltabdata[curtabstr]["tablayout"])
+            
 
         except Exception: #if something breaks
             trace_error()
@@ -941,7 +944,7 @@ class RunProgram(QMainWindow):
                 
                 
     #slot to notify main GUI that the thread has been triggered with AXBT data
-    @pyqtSlot(int,float)
+    @Slot(int,float)
     def triggerUI(self,plottabnum,firstpointtime):
         try:
             plottabstr = self.gettabstrfromnum(plottabnum)
@@ -954,7 +957,7 @@ class RunProgram(QMainWindow):
             
             
     #slot to pass AXBT data from thread to main GUI
-    @pyqtSlot(int,float,float,float,float,float,float,float,int)
+    @Slot(int,float,float,float,float,float,float,float,int)
     def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,cact,cratio,ctime,i):
         try:
             plottabstr = self.gettabstrfromnum(plottabnum)
@@ -1029,7 +1032,7 @@ class RunProgram(QMainWindow):
             
             
     #final update from thread after being aborted- restoring scroll bar, other info
-    @pyqtSlot(int)
+    @Slot(int)
     def updateUIfinal(self,plottabnum):
         try:
             plottabstr = self.gettabstrfromnum(plottabnum)
@@ -1052,7 +1055,7 @@ class RunProgram(QMainWindow):
             
             
     #posts message in main GUI if thread processor fails for some reason
-    @pyqtSlot(int)
+    @Slot(int)
     def failedWRmessage(self,messagenum):
         if messagenum == 1:
             self.posterror("Failed to connect to specified WiNRADIO!")
@@ -1084,7 +1087,7 @@ class RunProgram(QMainWindow):
             
             
     #updates on screen progress bar if thread is processing audio data
-    @pyqtSlot(int,int)
+    @Slot(int,int)
     def updateaudioprogressbar(self,plottabnum,newprogress):
         try:
             plottabstr = self.gettabstrfromnum(plottabnum)
@@ -1406,12 +1409,12 @@ class RunProgram(QMainWindow):
                 self.tabWidget.setTabText(curtab,dtg)  
                 
             #now delete widget entries
-            del self.alltabdata[curtabstr]["tabwidgets"]
-            QObjectCleanupHandler().add(self.alltabdata[curtabstr]["tablayout"])
+            #del self.alltabdata[curtabstr]["tabwidgets"]#,self.alltabdata[curtabstr]["tablayout"]
             
-            self.alltabdata[curtabstr]["tablayout"] = QGridLayout()
-            self.alltabdata[curtabstr]["tab"].setLayout(self.alltabdata[curtabstr]["tablayout"]) 
-            self.alltabdata[curtabstr]["tablayout"].setSpacing(10)
+            #setting up new keys with different names to prevent memory issues
+            self.alltabdata[curtabstr]["tabwidgets2"] = {}
+            self.alltabdata[curtabstr]["tablayout2"] = QGridLayout()
+            self.alltabdata[curtabstr]["tablayout2"].setSpacing(10)
             
             #ADDING FIGURES AND AXES TO GRID LAYOUT (row column rowext colext)
             self.alltabdata[curtabstr]["ProfFig"] = plt.figure()
@@ -1432,71 +1435,71 @@ class RunProgram(QMainWindow):
             self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["ProfToolbar"],2,2,1,2)
 
             #Create widgets for UI populated with test example
-            self.alltabdata[curtabstr]["tabwidgets"] = {}
+            self.alltabdata[curtabstr]["tabwidgets2"] = {}
             
             #first column: profile editor functions:
-            self.alltabdata[curtabstr]["tabwidgets"]["toggleclimooverlay"] = QPushButton('Overlay Climatology') #1
-            self.alltabdata[curtabstr]["tabwidgets"]["toggleclimooverlay"].setCheckable(True)
-            self.alltabdata[curtabstr]["tabwidgets"]["toggleclimooverlay"].setChecked(True)
-            self.alltabdata[curtabstr]["tabwidgets"]["toggleclimooverlay"].clicked.connect(self.toggleclimooverlay) 
+            self.alltabdata[curtabstr]["tabwidgets2"]["toggleclimooverlay"] = QPushButton('Overlay Climatology') #1
+            self.alltabdata[curtabstr]["tabwidgets2"]["toggleclimooverlay"].setCheckable(True)
+            self.alltabdata[curtabstr]["tabwidgets2"]["toggleclimooverlay"].setChecked(True)
+            self.alltabdata[curtabstr]["tabwidgets2"]["toggleclimooverlay"].clicked.connect(self.toggleclimooverlay) 
             
-            self.alltabdata[curtabstr]["tabwidgets"]["addpoint"] = QPushButton('Add Point') #2
-            self.alltabdata[curtabstr]["tabwidgets"]["addpoint"].clicked.connect(self.addpoint)
-            self.alltabdata[curtabstr]["tabwidgets"]["addpoint"].setToolTip("After clicking, select a single point to add")
+            self.alltabdata[curtabstr]["tabwidgets2"]["addpoint"] = QPushButton('Add Point') #2
+            self.alltabdata[curtabstr]["tabwidgets2"]["addpoint"].clicked.connect(self.addpoint)
+            self.alltabdata[curtabstr]["tabwidgets2"]["addpoint"].setToolTip("After clicking, select a single point to add")
             
-            self.alltabdata[curtabstr]["tabwidgets"]["removepoint"] = QPushButton('Remove Point') #3
-            self.alltabdata[curtabstr]["tabwidgets"]["removepoint"].clicked.connect(self.removepoint)
-            self.alltabdata[curtabstr]["tabwidgets"]["removepoint"].setToolTip("After clicking, select a single point to remove")
+            self.alltabdata[curtabstr]["tabwidgets2"]["removepoint"] = QPushButton('Remove Point') #3
+            self.alltabdata[curtabstr]["tabwidgets2"]["removepoint"].clicked.connect(self.removepoint)
+            self.alltabdata[curtabstr]["tabwidgets2"]["removepoint"].setToolTip("After clicking, select a single point to remove")
 
-            self.alltabdata[curtabstr]["tabwidgets"]["removerange"] = QPushButton('Remove Range') #4
-            self.alltabdata[curtabstr]["tabwidgets"]["removerange"].clicked.connect(self.removerange)
-            self.alltabdata[curtabstr]["tabwidgets"]["removerange"].setToolTip("After clicking, click and drag over a (vertical) range of points to remove")
+            self.alltabdata[curtabstr]["tabwidgets2"]["removerange"] = QPushButton('Remove Range') #4
+            self.alltabdata[curtabstr]["tabwidgets2"]["removerange"].clicked.connect(self.removerange)
+            self.alltabdata[curtabstr]["tabwidgets2"]["removerange"].setToolTip("After clicking, click and drag over a (vertical) range of points to remove")
             
-            self.alltabdata[curtabstr]["tabwidgets"]["sfccorrectiontitle"] = QLabel('Isothermal Layer (m):') #5
-            self.alltabdata[curtabstr]["tabwidgets"]["sfccorrection"] = QSpinBox() #6
-            self.alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setRange(0, int(np.max(rawdepth+200)))
-            self.alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setSingleStep(1)
-            self.alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setValue(0)
+            self.alltabdata[curtabstr]["tabwidgets2"]["sfccorrectiontitle"] = QLabel('Isothermal Layer (m):') #5
+            self.alltabdata[curtabstr]["tabwidgets2"]["sfccorrection"] = QSpinBox() #6
+            self.alltabdata[curtabstr]["tabwidgets2"]["sfccorrection"].setRange(0, int(np.max(rawdepth+200)))
+            self.alltabdata[curtabstr]["tabwidgets2"]["sfccorrection"].setSingleStep(1)
+            self.alltabdata[curtabstr]["tabwidgets2"]["sfccorrection"].setValue(0)
             
-            self.alltabdata[curtabstr]["tabwidgets"]["maxdepthtitle"] = QLabel('Maximum Depth (m):') #7
-            self.alltabdata[curtabstr]["tabwidgets"]["maxdepth"] = QSpinBox() #8
-            self.alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setRange(0, int(np.round(np.max(rawdepth+200),-2)))
-            self.alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setSingleStep(1)
+            self.alltabdata[curtabstr]["tabwidgets2"]["maxdepthtitle"] = QLabel('Maximum Depth (m):') #7
+            self.alltabdata[curtabstr]["tabwidgets2"]["maxdepth"] = QSpinBox() #8
+            self.alltabdata[curtabstr]["tabwidgets2"]["maxdepth"].setRange(0, int(np.round(np.max(rawdepth+200),-2)))
+            self.alltabdata[curtabstr]["tabwidgets2"]["maxdepth"].setSingleStep(1)
             # self.alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setValue(int(np.round(maxdepth)))
-            self.alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setValue(int(np.round(1000)))
+            self.alltabdata[curtabstr]["tabwidgets2"]["maxdepth"].setValue(int(np.round(1000)))
             
-            self.alltabdata[curtabstr]["tabwidgets"]["depthdelaytitle"] = QLabel('Depth Delay (m):') #9
-            self.alltabdata[curtabstr]["tabwidgets"]["depthdelay"] = QSpinBox() #10
-            self.alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setRange(0, int(np.round(np.max(rawdepth+200),-2)))
-            self.alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setSingleStep(1)
-            self.alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setValue(0)
+            self.alltabdata[curtabstr]["tabwidgets2"]["depthdelaytitle"] = QLabel('Depth Delay (m):') #9
+            self.alltabdata[curtabstr]["tabwidgets2"]["depthdelay"] = QSpinBox() #10
+            self.alltabdata[curtabstr]["tabwidgets2"]["depthdelay"].setRange(0, int(np.round(np.max(rawdepth+200),-2)))
+            self.alltabdata[curtabstr]["tabwidgets2"]["depthdelay"].setSingleStep(1)
+            self.alltabdata[curtabstr]["tabwidgets2"]["depthdelay"].setValue(0)
 
-            self.alltabdata[curtabstr]["tabwidgets"]["runqc"] = QPushButton('Re-QC Profile (Reset)') #11
-            self.alltabdata[curtabstr]["tabwidgets"]["runqc"].clicked.connect(self.runqc)    
+            self.alltabdata[curtabstr]["tabwidgets2"]["runqc"] = QPushButton('Re-QC Profile (Reset)') #11
+            self.alltabdata[curtabstr]["tabwidgets2"]["runqc"].clicked.connect(self.runqc)    
             
             
             #Second column: profile information
-            self.alltabdata[curtabstr]["tabwidgets"]["proftxt"] = QLabel(' ')#12
-            self.alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"] = QCheckBox('Bottom Strike?') #13
-            self.alltabdata[curtabstr]["tabwidgets"]["rcodetitle"] = QLabel('Profile Quality:') #14
-            self.alltabdata[curtabstr]["tabwidgets"]["rcode"] = QComboBox() #15
-            self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Good Profile")
-            self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("No Signal")
-            self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Spotty/Intermittent")
-            self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Hung Probe/Early Start")
-            self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Isothermal")
-            self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Late Start")
-            self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Slow Falling")
-            self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Bottom Strike")
-            self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Climatology Mismatch")
-            self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Action Required/Reprocess")
+            self.alltabdata[curtabstr]["tabwidgets2"]["proftxt"] = QLabel(' ')#12
+            self.alltabdata[curtabstr]["tabwidgets2"]["isbottomstrike"] = QCheckBox('Bottom Strike?') #13
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcodetitle"] = QLabel('Profile Quality:') #14
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcode"] = QComboBox() #15
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcode"].addItem("Good Profile")
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcode"].addItem("No Signal")
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcode"].addItem("Spotty/Intermittent")
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcode"].addItem("Hung Probe/Early Start")
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcode"].addItem("Isothermal")
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcode"].addItem("Late Start")
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcode"].addItem("Slow Falling")
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcode"].addItem("Bottom Strike")
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcode"].addItem("Climatology Mismatch")
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcode"].addItem("Action Required/Reprocess")
                 
             #formatting widgets
-            self.alltabdata[curtabstr]["tabwidgets"]["proftxt"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
-            self.alltabdata[curtabstr]["tabwidgets"]["rcodetitle"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
-            self.alltabdata[curtabstr]["tabwidgets"]["depthdelaytitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.alltabdata[curtabstr]["tabwidgets"]["sfccorrectiontitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.alltabdata[curtabstr]["tabwidgets"]["maxdepthtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.alltabdata[curtabstr]["tabwidgets2"]["proftxt"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            self.alltabdata[curtabstr]["tabwidgets2"]["rcodetitle"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            self.alltabdata[curtabstr]["tabwidgets2"]["depthdelaytitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.alltabdata[curtabstr]["tabwidgets2"]["sfccorrectiontitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.alltabdata[curtabstr]["tabwidgets2"]["maxdepthtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             
             
             #should be 15 entries
@@ -1509,8 +1512,8 @@ class RunProgram(QMainWindow):
             
             #adding user inputs
             for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
-                self.alltabdata[curtabstr]["tabwidgets"][i].setFont(self.labelfont)
-                self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
+                self.alltabdata[curtabstr]["tabwidgets2"][i].setFont(self.labelfont)
+                self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets2"][i],r,c,re,ce)
                 
 
             #adjusting stretch factors for all rows/columns
@@ -1523,6 +1526,9 @@ class RunProgram(QMainWindow):
 
             #run autoQC code, pull variables from self.alltabdata dict
             self.alltabdata[curtabstr]["hasbeenprocessed"] = False
+            
+            #setting layout
+            self.alltabdata[curtabstr]["tab"].setLayout(self.alltabdata[curtabstr]["tablayout"]) 
             
             if self.runqc(): #only executes following code if autoQC runs sucessfully
                 depth = self.alltabdata[curtabstr]["profdata"]["depth_plot"]
@@ -1542,11 +1548,14 @@ class RunProgram(QMainWindow):
                 self.alltabdata[curtabstr]["hasbeenprocessed"] = True #note that the autoQC driver has run at least once
     
                 #configure spinboxes to run "applychanges" function after being changed
-                self.alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].valueChanged.connect(self.applychanges)
-                self.alltabdata[curtabstr]["tabwidgets"]["maxdepth"].valueChanged.connect(self.applychanges)
-                self.alltabdata[curtabstr]["tabwidgets"]["depthdelay"].valueChanged.connect(self.applychanges)
+                self.alltabdata[curtabstr]["tabwidgets2"]["sfccorrection"].valueChanged.connect(self.applychanges)
+                self.alltabdata[curtabstr]["tabwidgets2"]["maxdepth"].valueChanged.connect(self.applychanges)
+                self.alltabdata[curtabstr]["tabwidgets2"]["depthdelay"].valueChanged.connect(self.applychanges)
     
                 self.alltabdata[curtabstr]["tabtype"] = "ProfileEditor"
+            
+                
+            
         except Exception:
             trace_error()
             self.posterror("Failed to build profile editor tab!")
@@ -1619,15 +1628,15 @@ class RunProgram(QMainWindow):
             self.alltabdata[curtabstr]["profdata"]["matchclimo"] = matchclimo
 
             # resetting depth correction QSpinBoxes
-            self.alltabdata[curtabstr]["tabwidgets"]["maxdepth"].setValue(int(np.round(maxdepth)))
-            self.alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setValue(0)
-            self.alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].setValue(0)
+            self.alltabdata[curtabstr]["tabwidgets2"]["maxdepth"].setValue(int(np.round(maxdepth)))
+            self.alltabdata[curtabstr]["tabwidgets2"]["depthdelay"].setValue(0)
+            self.alltabdata[curtabstr]["tabwidgets2"]["sfccorrection"].setValue(0)
 
             # adjusting bottom strike checkbox as necessary
             if isbottomstrike == 1:
-                self.alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].setChecked(True)
+                self.alltabdata[curtabstr]["tabwidgets2"]["isbottomstrike"].setChecked(True)
             else:
-                self.alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].setChecked(False)
+                self.alltabdata[curtabstr]["tabwidgets2"]["isbottomstrike"].setChecked(False)
 
             self.updateprofeditplots() #update profile plot, data on window
             
@@ -1656,9 +1665,9 @@ class RunProgram(QMainWindow):
             if len(tempplot) > 0 and len(depthplot) > 0:
 
                 #new depth correction settings
-                sfcdepth = self.alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
-                maxdepth = self.alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
-                depthdelay = self.alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
+                sfcdepth = self.alltabdata[curtabstr]["tabwidgets2"]["sfccorrection"].value()
+                maxdepth = self.alltabdata[curtabstr]["tabwidgets2"]["maxdepth"].value()
+                depthdelay = self.alltabdata[curtabstr]["tabwidgets2"]["depthdelay"].value()
     
                 if depthdelay > 0: #shifitng entire profile up if necessary
                     depthplot = depthplot - depthdelay
@@ -1698,7 +1707,7 @@ class RunProgram(QMainWindow):
             
             # Replace drop info
             proftxt = self.generateprofiledescription(curtabstr,len(tempplot))
-            self.alltabdata[curtabstr]["tabwidgets"]["proftxt"].setText(proftxt)
+            self.alltabdata[curtabstr]["tabwidgets2"]["proftxt"].setText(proftxt)
 
             # re-plotting (if not first pass through editor)
             if self.alltabdata[curtabstr]["hasbeenprocessed"]:
@@ -1714,9 +1723,9 @@ class RunProgram(QMainWindow):
             
     def generateprofiledescription(self,curtabstr,numpoints):
         try:
-            sfcdepth = self.alltabdata[curtabstr]["tabwidgets"]["sfccorrection"].value()
-            maxdepth = self.alltabdata[curtabstr]["tabwidgets"]["maxdepth"].value()
-            depthdelay = self.alltabdata[curtabstr]["tabwidgets"]["depthdelay"].value()
+            sfcdepth = self.alltabdata[curtabstr]["tabwidgets2"]["sfccorrection"].value()
+            maxdepth = self.alltabdata[curtabstr]["tabwidgets2"]["maxdepth"].value()
+            depthdelay = self.alltabdata[curtabstr]["tabwidgets2"]["depthdelay"].value()
             
             lon = self.alltabdata[curtabstr]["profdata"]["lon"]
             lat = self.alltabdata[curtabstr]["profdata"]["lat"]
