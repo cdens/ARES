@@ -100,7 +100,7 @@ completes the following modifications to the raw data:
 ## Required Datasets
 This program requires several datasets, saved in $ARES_PATH$/qcdata/$datasetsubfolder$/
 Required datasets are:
-	> Levitus Monthly Ocean Temperature Climatology (netCDF4 1 degree horizontal resolution):
+	> Global Digitized Enviromental Model (GDEM) Climatology
 		Provides global ocean climotological temperature depth profiles for the editor to 
 		incorporate into the autoQC algorithm and display for the user to make addional edits
 	> NOAA-NGDC ETOPO1 Global Relief Dataset (netCDF4, 1 arcminute resolution)
@@ -140,7 +140,7 @@ Python core modules: sys, os, platform, traceback, ctypes, datetime, time
 
 Modules which must first be installed before running ARES:
 	numpy		matplotlib			scipy
-	shapely		PyShp				PyQt5
+	shapely		PyShp				PySide2
 	cmocean		netCDF4				pynmea2
 	pyserial	
 	fbs (generate executable)
@@ -148,14 +148,14 @@ Modules which must first be installed before running ARES:
 	
 ### Installing on Linux/MacOs:
 ```
-pip3 install numpy matplotlib scipy PyShp PyQt5 cmocean netCDF4 Shapely fbs pyserial pynmea2
+pip3 install numpy matplotlib scipy PyShp PySide2 cmocean netCDF4 Shapely fbs pyserial pynmea2
 ```
 
 NOTE: You may need to install the libgeos library (e.g. *brew install libgeos* on MacOS) for Shapely to work
 
 ### Installing on Windows:
 ```
-pip install numpy matplotlib scipy PyShp PyQt5 cmocean netCDF4 wheel fbs pyserial pynmea2
+pip install numpy matplotlib scipy PyShp PySide2 cmocean netCDF4 wheel fbs pyserial pynmea2
 ```
 
 Next, download Shapely wheel for Python v3.x from https://www.lfd.uci.edu/~gohlke/pythonlibs/- 
@@ -165,4 +165,4 @@ The file should be named Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl de
 pip install Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl 
 ```
 ***(again, fill in necessary info there)
-
+NOTE: for either method, use `pip install -r requirements.txt` to install versions of each module that were tested with ARES during development 

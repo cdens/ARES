@@ -3,7 +3,7 @@ numpy==1.16.4
 PyInstaller==3.5 #executable generation only
 pynmea2==1.15.0 #GPS feeds
 #pypiwin32==223 #for PyInstaller
-PyQt5==5.9.2 #GUI
+PySide2==5.14.2.1 #Qt5 binding (replaced PyQt5)
 pyserial==3.4 #serial connection
 pyshp==2.1.0 #shapefile handling (regions)
 #pywin32==224 #for PyInstaller (windows only)
