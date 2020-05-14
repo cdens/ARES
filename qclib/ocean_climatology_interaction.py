@@ -1,7 +1,22 @@
 # =============================================================================
 #     Code: ocean_climatology_interaction.py
 #     Author: ENS Casey R. Densmore, 20JUN2019
-#     
+#
+#    This file is part of the AXBT Realtime Editing System (ARES).
+#
+#    ARES is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    ARES is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with ARES.  If not, see <https://www.gnu.org/licenses/>.
+#  
 #     Purpose: Interaction with ocean bathymetry and climatology data. These 
 #       functions are specifically written to interact with gridded bathymetry
 #       and climatology data broken into spatially/temporally organized chunks
