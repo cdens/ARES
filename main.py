@@ -16,6 +16,10 @@ if cursys() == 'Windows':
     #basic Qt5 bindings for app + splash screen
     from PyQt5.QtWidgets import QApplication, QSplashScreen
     from PyQt5.QtGui import QPixmap
+    from PyQt5.QtCore import QCoreApplication, Qt
+    
+    #fixing QtWebEngine from plugin issue
+    QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     
     #making splash screen
     app = QApplication(argv)
