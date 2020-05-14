@@ -7,25 +7,41 @@
 
 #import and run splash screen
 from sys import argv, exit
-from PyQt5.QtWidgets import QApplication, QSplashScreen
-from PyQt5.QtGui import QPixmap
-import time
 
-app = QApplication(argv)
-splash = QSplashScreen(QPixmap("qclib/dropicon.png"))
-splash.show()
+from platform import system as cursys
 
-#Imports necessary for main program
-import ARESgui 
-
-#creates main program instance
-app2 = QApplication(argv)
-ex = ARESgui.RunProgram()
-
-#kill splash screen
-splash.close()
-
-#executes main program
-exit(app2.exec_())
+#add splash screen on Windows because of SLOW import speed due to drivers
+if cursys() == 'Windows':
     
+    #basic Qt5 bindings for app + splash screen
+    from PyQt5.QtWidgets import QApplication, QSplashScreen
+    from PyQt5.QtGui import QPixmap
     
+    #making splash screen
+    app = QApplication(argv)
+    splash = QSplashScreen(QPixmap("qclib/dropicon.png"))
+    splash.show()
+    
+    #Imports necessary for main program
+    import ARESgui 
+    
+    #creates main program instance
+    ex = ARESgui.RunProgram()
+    
+    #kill splash screen
+    splash.close()
+    
+else:
+    #Qt5 binding for app only
+    from PyQt5.QtWidgets import QApplication
+        
+    #Imports necessary for main program
+    import ARESgui 
+    
+    #creates main program instance
+    app = QApplication(argv)
+    ex = ARESgui.RunProgram()
+    
+
+#executes main program (identical regardless of splash screen)
+exit(app.exec_())
