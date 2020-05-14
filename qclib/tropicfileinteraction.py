@@ -4,6 +4,7 @@
 #    
 #     Purpose: Provides functions to write/read various AXBT data file formats
 #
+#    This file is part of the AXBT Realtime Editing System (ARES)
 #
 #    ARES is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
