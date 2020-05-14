@@ -18,6 +18,7 @@ Password=5309
 Compression=lzma
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64 
+LicenseFile=License_GNU_GPL_v3.txt
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
