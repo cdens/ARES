@@ -10,7 +10,7 @@ node {
     stage('SonarQube Analysis') {
         withSonarQubeEnv("Sonarqube Di2e Server") {
             def sonarScanner = tool name: 'SonarQube Scanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
-            def scannerHome = tool 'SonarScanner 2.11';
+            def scannerHome = tool 'SonarScanner 2.8.1';
             sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=AXBT -Dsonar.sources=."
         }
     }
