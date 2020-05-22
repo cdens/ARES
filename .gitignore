@@ -8,6 +8,7 @@ testdata/
 __pycache__/
 qclib/__pycache__/
 *.pyc
+ARESgui/__pycache__/
 
 #ignore all program settings files
 *.ARESsettings
