@@ -437,6 +437,8 @@ def startprocessor(self):
             
             #gets rid of scroll bar on table
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            
+            autopopulate = False #tracking whether to autopopulate fields (waits until after thread has been started to prevent from hanging on GPS stream)
 
             #saving start time for current drop
             if self.alltabdata[curtabstr]["rawdata"]["starttime"] == 0:
@@ -445,18 +447,7 @@ def startprocessor(self):
                 
                 #autopopulating selected fields
                 if datasource[:5] != 'Audio': #but not if reprocessing from audio file
-                    if self.settingsdict["autodtg"]:#populates date and time if requested
-                        curdatestr = str(starttime.year) + str(starttime.month).zfill(2) + str(starttime.day).zfill(2)
-                        self.alltabdata[curtabstr]["tabwidgets"]["dateedit"].setText(curdatestr)
-                        curtimestr = str(starttime.hour).zfill(2) + str(starttime.minute).zfill(2)
-                        self.alltabdata[curtabstr]["tabwidgets"]["timeedit"].setText(curtimestr)
-                    if self.settingsdict["autolocation"] and self.settingsdict["comport"] != 'n':
-                        lat, lon, gpsdate, flag = gps.getcurrentposition(self.settingsdict["comport"], 20)
-                        if flag == 0 and abs((gpsdate - starttime).total_seconds()) <= 60:
-                            self.alltabdata[curtabstr]["tabwidgets"]["latedit"].setText(str(lat))
-                            self.alltabdata[curtabstr]["tabwidgets"]["lonedit"].setText(str(lon))
-                    if self.settingsdict["autoid"]:
-                        self.alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.settingsdict["platformid"])
+                    autopopulate = True
                         
             else:
                 starttime = self.alltabdata[curtabstr]["rawdata"]["starttime"]
@@ -485,6 +476,21 @@ def startprocessor(self):
             
             #the code is still running but data collection has at least been initialized. This allows self.savecurrenttab() to save raw data files
             self.alltabdata[curtabstr]["tabtype"] = "SignalProcessor_completed"
+            
+            #autopopulating fields if necessary
+            if autopopulate:
+                if self.settingsdict["autodtg"]:#populates date and time if requested
+                    curdatestr = str(starttime.year) + str(starttime.month).zfill(2) + str(starttime.day).zfill(2)
+                    self.alltabdata[curtabstr]["tabwidgets"]["dateedit"].setText(curdatestr)
+                    curtimestr = str(starttime.hour).zfill(2) + str(starttime.minute).zfill(2)
+                    self.alltabdata[curtabstr]["tabwidgets"]["timeedit"].setText(curtimestr)
+                if self.settingsdict["autolocation"] and self.settingsdict["comport"] != 'n':
+                    lat, lon, gpsdate, flag = gps.getcurrentposition(self.settingsdict["comport"], 20)
+                    if flag == 0 and abs((gpsdate - starttime).total_seconds()) <= 60:
+                        self.alltabdata[curtabstr]["tabwidgets"]["latedit"].setText(str(lat))
+                        self.alltabdata[curtabstr]["tabwidgets"]["lonedit"].setText(str(lon))
+                if self.settingsdict["autoid"]:
+                    self.alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.settingsdict["platformid"])
             
     except Exception:
         trace_error()
@@ -759,4 +765,4 @@ def processprofile(self):
     #generating QC tab
     self.continuetoqc(curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,time,"NotFromFile",identifier)
         
-        
+    
