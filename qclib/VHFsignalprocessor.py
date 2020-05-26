@@ -299,10 +299,21 @@ class ThreadProcessor(QRunnable):
                 return
             
             self.f_s, snd = wavfile.read(self.audiofile) #reading file
-            try: #if left/right stereo
-                self.audiostream = snd[:, 0]
-            except:
+            
+            #if multiple channels, sum them together
+            sndshape = np.shape(snd) #array size (tuple)
+            ndims = len(sndshape) #number of dimensions
+            if ndims == 1: #if one channel, use that
                 self.audiostream = snd
+            elif ndims == 2: #if two channels, sum them up
+                self.audiostream = np.sum(snd,axis=1)
+                #self.audiostream = snd[:,0]
+                #for ch in range(1,sndshape[1]):
+                #    self.audiostream += snd[:,ch]
+                    
+            else: #if more than 2D- not a valid file
+                self.audiostream = [0]*10000
+                self.startthread = 11
                 
         elif datasource == 'Test': #test run- use included audio file
             self.audiofile = 'testdata/MZ000006.WAV'
