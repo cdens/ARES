@@ -71,7 +71,11 @@ def addnewtab(self):
 
 #gets index of open tab in GUI
 def whatTab(self):
-    return self.tabnumbers[self.tabWidget.currentIndex()]
+    ctabnum = self.tabWidget.currentIndex()
+    if ctabnum == -1:
+        return ctabnum
+    else:
+        return self.tabnumbers[ctabnum]
     
     
 

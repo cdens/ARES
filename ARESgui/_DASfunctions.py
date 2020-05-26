@@ -353,11 +353,10 @@ def changechannelandfrequency(self,newchannel,newfrequency,curtabstr):
 #update FFT thresholds/window setting
 def updatefftsettings(self):
     try:
-        curtabstr = "Tab " + str(self.whatTab())
         #updates fft settings for any active tabs
         for ctab in self.alltabdata:
             if self.alltabdata[ctab]["isprocessing"]: 
-                self.alltabdata[curtabstr]["processor"].changethresholds(self.settingsdict["fftwindow"], self.settingsdict["minfftratio"], self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"], self.settingsdict["triggersiglev"])
+                self.alltabdata[ctab]["processor"].changethresholds(self.settingsdict["fftwindow"], self.settingsdict["minfftratio"], self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"], self.settingsdict["triggersiglev"])
     except Exception:
         trace_error()
         self.posterror("Error updating FFT settings!")
