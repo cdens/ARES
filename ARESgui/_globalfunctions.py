@@ -367,8 +367,9 @@ def savedataincurtab(self):
         self.posterror("Filed to save files")
         successval = False #notes that process failed
     finally:
-        QApplication.restoreOverrideCursor() 
-        return successval
+        QApplication.restoreOverrideCursor() #restore cursor here
+        
+    return successval
     
         
         

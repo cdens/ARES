@@ -381,7 +381,7 @@ class ThreadProcessor(QRunnable):
                     return
 
             except Exception: #if any WiNRADIO comms/initialization attempts failed, terminate thread
-                traceback.print_exc()
+                trace_error()
                 self.startthread = 6
                 return
         else:
@@ -572,7 +572,6 @@ class ThreadProcessor(QRunnable):
         self.signals.terminated.emit(curtabnum)  # emits signal that processor has been terminated
         self.txtfile.close()
         
-        return
         
         
     #terminate the audio file recording (for WINRADIO processor tabs) if it exceeds a certain length set by maxframenum
