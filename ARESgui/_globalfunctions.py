@@ -38,7 +38,7 @@ from os import remove, path, listdir
 from traceback import print_exc as trace_error
 from shutil import copy as shcopy
 
-from PyQt5.QtWidgets import QApplication, QMessageBox, QFileDialog, QInputDialog
+from PyQt5.QtWidgets import QApplication, QMessageBox, QFileDialog, QInputDialog, QLineEdit
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QPalette, QBrush, QLinearGradient
 
@@ -49,6 +49,7 @@ import matplotlib.pyplot as plt
 
 import qclib.tropicfileinteraction as tfio
 import qclib.makeAXBTplots as tplot
+import qclib.ocean_climatology_interaction as oci
 
 
 
@@ -121,15 +122,14 @@ def closecurrenttab(self):
             indextoclose = self.tabWidget.currentIndex()
             
             #check to make sure there isn't a corresponding processor thread, close if there is
-            if self.alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_incomplete' or self.alltabdata[curtabstr]["tabtype"] == 'SignalProcessor_completed':
-                if self.alltabdata[curtabstr]["isprocessing"]:
-                    reply = QMessageBox.question(self, 'Message',
-                        "Closing this tab will terminate the current profile and discard the data. Continue?", QMessageBox.Yes | 
-                        QMessageBox.No, QMessageBox.No)
-                    if reply == QMessageBox.No:
-                        return
-                    else:
-                        self.alltabdata[curtabstr]["processor"].abort()
+            if self.alltabdata[curtabstr]["isprocessing"]:
+                reply = QMessageBox.question(self, 'Message',
+                    "Closing this tab will terminate the current profile and discard the data. Continue?", QMessageBox.Yes | 
+                    QMessageBox.No, QMessageBox.No)
+                if reply == QMessageBox.No:
+                    return
+                else:
+                    self.alltabdata[curtabstr]["processor"].abort()
 
             #closing open figures in tab to prevent memory leak
             if self.alltabdata[curtabstr]["tabtype"] == "ProfileEditor":

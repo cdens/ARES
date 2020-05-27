@@ -43,7 +43,7 @@ else:
 from os import path
 from traceback import print_exc as trace_error
 
-from PyQt5.QtWidgets import (QLineEdit, QLabel, QSpinBox, QPushButton, QWidget, QFileDialog, QComboBox, QGridLayout, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QApplication)
+from PyQt5.QtWidgets import (QLineEdit, QLabel, QSpinBox, QPushButton, QWidget, QFileDialog, QComboBox, QGridLayout, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QApplication, QMessageBox)
 from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot
 from PyQt5.QtGui import QColor
 
@@ -261,10 +261,8 @@ def datasourcechange(self):
         woption = self.alltabdata[curtabstr]["tabwidgets"]["datasource"].currentText()
         if woption != "Audio" and woption != "Test":
             for ctab in self.alltabdata:
-                if ctab != curtabstr and (self.alltabdata[ctab]["tabtype"] == "SignalProcessor_incomplete" or
-                                          self.alltabdata[ctab]["tabtype"] == "SignalProcessor_completed"):
-                    if self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == woption:
-                        isbusy = True
+                if ctab != curtabstr and  self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == woption:
+                    isbusy = True
 
         if isbusy:
             self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
@@ -576,9 +574,10 @@ def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,cact,cratio,ctime,i):
                 self.alltabdata[plottabstr]["ProcessorCanvas"].draw()
 
             #coloring new cell based on whether or not it has good data
+            stars = '*****'
             if np.isnan(ctemp):
-                ctemp = '*****'
-                cdepth = '*****'
+                ctemp = stars
+                cdepth = stars
                 curcolor = QColor(179, 179, 255) #light blue
             else:
                 curcolor = QColor(204, 255, 220) #light green
@@ -597,7 +596,7 @@ def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,cact,cratio,ctime,i):
             elif csig >= -150:
                 tablesignal = QTableWidgetItem(str(csig))
             else:
-                tablesignal = QTableWidgetItem('*****')
+                tablesignal = QTableWidgetItem(stars)
             tablesignal.setBackground(curcolor)
             tableact = QTableWidgetItem(str(cact))
             tableact.setBackground(curcolor)

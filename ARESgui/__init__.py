@@ -55,7 +55,7 @@ class RunProgram(QMainWindow):
         
         try:
             self.initUI() #creates GUI window
-            self.buildmenu() #Creates interactive menu, options to create tabs and start autoQC
+            self.buildmenu() #Creates interactive menu, options to create tabs and run ARES systems
             self.loaddata() #loads climo and bathy data into program first if using the full datasets
             self.makenewprocessortab() #Opens first tab
 
