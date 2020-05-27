@@ -22,7 +22,7 @@
 #
 
 #import and run splash screen
-from sys import argv, exit
+from sys import exit
 
 from platform import system as cursys
 
@@ -38,7 +38,7 @@ if cursys() == 'Windows':
     QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     
     #making splash screen
-    app = QApplication(argv)
+    app = QApplication([])
     splash = QSplashScreen(QPixmap("qclib/dropicon.png"))
     splash.show()
     
@@ -59,7 +59,7 @@ else:
     import ARESgui 
     
     #creates main program instance
-    app = QApplication(argv)
+    app = QApplication([])
     ex = ARESgui.RunProgram()
     
 

@@ -155,6 +155,9 @@ def closecurrenttab(self):
             
 #save data in open tab        
 def savedataincurtab(self):
+    
+    successval = True #changes to False if error is raised
+    
     try:
         #getting directory to save files from QFileDialog
         try:
@@ -359,13 +362,13 @@ def savedataincurtab(self):
             self.postwarning('You must process a profile before attempting to save data!')
             
     except Exception:
+        QApplication.restoreOverrideCursor() #restore cursor here as extra measure
         trace_error() #if something else in the file save code broke
         self.posterror("Filed to save files")
-        QApplication.restoreOverrideCursor()
-        return False
+        successval = False #notes that process failed
     finally:
-        QApplication.restoreOverrideCursor()
-        return True
+        QApplication.restoreOverrideCursor() 
+        return successval
     
         
         

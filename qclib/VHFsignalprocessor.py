@@ -307,9 +307,6 @@ class ThreadProcessor(QRunnable):
                 self.audiostream = snd
             elif ndims == 2: #if two channels, sum them up
                 self.audiostream = np.sum(snd,axis=1)
-                #self.audiostream = snd[:,0]
-                #for ch in range(1,sndshape[1]):
-                #    self.audiostream += snd[:,ch]
                     
             else: #if more than 2D- not a valid file
                 self.audiostream = [0]*10000
