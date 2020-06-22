@@ -146,20 +146,17 @@ from ctypes import (Structure, pointer, c_int, c_ulong, c_char, c_uint32,
                     c_char_p, c_void_p, POINTER, c_int16, cast, CFUNCTYPE)
 
                     
-#convert time(s) into depth (m)
-def timetodepth(time):
-    depth = 1.52*time
-    return depth
-    
-    
-#convert frequency (Hz) to temperature (C)
-def freqtotemp(frequency):
-    temp = (frequency - 1440)/36
-    return temp
+
+#convert time to depth, freq to temp given coefficient lists
+def btconvert(input,coefficients):
+    output = 0
+    for (i,c) in enumerate(coefficients):
+        output += c*input**i
+    return output
     
 
 #function to run fft here
-def dofft(pcmdata,fs):
+def dofft(pcmdata,fs,flims):
     # apply taper- alpha=0.25
     taper = tukey(len(pcmdata), alpha=0.25)
     pcmdata = taper * pcmdata
@@ -175,7 +172,7 @@ def dofft(pcmdata,fs):
     f = np.array([df * n if n < N / 2 else df * (n - N) for n in range(N)])
 
     #limiting frequencies, converting data to ratio form
-    ind = np.all((np.greater_equal(f,1300),np.less_equal(f,2800)),axis=0)
+    ind = np.all((np.greater_equal(f,flims[0]),np.less_equal(f,flims[1])),axis=0)
     f = f[ind]
     
     #maximum signal strength in band
@@ -247,7 +244,7 @@ class ThreadProcessor(QRunnable):
 
     #initializing current thread (saving variables, reading audio data or contacting/configuring receiver)
     def __init__(self, wrdll, datasource, vhffreq, curtabnum, starttime, istriggered, firstpointtime, 
-        fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev,slash,tempdir, *args,**kwargs):
+        fftwindow, minfftratio, minsiglev, triggerfftratio, triggersiglev, tcoeff, zcoeff, flims, slash,tempdir, *args,**kwargs):
         super(ThreadProcessor, self).__init__()
 
         #prevents Run() method from starting before init is finished (value must be changed to 100 at end of __init__)
@@ -268,6 +265,11 @@ class ThreadProcessor(QRunnable):
         self.minsiglev = 10 ** (minsiglev/10) #convert from dB to bits
         self.triggerfftratio = triggerfftratio
         self.triggersiglev = 10 ** (triggersiglev/10) #convert from dB to bits
+        
+        #conversion coefficients + parameters
+        self.tcoeff = tcoeff
+        self.zcoeff = zcoeff
+        self.flims = flims
 
         #output file names
         self.txtfilename = tempdir + slash + "sigdata_" + str(self.curtabnum) + '.txt'
@@ -440,7 +442,7 @@ class ThreadProcessor(QRunnable):
         else: #if source is an audio file
             #configuring sample times for the audio file
             self.lensignal = len(self.audiostream)
-            self.maxtime = (self.lensignal-1)/self.f_s
+            self.maxtime = self.lensignal/self.f_s
             self.sampletimes = np.arange(0.1,self.maxtime-0.1,0.1)
 
 
@@ -470,7 +472,6 @@ class ThreadProcessor(QRunnable):
                         self.kill(8)
 
                     # listens to current frequency, gets sound level, set audio stream, and corresponding time
-                    sigstrength = self.wrdll.GetSignalStrengthdBm(self.hradio)
                     currentdata = self.audiostream[-int(self.f_s * self.fftwindow):]
                 else:
 
@@ -478,7 +479,7 @@ class ThreadProcessor(QRunnable):
                     #kill test/audio threads once time exceeds the max time of the audio file
                     #NOTE: need to do this on the cycle before hitting the max time when processing from audio because
                     #       the WAV file processes faster than the thread can kill itself
-                    if (self.isfromtest and ctime > self.maxtime) or (self.isfromaudio and i >= len(self.sampletimes)-1):
+                    if (self.isfromtest and ctime >= self.maxtime - self.fftwindow) or (self.isfromaudio and i >= len(self.sampletimes)-1):
                         self.keepgoing = False
                         self.kill(0)
                         
@@ -493,19 +494,11 @@ class ThreadProcessor(QRunnable):
                     ctrind = int(np.round(ctime*self.f_s))
                     pmind = int(np.min([np.round(self.f_s*self.fftwindow/2),ctrind,self.lensignal-ctrind-1])) #uses minimum value so no overflow
                     currentdata = self.audiostream[ctrind-pmind:ctrind+pmind]
-                    sigstrength = 0
-
+                    
 
                 #conducting FFT or skipping, depending on signal strength
-                if sigstrength == int(-1):
-                    sigstrength = -15000
-                sigstrength = float(sigstrength) / 10  # signal strength in dBm
-                if sigstrength >= -150:
-                    cfreq,actmax,ratiomax = dofft(currentdata, self.f_s)
-                else:
-                    cfreq = 0
-                    actmax = 0
-                    ratiomax = 0
+                cfreq,actmax,ratiomax = dofft(currentdata, self.f_s, self.flims)
+                
 
                 #writing raw data to sigdata file (ASCII) for current thread- before correcting for minratio/minsiglev
                 cline = str(ctime) + ',' + str(cfreq) + ',' + str(actmax) + ',' + str(ratiomax) + '\n'
@@ -527,9 +520,9 @@ class ThreadProcessor(QRunnable):
                 #determining temperature/depth using fall rate/frequency conversion functions
                 if self.istriggered:
                     timefromtrigger = ctime - self.firstpointtime
-                    cdepth = timetodepth(timefromtrigger)
+                    cdepth = btconvert(timefromtrigger, self.zcoeff)
                     if cfreq != 0:
-                        ctemp = freqtotemp(cfreq)
+                        ctemp = btconvert(cfreq, self.tcoeff)
                     else:
                         ctemp = np.NaN
 
@@ -544,8 +537,7 @@ class ThreadProcessor(QRunnable):
                 ctime = np.round(ctime, 1)
                 actmax = np.round(10*np.log10(actmax),2)
                 ratiomax = np.round(100*ratiomax,1)
-                sigstrength = np.round(sigstrength, 2)
-                self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, cfreq, sigstrength, actmax, ratiomax, ctime, i)
+                self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, cfreq, actmax, ratiomax, ctime, i)
 
                 if not self.isfromaudio: 
                     timemodule.sleep(0.1)  #pauses when processing in realtime (fs ~ 10 Hz)
@@ -597,7 +589,7 @@ class ThreadProcessor(QRunnable):
             
 
     @pyqtSlot(float,float,int,float,int)
-    def changethresholds(self,fftwindow,minfftratio,minsiglev,triggerfftratio,triggersiglev): #update data thresholds for FFT
+    def changethresholds(self,fftwindow,minfftratio,minsiglev,triggerfftratio,triggersiglev,tcoeff,zcoeff,flims): #update data thresholds for FFT
         if fftwindow <= 1:
             self.fftwindow = fftwindow
         else:
@@ -605,14 +597,17 @@ class ThreadProcessor(QRunnable):
         self.minfftratio = minfftratio
         self.minsiglev = 10 ** (minsiglev/10) #convert from dB to bits
         self.triggerfftratio = triggerfftratio
-        self.triggersiglev = 10 ** (triggersiglev/10) #convert from dB to bits       
+        self.triggersiglev = 10 ** (triggersiglev/10) #convert from dB to bits
+        self.tcoeff = tcoeff
+        self.zcoeff = zcoeff
+        self.flims = flims       
         
 
         
         
 #initializing signals for data to be passed back to main loop
 class ThreadProcessorSignals(QObject): 
-    iterated = pyqtSignal(int,float,float,float,float,float,float,float,int) #signal to add another entry to raw data arrays
+    iterated = pyqtSignal(int,float,float,float,float,float,float,int) #signal to add another entry to raw data arrays
     triggered = pyqtSignal(int,float) #signal that the first tone has been detected
     terminated = pyqtSignal(int) #signal that the loop has been terminated (by user input or program error)
     failed = pyqtSignal(int)

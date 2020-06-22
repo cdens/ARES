@@ -328,7 +328,7 @@ def savedataincurtab(self):
                 if self.settingsdict["saveedf"]:
                     try:
                         # noinspection PyUnboundLocalVariable
-                        tfio.writeedffile(outdir + slash + filename + '.edf',rawtemperature,rawdepth,year,month,day,hour,minute,0,lat,lon) #lat/lon only parsed if self.settingsdict["saveedf"] is True
+                        tfio.writeedffile(outdir + slash + filename + '.edf',rawtemperature,rawdepth,year,month,day,hour,minute,0,lat,lon, self.settingsdict["tcoeff"], self.settingsdict["zcoeff"]) #lat/lon only parsed if self.settingsdict["saveedf"] is True
                     except Exception:
                         trace_error()
                         self.posterror("Failed to save EDF file")

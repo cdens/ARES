@@ -63,6 +63,7 @@ from PyQt5.QtCore import Qt, pyqtSlot, pyqtSignal, QObject
 from PyQt5.QtGui import QIcon, QColor, QPalette, QBrush, QLinearGradient, QFont
 
 import qclib.GPS_COM_interaction as gps
+import qclib.VHFsignalprocessor as vsp #for temperature conversion for flims
 
 from platform import system as cursys
 if cursys() == 'Windows':
@@ -93,6 +94,7 @@ class RunSettings(QMainWindow):
             #building window/tabs
             self.buildcentertable()
             self.makeprocessorsettingstab()  # processor settings
+            self.maketzconvertsettingstab() #temperature/depth conversion eqn settings
             self.makeprofileeditorsettingstab() #profile editor tab
             self.makegpssettingstab() #add GPS settings
 
@@ -147,7 +149,7 @@ class RunSettings(QMainWindow):
     
     def defineconstants(self):
         #defining constants for labels called from multiple points
-        self.label_fftwindow = "FFT Window (s)"
+        self.label_fftwindow = "FFT Window (s): "
         self.label_minsiglev = "Minimum Signal Level (dB): "
         self.label_minsigrat = "Minimum Signal Ratio (%): "
         self.label_trigsiglev = "Trigger Signal Level (dB): "
@@ -205,6 +207,25 @@ class RunSettings(QMainWindow):
         self.processortabwidgets["triggerratiolabel"].setText(
             self.label_trigsigrat + str(np.round(self.settingsdict["triggerfftratio"] * 100)))  # 19
         self.processortabwidgets["triggerratio"].setValue(int(self.settingsdict["triggerfftratio"] * 100))
+        
+        tc = self.settingsdict["tcoeff"]
+        self.tzconverttabwidgets["F2Tb0"].setText(str(tc[0]))
+        self.tzconverttabwidgets["F2Tb1"].setText(str(tc[1]))
+        self.tzconverttabwidgets["F2Tb2"].setText(str(tc[2]))
+        self.tzconverttabwidgets["F2Tb3"].setText(str(tc[3]))
+        self.updateF2Teqn()
+        
+        zc = self.settingsdict["zcoeff"]
+        self.tzconverttabwidgets["t2zb0"].setText(str(zc[0]))
+        self.tzconverttabwidgets["t2zb1"].setText(str(zc[1]))
+        self.tzconverttabwidgets["t2zb2"].setText(str(zc[2]))
+        self.tzconverttabwidgets["t2zb3"].setText(str(zc[3]))
+        self.updatet2zeqn()
+        
+        flims = self.settingsdict["flims"]
+        self.tzconverttabwidgets["flow"].setValue(flims[0])
+        self.tzconverttabwidgets["fhigh"].setValue(flims[1])
+        self.updateflims()
 
         self.profeditortabwidgets["useclimobottom"].setChecked(self.settingsdict["useclimobottom"])
         self.profeditortabwidgets["comparetoclimo"].setChecked(self.settingsdict["comparetoclimo"])
@@ -249,6 +270,8 @@ class RunSettings(QMainWindow):
 
         self.settingsdict["triggersiglev"] = float(self.processortabwidgets["triggersiglev"].value())/10
         self.settingsdict["triggerfftratio"] = float(self.processortabwidgets["triggerratio"].value())/100
+        
+        #T/Z coefficients and frequency ranges are recorded on every update to their respective fields
 
         self.settingsdict["platformid"] = self.processortabwidgets["IDedit"].text()
 
@@ -395,8 +418,167 @@ class RunSettings(QMainWindow):
             trace_error()
             self.posterror("Failed to build new processor tab")
             
+            
+            
+            
+            
+    # =============================================================================
+    #     TEMPERATURE-DEPTH CONVERSION EQNS + LIMITATIONS HERE
+    # =============================================================================
+    def maketzconvertsettingstab(self):
+        try:
+
+            self.tzconverttab = QWidget()
+            self.tzconverttablayout = QGridLayout()
+            self.setnewtabcolor(self.tzconverttab)
+
+            self.tzconverttablayout.setSpacing(10)
+
+            self.tabWidget.addTab(self.tzconverttab,'Temperature/Depth Conversion')
+            self.tabWidget.setCurrentIndex(0)
+
+            # and add new buttons and other widgets
+            self.tzconverttabwidgets = {}
+
+            # making widgets
+            tc = self.settingsdict["tcoeff"]
+            self.tzconverttabwidgets["F2Tlabel"] = QLabel('Frequency to Temperature Conversion:') #1
+            self.tzconverttabwidgets["F2Teqn"] = QLabel(f"T = {tc[0]} + {tc[1]}*f + {tc[2]}*f<sup>2</sup> + {tc[3]}*f<sup>3</sup>") #2
+            self.tzconverttabwidgets["F2Tb0"] = QLineEdit(str(tc[0])) #3
+            self.tzconverttabwidgets["F2Tb0"].textChanged.connect(self.updateF2Teqn)
+            self.tzconverttabwidgets["F2Tb1"] = QLineEdit(str(tc[1])) #4
+            self.tzconverttabwidgets["F2Tb1"].textChanged.connect(self.updateF2Teqn)
+            self.tzconverttabwidgets["F2Tb2"] = QLineEdit(str(tc[2])) #5
+            self.tzconverttabwidgets["F2Tb2"].textChanged.connect(self.updateF2Teqn)
+            self.tzconverttabwidgets["F2Tb3"] = QLineEdit(str(tc[3])) #6
+            self.tzconverttabwidgets["F2Tb3"].textChanged.connect(self.updateF2Teqn)
+            self.tzconverttabwidgets["F2Ts0"] = QLabel(" + ") #7
+            self.tzconverttabwidgets["F2Ts1"] = QLabel("* f + ") #8
+            self.tzconverttabwidgets["F2Ts2"] = QLabel("* f<sup>2</sup> + ") #9
+            self.tzconverttabwidgets["F2Ts3"] = QLabel("* f<sup>3</sup> ") #10
+            
+            zc = self.settingsdict["zcoeff"]
+            self.tzconverttabwidgets["t2zlabel"] = QLabel('Time Elapsed to Depth Conversion:') #11
+            self.tzconverttabwidgets["t2zeqn"] = QLabel(f"z = {zc[0]} + {zc[1]}*t + {zc[2]}*t<sup>2</sup> + {zc[3]}*t<sup>3</sup>") #12
+            self.tzconverttabwidgets["t2zb0"] = QLineEdit(str(zc[0])) #13
+            self.tzconverttabwidgets["t2zb0"].textChanged.connect(self.updatet2zeqn)
+            self.tzconverttabwidgets["t2zb1"] = QLineEdit(str(zc[1])) #14
+            self.tzconverttabwidgets["t2zb1"].textChanged.connect(self.updatet2zeqn)
+            self.tzconverttabwidgets["t2zb2"] = QLineEdit(str(zc[2])) #15
+            self.tzconverttabwidgets["t2zb2"].textChanged.connect(self.updatet2zeqn)
+            self.tzconverttabwidgets["t2zb3"] = QLineEdit(str(zc[3])) #16
+            self.tzconverttabwidgets["t2zb3"].textChanged.connect(self.updatet2zeqn)
+            self.tzconverttabwidgets["t2zs0"] = QLabel(" + ") #17
+            self.tzconverttabwidgets["t2zs1"] = QLabel("* t + ") #18
+            self.tzconverttabwidgets["t2zs2"] = QLabel("* t<sup>2</sup> + ") #19
+            self.tzconverttabwidgets["t2zs3"] = QLabel("* t<sup>3</sup> ") #20
+            
+            flims = self.settingsdict["flims"]
+            self.tzconverttabwidgets["flimlabel"] = QLabel('Valid Frequency/Temperature Limits:') #21
+            self.tzconverttabwidgets["flowlabel"] = QLabel('Minimum Valid Frequency (Hz):') #22
+            self.tzconverttabwidgets["fhighlabel"] = QLabel('Maximum Valid Frequency (Hz):') #23
+            
+            self.tzconverttabwidgets["flow"] = QSpinBox() #24
+            self.tzconverttabwidgets["flow"].setMinimum(0)
+            self.tzconverttabwidgets["flow"].setMaximum(5000)
+            self.tzconverttabwidgets["flow"].setSingleStep(1)
+            self.tzconverttabwidgets["flow"].setValue(flims[0])
+            self.tzconverttabwidgets["flow"].valueChanged.connect(self.updateflims)
+            self.tzconverttabwidgets["fhigh"] = QSpinBox() #25
+            self.tzconverttabwidgets["fhigh"].setMinimum(0)
+            self.tzconverttabwidgets["fhigh"].setMaximum(5000)
+            self.tzconverttabwidgets["fhigh"].setSingleStep(1)
+            self.tzconverttabwidgets["fhigh"].setValue(flims[1])
+            self.tzconverttabwidgets["fhigh"].valueChanged.connect(self.updateflims)
+            
+            self.tzconverttabwidgets["Tlowlabel"]  = QLabel(f"Minimum Valid Temperature (\xB0C): {vsp.btconvert(flims[0],tc):5.2f}") #26
+            self.tzconverttabwidgets["Thighlabel"] = QLabel(f"Maximum Valid Temperature (\xB0C): {vsp.btconvert(flims[1],tc):5.2f}") #27
+            
+            
+            # formatting widgets 
+            self.tzconverttabwidgets["F2Tlabel"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            self.tzconverttabwidgets["t2zlabel"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            self.tzconverttabwidgets["flimlabel"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            self.tzconverttabwidgets["flowlabel"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.tzconverttabwidgets["fhighlabel"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            
+
+            # should be XX entries
+            widgetorder = ["F2Tlabel","F2Teqn","F2Tb0","F2Tb1","F2Tb2","F2Tb3","F2Ts0","F2Ts1","F2Ts2","F2Ts3","t2zlabel", "t2zeqn", "t2zb0","t2zb1", "t2zb2","t2zb3", "t2zs0", "t2zs1", "t2zs2", "t2zs3", "flimlabel", "flowlabel", "fhighlabel", "flow", "fhigh", "Tlowlabel", "Thighlabel"]
+
+            wcols = [1,1,1,1,1,1,2,2,2,2,4,4,4,4,4,4,5,5,5,5,1,0,0,2,2,4,4]
+            wrows = [1,2,3,4,5,6,3,4,5,6,1,2,3,4,5,6,3,4,5,6,9,10,11,10,11,10,11]
+
+            wrext = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+            wcolext = [2,2,1,1,1,1,1,1,1,1,2,2,1,1,1,1,1,1,1,1,5,2,2,1,1,2,2]
+
+            # adding user inputs
+            for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
+                self.tzconverttablayout.addWidget(self.tzconverttabwidgets[i], r, c, re, ce)
+
+            # Applying spacing preferences to grid layout
+            colstretches = [1,2,1,1,2,1,1]
+            for i,s in enumerate(colstretches):
+                self.tzconverttablayout.setColumnStretch(i, s)
+            for i in range(12):
+                self.tzconverttablayout.setRowStretch(i, 1)
+                
+            # applying the current layout for the tab
+            self.tzconverttab.setLayout(self.tzconverttablayout)
+
+        except Exception:
+            trace_error()
+            self.posterror("Failed to build new temperature/depth conversion settings tab")
+            
+            
+            
+            
+            
+            
+    def updateF2Teqn(self):
+        
+        try: #only updates if the values are numeric
+            tc = [float(self.tzconverttabwidgets["F2Tb0"].text()), float(self.tzconverttabwidgets["F2Tb1"].text()), float(self.tzconverttabwidgets["F2Tb2"].text()), float(self.tzconverttabwidgets["F2Tb3"].text())]
+            self.tzconverttabwidgets["F2Teqn"].setText(f"T = {tc[0]} + {tc[1]}*f + {tc[2]}*f<sup>2</sup> + {tc[3]}*f<sup>3</sup>")
+            self.settingsdict["tcoeff"] = tc
+        except:
+            pass
+
+       
+    def updatet2zeqn(self):
+        
+        try: #only updates if the values are numeric
+            zc = [float(self.tzconverttabwidgets["t2zb0"].text()), float(self.tzconverttabwidgets["t2zb1"].text()), float(self.tzconverttabwidgets["t2zb2"].text()), float(self.tzconverttabwidgets["t2zb3"].text())]
+            self.tzconverttabwidgets["t2zeqn"].setText(f"z = {zc[0]} + {zc[1]}*t + {zc[2]}*t<sup>2</sup> + {zc[3]}*t<sup>3</sup>")
+            self.settingsdict["zcoeff"] = zc
+        except:
+            pass
+            
+            
+    def updateflims(self):
+        
+        flims = [self.tzconverttabwidgets["flow"].value(), self.tzconverttabwidgets["fhigh"].value()]
+        tc = self.settingsdict["tcoeff"]
+        
+        if flims[1] > flims[0]: #valid min frequency must be less than valid max frequency
+            self.tzconverttabwidgets["Tlowlabel"].setText(f"Minimum Valid Temperature (\xB0C): {vsp.btconvert(flims[0],tc):5.2f}")
+            self.tzconverttabwidgets["Thighlabel"].setText(f"Maximum Valid Temperature (\xB0C): {vsp.btconvert(flims[1],tc):5.2f}")
+            
+            self.settingsdict["flims"] = flims
+            
+        #else: #reset previous setting
+        #    self.postwarning("Minimum valid frequency must be less than maximum valid frequency!")
+        #    self.tzconverttabwidgets["flow"].setValue(self.settingsdict["flims"][0])
+        #    self.tzconverttabwidgets["fhigh"].setValue(self.settingsdict["flims"][1])
+            
+            
+            
+            
+            
     
     
+            
+            
 
     # =============================================================================
     #     GPS COM PORT SELECTION TAB AND INPUTS HERE
@@ -788,6 +970,10 @@ def setdefaultsettings():
 
     settingsdict["triggerfftratio"] = 0.8  # minimum signal to noise ratio to ID data
     settingsdict["triggersiglev"] = 70.  # minimum total signal level to receive data
+    
+    settingsdict["tcoeff"] = [-40,0.02778,0,0] #temperature conversion coefficients
+    settingsdict["zcoeff"] = [0,1.524,0,0] #depth conversion coefficients
+    settingsdict["flims"] = [1300, 2800] #valid frequency range limits
 
     #profeditorpreferences
     settingsdict["useclimobottom"] = True  # use climatology to ID bottom strikes
@@ -823,6 +1009,8 @@ def readsettings(filename):
         
         #read settings from file
         with open(filename) as file:
+            
+            #Data Acquisition System Settings
             line = file.readline()
             settingsdict["autodtg"] = bool(int(line.strip().split()[1])) 
             line = file.readline()
@@ -855,6 +1043,26 @@ def readsettings(filename):
             settingsdict["triggerfftratio"] = float(line.strip().split()[1]) 
             line = file.readline()
             settingsdict["triggersiglev"] = float(line.strip().split()[1]) 
+            
+            #DAS F2T and dt2z conversion equations- multiple values per setting, forward slash delimited
+            line = file.readline()
+            settingsdict["tcoeff"] = []
+            tcstr = line.strip().split()[1].split('/')
+            for val in tcstr:
+                settingsdict["tcoeff"].append(float(val))
+                
+            line = file.readline()
+            settingsdict["zcoeff"] = []
+            zcstr = line.strip().split()[1].split('/')
+            for val in zcstr:
+                settingsdict["zcoeff"].append(float(val))
+                
+            line = file.readline()
+            settingsdict["flims"] = []
+            for val in line.strip().split()[1].split('/'):
+                settingsdict["flims"].append(int(val)) #frequency limits must be whole numbers
+            
+            #Profile Editing System Settings
             line = file.readline()
             settingsdict["useclimobottom"] = bool(int(line.strip().split()[1])) 
             line = file.readline()
@@ -884,7 +1092,7 @@ def readsettings(filename):
             line = file.readline()
             settingsdict["originatingcenter"] = int(line.strip().split()[1]) 
             line = file.readline()
-            settingsdict["comport"] = str(line.strip().split()[1]) 
+            settingsdict["comport"] = str(line.strip().split()[1]) #GPS setting
             line = file.readline()
             settingsdict["fontsize"] = int(line.strip().split()[1]) 
             
@@ -895,7 +1103,6 @@ def readsettings(filename):
         trace_error() #report issue
 
     return settingsdict
-
 
     
     
@@ -908,6 +1115,8 @@ def writesettings(filename,settingsdict):
 
     #writes settings to file
     with open(filename,'w') as file:
+        
+        #Data Acquisition System settings
         file.write('autodtg: '+str(int(settingsdict["autodtg"])) + '\n')
         file.write('autolocation: '+str(int(settingsdict["autolocation"])) + '\n')
         file.write('autoid: '+str(int(settingsdict["autoid"])) + '\n')
@@ -924,6 +1133,20 @@ def writesettings(filename,settingsdict):
         file.write('minsiglev: '+str(settingsdict["minsiglev"]) + '\n')
         file.write('triggerfftratio: '+str(settingsdict["triggerfftratio"]) + '\n')
         file.write('triggersiglev: '+str(settingsdict["triggersiglev"]) + '\n')
+        
+        #writing coefficient settings is a bit more complicated
+        tcoeffstr = ""
+        zcoeffstr = ""
+        for t in settingsdict["tcoeff"]:
+            tcoeffstr += f"{t}/"
+        for z in settingsdict["zcoeff"]:
+            zcoeffstr += f"{z}/"
+        file.write('tcoeff: ' + tcoeffstr[:-1] + '\n')
+        file.write('zcoeff: ' + zcoeffstr[:-1] + '\n')
+        file.write(f"flims: {settingsdict['flims'][0]}/{settingsdict['flims'][1]}\n")
+        
+        
+        #Profile Editing System settings
         file.write('useclimobottom: '+str(int(settingsdict["useclimobottom"])) + '\n')
         file.write('overlayclimo: '+str(int(settingsdict["overlayclimo"])) + '\n')
         file.write('comparetoclimo: '+str(int(settingsdict["comparetoclimo"])) + '\n')
@@ -938,7 +1161,7 @@ def writesettings(filename,settingsdict):
         file.write('profres: '+str(settingsdict["profres"]) + '\n')
         file.write('maxstdev: '+str(settingsdict["maxstdev"]) + '\n')
         file.write('originatingcenter: '+str(settingsdict["originatingcenter"]) + '\n')
-        file.write('comport: '+str(settingsdict["comport"]) + '\n')
+        file.write('comport: '+str(settingsdict["comport"]) + '\n') #GPS settings
         file.write('fontsize: '+str(settingsdict["fontsize"]) + '\n')
         
         

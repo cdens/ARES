@@ -188,15 +188,15 @@ def makenewprocessortab(self):
                 
         #adding table widget after all other buttons populated
         self.alltabdata[curtabstr]["tabwidgets"]["table"] = QTableWidget() #19
-        self.alltabdata[curtabstr]["tabwidgets"]["table"].setColumnCount(7)
+        self.alltabdata[curtabstr]["tabwidgets"]["table"].setColumnCount(6)
         self.alltabdata[curtabstr]["tabwidgets"]["table"].setRowCount(0) 
-        self.alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalHeaderLabels(('Time (s)', 'Freq (Hz)', 'ChS (dBm)', 'Sp (dB)', 'Rp (%)' ,'Depth (m)','Temp (C)'))
+        self.alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalHeaderLabels(('Time (s)', 'Fp (Hz)', 'Sp (dB)', 'Rp (%)' ,'Depth (m)','Temp (C)'))
         self.alltabdata[curtabstr]["tabwidgets"]["table"].setFont(self.labelfont)
         self.alltabdata[curtabstr]["tabwidgets"]["table"].verticalHeader().setVisible(False)
         self.alltabdata[curtabstr]["tabwidgets"]["table"].setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) #removes scroll bars
         self.alltabdata[curtabstr]["tabwidgets"]["tableheader"] = self.alltabdata[curtabstr]["tabwidgets"]["table"].horizontalHeader() 
         self.alltabdata[curtabstr]["tabwidgets"]["tableheader"].setFont(self.labelfont)
-        for ii in range(0,7):
+        for ii in range(0,6):
             self.alltabdata[curtabstr]["tabwidgets"]["tableheader"].setSectionResizeMode(ii, QHeaderView.Stretch)  
         self.alltabdata[curtabstr]["tabwidgets"]["table"].setEditTriggers(QTableWidget.NoEditTriggers)
         self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"]["table"],8,2,2,7)
@@ -354,7 +354,7 @@ def updatefftsettings(self):
         #updates fft settings for any active tabs
         for ctab in self.alltabdata:
             if self.alltabdata[ctab]["isprocessing"]: 
-                self.alltabdata[ctab]["processor"].changethresholds(self.settingsdict["fftwindow"], self.settingsdict["minfftratio"], self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"], self.settingsdict["triggersiglev"])
+                self.alltabdata[ctab]["processor"].changethresholds(self.settingsdict["fftwindow"], self.settingsdict["minfftratio"], self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"], self.settingsdict["triggersiglev"], self.settingsdict["tcoeff"], self.settingsdict["zcoeff"], self.settingsdict["flims"])
     except Exception:
         trace_error()
         self.posterror("Error updating FFT settings!")
@@ -456,7 +456,7 @@ def startprocessor(self):
 
             #initializing thread, connecting signals/slots
             vhffreq = self.alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
-            self.alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum,  starttime, self.alltabdata[curtabstr]["rawdata"]["istriggered"], self.alltabdata[curtabstr]["rawdata"]["firstpointtime"], self.settingsdict["fftwindow"], self.settingsdict["minfftratio"],self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"],self.settingsdict["triggersiglev"],slash,self.tempdir)
+            self.alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum,  starttime, self.alltabdata[curtabstr]["rawdata"]["istriggered"], self.alltabdata[curtabstr]["rawdata"]["firstpointtime"], self.settingsdict["fftwindow"], self.settingsdict["minfftratio"],self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"],self.settingsdict["triggersiglev"], self.settingsdict["tcoeff"], self.settingsdict["zcoeff"], self.settingsdict["flims"], slash, self.tempdir)
             
             self.alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
             self.alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
@@ -546,8 +546,8 @@ def triggerUI(self,plottabnum,firstpointtime):
         
         
 #slot to pass AXBT data from thread to main GUI
-@pyqtSlot(int,float,float,float,float,float,float,float,int)
-def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,cact,cratio,ctime,i):
+@pyqtSlot(int,float,float,float,float,float,float,int)
+def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,cact,cratio,ctime,i):
     try:
         plottabstr = self.gettabstrfromnum(plottabnum)
         
@@ -574,11 +574,12 @@ def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,cact,cratio,ctime,i):
                 self.alltabdata[plottabstr]["ProcessorCanvas"].draw()
 
             #coloring new cell based on whether or not it has good data
-            stars = '*****'
+            stars = '------'
             if np.isnan(ctemp):
                 ctemp = stars
                 cdepth = stars
-                curcolor = QColor(179, 179, 255) #light blue
+                #curcolor = QColor(179, 179, 255) #light blue
+                curcolor = QColor(200, 200, 200) #light gray
             else:
                 curcolor = QColor(204, 255, 220) #light green
 
@@ -591,13 +592,6 @@ def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,cact,cratio,ctime,i):
             tablefreq.setBackground(curcolor)
             tabletemp = QTableWidgetItem(str(ctemp))
             tabletemp.setBackground(curcolor)
-            if csig == 0:
-                tablesignal = QTableWidgetItem('N/A')
-            elif csig >= -150:
-                tablesignal = QTableWidgetItem(str(csig))
-            else:
-                tablesignal = QTableWidgetItem(stars)
-            tablesignal.setBackground(curcolor)
             tableact = QTableWidgetItem(str(cact))
             tableact.setBackground(curcolor)
             tablerat = QTableWidgetItem(str(cratio))
@@ -608,14 +602,14 @@ def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,csig,cact,cratio,ctime,i):
             table.insertRow(crow)
             table.setItem(crow, 0, tabletime)
             table.setItem(crow, 1, tablefreq)
-            table.setItem(crow, 2, tablesignal)
-            table.setItem(crow, 3, tableact)
-            table.setItem(crow, 4, tablerat)
-            table.setItem(crow, 5, tabledepth)
-            table.setItem(crow, 6, tabletemp)
+            table.setItem(crow, 2, tableact)
+            table.setItem(crow, 3, tablerat)
+            table.setItem(crow, 4, tabledepth)
+            table.setItem(crow, 5, tabletemp)
             table.scrollToBottom()
             #        if crow > 20: #uncomment to remove old rows
             #            table.removeRow(0)
+            
     except Exception:
         trace_error()
     

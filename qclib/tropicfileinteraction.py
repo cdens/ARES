@@ -66,6 +66,7 @@
 
 import numpy as np
 from datetime import date
+import chardet
 
 
 
@@ -181,81 +182,138 @@ def writelogfile(logfile,initdatestr,inittimestr,timefromstart,depth,frequency,t
 
     
 def readedffile(edffile):
-    with open(edffile,'rb') as f_in:
     
-        #misc. header lines
-        line = f_in.readline()
-        line = f_in.readline()
-
-        #date of launch
-        line = f_in.readline()
-        line = line.decode('utf-8')
-        day = int(line[17:19])
-        month = int(line[20:22])
-        year = int(line[23:42]) + 2000
-
-        #time of launch
-        line = f_in.readline()
-        line = line.decode('utf-8')
-        hour = int(line[17:19])
-        minute = int(line[20:22])
-        second = int(line[23:42])
-
-        #misc. header line
-        line = f_in.readline()
-
-        #latitude
-        line = f_in.readline()
-        line = line.decode('utf-8')
-        lat = float(line[17:19]) + float(line[20:-3])/60
-        if line[-3].lower() == 's':
-            lat = -1.*lat
-
-        #longitude
-        line = f_in.readline()
-        line = line.decode('utf-8')
-        lon = float(line[17:20]) + float(line[21:-3])/60
-        if line[-3].lower() == 'w':
-            lon = -1.*lon
-
-        #lots of misc. header lines
-        for i in range(25):
-            line = f_in.readline()
-
-        #reading temperature-depth profile (ignoring sound speed if present)
-        rawtemperature = []
-        rawdepth = []
+    encoding = 'utf-8'
+    
+    lat = False #variables will be returned as false if unsuccessfully parsed
+    lon = False
+    day = False
+    month = False
+    year = False
+    hour = False
+    minute = False
+    second = False
+    
+    rawtemperature = []
+    rawdepth = []
+    
+    with open(edffile,'rb') as f_in:
+        
         for line in f_in:
             try:
-                line = line.decode('utf-8')
-                line = line.strip().split() #get rid of \n character, split by spaces
-                rawdepth.append(float(line[0]))
-                rawtemperature.append(float(line[1]))
+                line = line.decode(encoding).strip()
             except:
-                break
-
-        #converting to numpy arrays
-        rawtemperature = np.asarray(rawtemperature)
-        rawdepth = np.asarray(rawdepth)
+                fileinfo = chardet.detect(line)
+                encoding = fileinfo['encoding']
+                line = line.decode(encoding).strip()
+                
+            try:
+                if ":" in line: #input parameter- parse appropriately
+                    line = line.strip().split(':')
+                    
+                    
+                    if "time" in line[0].lower(): #assumes time is in "HH", "HH:MM", or "HH:MM:SS" format
+                        hour = int(line[1].strip())
+                        minute = int(line[2].strip())
+                        second = int(line[3].strip())
+                        
+                        
+                    elif "date" in line[0].lower():
+                        line = line[1].strip() #should be eight digits long
+                        print(line)
+                        if "/" in line and len(line) == 8: #mm/dd/yy format
+                            line = line.split('/')
+                            month = int(line[0])
+                            day = int(line[1])
+                            year = int(line[2]) + 2000
+                        elif "/" in line and len(line) == 10: #mm/dd/yyyy, or yyyy/mm/dd (assuming not dd/mm/yyyy)
+                            line = line.split('/')
+                            if len(line[0]) == 4:
+                                year = int(line[0])
+                                month = int(line[1])
+                                day = int(line[2])
+                            elif len(line[2]) == 4:
+                                year = int(line[2])
+                                month = int(line[1])
+                                day = int(line[0])
+                        
+                        else: #trying YYYYMMDD format instead
+                            year = int(line[:4])
+                            month = int(line[4:6])
+                            day = int(line[6:8])
+                            
+                    
+                    elif "latitude" in line[0].lower(): 
+                        if 'n' in line[-1].lower() or 's' in line[-1].lower():
+                            if len(line) == 2: #XX.XXXH format
+                                lat = float(line[1][:-1])
+                                if line[1][-1].lower() == 's':
+                                    lat = -1.*lat
+                            elif len(line) == 3: #XX:XX.XXXH format
+                                lat = float(line[1]) + float(line[2][:-1])/60
+                                if line[2][-1].lower() == 's':
+                                    lat = -1.*lat
+                            elif len(line) == 4: #XX:XX:XXH format
+                                lat = float(line[1]) + float(line[2])/60 + float(line[3][:-1])/3600
+                                if line[3][-1].lower() == 's':
+                                    lat = -1.*lat
+                        else:
+                            if len(line) == 2: #XX.XXX format
+                                lat = float(line[1])
+                            elif len(line) == 3: #XX:XX.XXX format
+                                lat = float(line[1]) + float(line[2])/60
+                            elif len(line) == 4: #XX:XX:XX format
+                                lat = float(line[1]) + float(line[2])/60 + float(line[3])/3600
+                            
+                    elif "longitude" in line[0].lower():
+                        if 'e' in line[-1].lower() or 'w' in line[-1].lower():
+                            if len(line) == 2: #XX.XXXH format
+                                lon = float(line[1][:-1])
+                                if line[1][-1].lower() == 'w':
+                                    lon = -1.*lon
+                            elif len(line) == 3: #XX:XX.XXXH format
+                                lon = float(line[1]) + float(line[2][:-1])/60
+                                if line[2][-1].lower() == 'w':
+                                    lon = -1.*lon
+                            elif len(line) == 4: #XX:XX:XXH format
+                                lon = float(line[1]) + float(line[2])/60 + float(line[3][:-1])/3600
+                                if line[3][-1].lower() == 'w':
+                                    lon = -1.*lon
+                        else:
+                            if len(line) == 2: #XX.XXX format
+                                lon = float(line[1])
+                            elif len(line) == 3: #XX:XX.XXX format
+                                lon = float(line[1]) + float(line[2])/60
+                            elif len(line) == 4: #XX:XX:XX format
+                                lon = float(line[1]) + float(line[2])/60 + float(line[3])/3600
+                        
+                                
+                #space-delimited temperature-depth obs or comments- attempt to parse as profile data, error will raise/function will move to next line if not
+                else: 
+                    line = line.strip().split() 
+                    rawdepth.append(float(line[0]))
+                    rawtemperature.append(float(line[1]))
+                    
+            except (ValueError, IndexError, AttributeError):
+                pass
+            
+    #converting to numpy arrays
+    rawtemperature = np.asarray(rawtemperature)
+    rawdepth = np.asarray(rawdepth)
     
     return rawtemperature,rawdepth,year,month,day,hour,minute,second,lat,lon
 
     
     
     
-def writeedffile(edffile,rawtemperature,rawdepth,year,month,day,hour,minute,second,lat,lon):
-    with open(edffile,'wb') as f_out:
+def writeedffile(edffile,temperature,depth,year,month,day,hour,minute,second,lat,lon,tcoeff,zcoeff):
+    with open(edffile,'w') as f_out:
     
         #writing header, date and time, drop # (bad value)
-        f_out.write(b"// This is a MK21 EXPORT DATA FILE  (EDF)\n//\n")
-        line = "Date of Launch:  " + str(day).zfill(2) +'/'+str(month).zfill(2)+'/'+str(year-2000).zfill(2)+'\n'
-        line = bytes(line,'utf-8')
-        f_out.write(line)
-        line = "Time of Launch:  " + str(hour).zfill(2) +':'+str(minute).zfill(2)+':'+str(second).zfill(2)+'\n'
-        line = bytes(line,'utf-8')
-        f_out.write(line)
-        f_out.write(bytes("Sequence #    :  99\n","utf-8"))
-
+        f_out.write("// This is an AXBT EXPORT DATA FILE  (EDF)\n//\n")
+        f_out.write(f"Date of Launch:  {month}/{day}/{year-2000}\n")
+        f_out.write(f"Time of Launch:  {hour}:{minute}:{second}\n")
+        
         #latitude and longitude
         if lat >= 0:
             nsh = 'N'
@@ -271,58 +329,41 @@ def writeedffile(edffile,rawtemperature,rawdepth,year,month,day,hour,minute,seco
         londeg = int(np.floor(lon))
         latmin = (lat - latdeg)*60
         lonmin = (lon - londeg)*60
-        latminstr = '%06.4f'%latmin
-        latminstr = latminstr.rjust(7,'0')
-        lonminstr = '%05.3f'%lonmin
-        lonminstr = lonminstr.rjust(6,'0')
-        line = "Latitude      :  " + str(latdeg).zfill(2) + ':' + latminstr + nsh + "\n"
-        line = bytes(line,'utf-8')
-        f_out.write(line)
-        line = "Longitude     :  " + str(londeg).zfill(3) + ':' + lonminstr + ewh + "\n"
-        line = bytes(line,'utf-8')
-        f_out.write(line)
+        f_out.write(f"Latitude      :  {latdeg:02d}:{latmin:06.3f}{nsh}\n")
+        f_out.write(f"Longitude     :  {londeg:03d}:{lonmin:06.3f}{ewh}\n")
 
-        line = """Serial #      :  99
-//
-// Here are the contents of the memo fields.
-// Depth 6000 Sst -99.00 Sssv -99.00 SssvSst -99.00
-//
-// Here is some probe information for this drop.
+        f_out.write(f"""//
+// Drop Settings Information:
 //
 Probe Type       :  AXBT
 Terminal Depth   :  800 m
-Depth Equation   :  Simple
-Depth Coeff. 1   :  0.0
-Depth Coeff. 2   :  1.5
-Depth Coeff. 3   :  0.0
-Depth Coeff. 4   :  0.0
+Depth Coeff. 1   :  {zcoeff[0]}
+Depth Coeff. 2   :  {zcoeff[1]}
+Depth Coeff. 3   :  {zcoeff[2]}
+Depth Coeff. 4   :  {zcoeff[3]}
 Pressure Pt Correction:  N/A
+Temp. Coeff. 1   :  {tcoeff[0]}
+Temp. Coeff. 2   :  {tcoeff[1]}
+Temp. Coeff. 3   :  {tcoeff[2]}
+Temp. Coeff. 4   :  {tcoeff[3]}
 //
-Raw Data Filename:  N/A
 //
 Display Units    :  Metric
 //
-// This XBT export file has not been noise reduced or averaged.
+// This profile has not been quality-controlled.
 //
-// Sound velocity not included.
-//
-Depth (m)  - Temperature (°C)\n"""
-    
-        line = bytes(line,'utf-8')
-        f_out.write(line)
+Depth (m)  - Temperature (°C)\n""")
 
         #removing NaNs from T-D profile
         ind = []
-        for i in range(len(rawtemperature)):
-            ind.append(not np.isnan(rawtemperature[i]) and not np.isnan(rawdepth[i]))
-        rawdepth = rawdepth[ind]
-        rawtemperature = rawtemperature[ind]
+        for t,d in zip(temperature,depth):
+            ind.append(not np.isnan(t) and not np.isnan(d))
+        depth = depth[ind]
+        temperature = temperature[ind]
 
         #adding temperature-depth data now
-        for d,t in zip(rawdepth,rawtemperature):
-            line = str(round(d,1)).zfill(5) +"\t"+str(round(t,2)).zfill(4)+"\n"
-            line = bytes(line,'utf-8')
-            f_out.write(line)
+        for d,t in zip(depth,temperature):
+            f_out.write(f"{round(d,1):05.1f}\t{round(t,2):04.2f}\n")
 
     
     
