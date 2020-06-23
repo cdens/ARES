@@ -207,7 +207,7 @@ def checkdatainputs_editorinput(self):
                 time = hour*100 + minute
                 
                 checkcoords = checkdate = False
-                if (not lat and type(lat) == bool) or (not lat and type(lat) == bool):
+                if (not lat and type(lat) == bool) or (not lon and type(lon) == bool):
                     checkcoords = True #if either lat or lon are bad, require inputs from text
                 if (not year and type(year) == bool) or (not month and type(month) == bool) or (not day and type(day) == bool) or (not hour and type(hour) == bool) or (not minute and type(minute) == bool):
                     checkdate = True #if either year, day, month, hour or minute are bad, require inputs from 
