@@ -555,7 +555,7 @@ class ThreadProcessor(QRunnable):
         curtabnum = self.curtabnum
         
         if reason != 0: #notify event loop that processor failed if non-zero exit code provided
-            self.signals.failed.emit(reason)
+            self.signals.failed.emit(self.curtabnum, reason)
 
         if not self.isfromaudio and not self.isfromtest:
             wave.Wave_write.close(self.wavfile)
@@ -569,7 +569,7 @@ class ThreadProcessor(QRunnable):
     #terminate the audio file recording (for WINRADIO processor tabs) if it exceeds a certain length set by maxframenum
     def killaudiorecording(self):
         wave.Wave_write.close(self.wavfile) #close WAV file
-        self.signals.failed.emit(13) #pass warning message back to GUI
+        self.signals.failed.emit(self.curtabnum, 13) #pass warning message back to GUI
 
         
         
@@ -610,7 +610,7 @@ class ThreadProcessorSignals(QObject):
     iterated = pyqtSignal(int,float,float,float,float,float,float,int) #signal to add another entry to raw data arrays
     triggered = pyqtSignal(int,float) #signal that the first tone has been detected
     terminated = pyqtSignal(int) #signal that the loop has been terminated (by user input or program error)
-    failed = pyqtSignal(int)
+    failed = pyqtSignal(int,int)
     updateprogress = pyqtSignal(int,int) #signal to add another entry to raw data arrays
 
 

@@ -200,13 +200,39 @@ def checkdatainputs_editorinput(self):
             #identifying and reading file data
             if logfile[-4:].lower() == '.dta':
                 rawtemperature,rawdepth = tfio.readlogfile(logfile)
+                
+            #EDF includes logic to handle partially missing data fields (e.g. lat/lon)
             elif logfile[-4:].lower() == '.edf':
-                rawtemperature,rawdepth,year,month,day,hour,minute,second,lat,lon = tfio.readedffile(logfile)
-                time = hour*100 + second
+                rawtemperature,rawdepth,year,month,day,hour,minute,_,lat,lon = tfio.readedffile(logfile)
+                time = hour*100 + minute
+                
+                checkcoords = checkdate = False
+                if (not lat and type(lat) == bool) or (not lat and type(lat) == bool):
+                    checkcoords = True #if either lat or lon are bad, require inputs from text
+                if (not year and type(year) == bool) or (not month and type(month) == bool) or (not day and type(day) == bool) or (not hour and type(hour) == bool) or (not minute and type(minute) == bool):
+                    checkdate = True #if either year, day, month, hour or minute are bad, require inputs from 
+                
+                try:
+                    ilat,ilon,iyear,imonth,iday,itime,_,_,identifier = self.parsestringinputs(latstr,lonstr,profdatestr,timestr,identifier, checkcoords, checkdate, True)
+                except:
+                    return
+                
+                if checkcoords:
+                    lat = ilat
+                    lon = ilon
+                if checkdate:
+                    year = iyear
+                    month = imonth
+                    day = iday
+                    time = itime
+                
             elif logfile[-4:].lower() in ['.fin','.nvo','.txt']: #assumes .txt are fin/nvo format
                 rawtemperature,rawdepth,day,month,year,time,lat,lon,_ = tfio.readfinfile(logfile)
+                _,_,_,_,_,_,_,_,identifier = self.parsestringinputs(latstr,lonstr,profdatestr,timestr,identifier,False,False,True)
+                
             elif logfile[-5:].lower() == '.jjvv':
-                rawtemperature,rawdepth,day,month,year,time,lat,lon,identifier = tfio.readjjvvfile(logfile,round(year,-1))
+                rawtemperature,rawdepth,day,month,year,time,lat,lon,identifier = tfio.readjjvvfile(logfile)
+                
             else:
                 QApplication.restoreOverrideCursor()
                 self.postwarning('Invalid Data File Format (must be .dta,.edf,.nvo,.fin, or .jjvv)!')

@@ -65,7 +65,7 @@
 # =============================================================================
 
 import numpy as np
-from datetime import date
+from datetime import date, datetime
 import chardet
 
 
@@ -185,14 +185,10 @@ def readedffile(edffile):
     
     encoding = 'utf-8'
     
-    lat = False #variables will be returned as false if unsuccessfully parsed
-    lon = False
-    day = False
-    month = False
-    year = False
-    hour = False
-    minute = False
-    second = False
+    lon = lat = day = month = year = hour = minute = second = False #variables will be returned as 0 if unsuccessfully parsed
+    
+    depthcolumn = 0
+    tempcolumn = 1
     
     rawtemperature = []
     rawdepth = []
@@ -220,14 +216,29 @@ def readedffile(edffile):
                         
                     elif "date" in line[0].lower():
                         line = line[1].strip() #should be eight digits long
-                        print(line)
-                        if "/" in line and len(line) == 8: #mm/dd/yy format
+                        if "/" in line and len(line) <= 8: #mm/dd/yy format
                             line = line.split('/')
                             month = int(line[0])
                             day = int(line[1])
                             year = int(line[2]) + 2000
-                        elif "/" in line and len(line) == 10: #mm/dd/yyyy, or yyyy/mm/dd (assuming not dd/mm/yyyy)
+                        elif "/" in line and len(line) <= 10: #mm/dd/yyyy, or yyyy/mm/dd (assuming not dd/mm/yyyy)
                             line = line.split('/')
+                            if len(line[0]) == 4:
+                                year = int(line[0])
+                                month = int(line[1])
+                                day = int(line[2])
+                            elif len(line[2]) == 4:
+                                month = int(line[0])
+                                day = int(line[1])
+                                year = int(line[2])
+                                
+                        elif "-" in line and len(line) <= 8: #mm-dd-yy format
+                            line = line.split('-')
+                            month = int(line[0])
+                            day = int(line[1])
+                            year = int(line[2]) + 2000
+                        elif "-" in line and len(line) <= 10: #mm-dd-yyyy, or yyyy-mm-dd (assuming not dd-mm-yyyy)
+                            line = line.split('-')
                             if len(line[0]) == 4:
                                 year = int(line[0])
                                 month = int(line[1])
@@ -286,13 +297,23 @@ def readedffile(edffile):
                                 lon = float(line[1]) + float(line[2])/60
                             elif len(line) == 4: #XX:XX:XX format
                                 lon = float(line[1]) + float(line[2])/60 + float(line[3])/3600
+                                
+                                
+                    elif "field" in line[0].lower(): #specifying which column contains temperature and depth
+                        if "temperature" in line[1].lower():
+                            tempcolumn = int(line[0].strip()[5]) - 1
+                        elif "depth" in line[1].lower():
+                            depthcolumn = int(line[0].strip()[5]) - 1
                         
                                 
                 #space-delimited temperature-depth obs or comments- attempt to parse as profile data, error will raise/function will move to next line if not
                 else: 
                     line = line.strip().split() 
-                    rawdepth.append(float(line[0]))
-                    rawtemperature.append(float(line[1]))
+                    cdepth = float(line[depthcolumn])
+                    ctemp = float(line[tempcolumn])
+                    if cdepth >= 0 and ctemp >= -10 and ctemp <= 50:
+                        rawdepth.append(cdepth)
+                        rawtemperature.append(ctemp)
                     
             except (ValueError, IndexError, AttributeError):
                 pass
@@ -311,8 +332,8 @@ def writeedffile(edffile,temperature,depth,year,month,day,hour,minute,second,lat
     
         #writing header, date and time, drop # (bad value)
         f_out.write("// This is an AXBT EXPORT DATA FILE  (EDF)\n//\n")
-        f_out.write(f"Date of Launch:  {month}/{day}/{year-2000}\n")
-        f_out.write(f"Time of Launch:  {hour}:{minute}:{second}\n")
+        f_out.write(f"Date of Launch:  {month:02d}/{day:02d}/{year-2000}\n")
+        f_out.write(f"Time of Launch:  {hour:02d}:{minute:02d}:{second:02d}\n")
         
         #latitude and longitude
         if lat >= 0:
@@ -334,7 +355,6 @@ def writeedffile(edffile,temperature,depth,year,month,day,hour,minute,second,lat
 
         f_out.write(f"""//
 // Drop Settings Information:
-//
 Probe Type       :  AXBT
 Terminal Depth   :  800 m
 Depth Coeff. 1   :  {zcoeff[0]}
@@ -346,9 +366,9 @@ Temp. Coeff. 1   :  {tcoeff[0]}
 Temp. Coeff. 2   :  {tcoeff[1]}
 Temp. Coeff. 3   :  {tcoeff[2]}
 Temp. Coeff. 4   :  {tcoeff[3]}
-//
-//
 Display Units    :  Metric
+Field0           :  Temperature (C)
+Field1           :  Depth (m)
 //
 // This profile has not been quality-controlled.
 //
@@ -363,13 +383,13 @@ Depth (m)  - Temperature (°C)\n""")
 
         #adding temperature-depth data now
         for d,t in zip(depth,temperature):
-            f_out.write(f"{round(d,1):05.1f}\t{round(t,2):04.2f}\n")
+            f_out.write(f"{round(d,1):05.1f}\t{round(t,2):05.2f}\n")
 
     
     
     
 #read data from JJVV file
-def readjjvvfile(jjvvfile,decade):
+def readjjvvfile(jjvvfile):
     with open(jjvvfile,'r') as f_in:
 
         depth = []
@@ -377,13 +397,20 @@ def readjjvvfile(jjvvfile,decade):
 
         line = f_in.readline()
         line = line.strip().split()
-
+        
         #date and time info
         datestr = line[1]
         day = int(datestr[:2])
         month = int(datestr[2:4])
-        year = int(datestr[4])+decade
+        yeardigit = int(datestr[4])
         time = int(line[2][:4])
+        
+        #determining year (drop must have been within last 10 years)
+        curyear = datetime.utcnow().year
+        decade = int(np.floor(curyear/10)*10)
+        if yeardigit + decade > curyear:
+            decade -= 1
+        year = decade + yeardigit
 
         #latitude and longitude
         latstr = line[3]
@@ -398,7 +425,7 @@ def readjjvvfile(jjvvfile,decade):
             lat = -1*lat
         elif quad == 7:
             lon = -1*lon
-
+            
         lastdepth = -1
         hundreds = 0
         l = 0
@@ -444,8 +471,6 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
     with open(jjvvfile,'w') as f_out:
     
         #first line- header information
-        lonstr = str(int(abs(lon*1000))).zfill(6)
-        latstr = str(int(abs(lat*1000))).zfill(5)
         if lon >= 0 and lat >= 0:
             quad = '1'
         elif lon >= 0 and lat < 0:
@@ -455,8 +480,7 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
         else:
             quad = '5'
 
-        line = 'JJVV ' + str(day).zfill(2)+str(month).zfill(2)+str(year)[3] + ' ' + str(time).zfill(4)+'/ ' + quad + latstr + ' ' + lonstr + ' 88888\n'
-        f_out.write(line)
+        f_out.write(f"JJVV {day:02d}{month:02d}{str(year)[3]} {time:04d}/ {quad}{int(abs(lat)*1000):05d} {int(abs(lon)*1000):06d} 88888\n")
 
         #create a list with all of the entries for the file
         filestrings = []
@@ -465,17 +489,19 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
         i = 0
         lastdepth = -1
 
-        # appending data to list, adding hundreds increment counters where necessary
+        # appending data to list, adding hundreds increment counters where necessary (while loop necessary in case a gap > 100m exists)
         while i < len(depth):
-            curdepth = int(depth[i])
-            if curdepth - hundreds > 99:  # need to increment hundreds counter in file
+            cdepth = round(depth[i])
+            ctemp = temperature[i]
+            
+            if cdepth - hundreds > 99:  # need to increment hundreds counter in file
                 hundreds = hundreds + 100
-                filestrings.append('999' + str(int(hundreds / 100)).zfill(2))
+                filestrings.append(f'999{int(hundreds/100):02d}')
             else:
-                if curdepth - lastdepth >= 1 and curdepth - hundreds <= 99:  # depth must be increasing, not outside of current hundreds range
-                    filestrings.append(
-                        str(curdepth - hundreds).zfill(2) + str(int(round(temperature[i], 1) * 10)).zfill(3))
-                    lastdepth = curdepth
+                if cdepth - lastdepth >= 1 and cdepth - hundreds <= 99:  # depth must be increasing, not outside of current hundreds range
+                    lastdepth = cdepth
+                    filestrings.append(f"{int(round(cdepth-hundreds)):02d}{int(round(ctemp,1)*10):03d}")
+                    
                 i += 1
 
         if isbtmstrike: #note if the profile struck the bottom
@@ -488,22 +514,20 @@ def writejjvvfile(jjvvfile,temperature,depth,day,month,year,time,lat,lon,identif
         i = 0
         while i < len(filestrings):
             if i == 0 and len(filestrings) >= 6: #first line has six columns (only if there is enough data)
-                line = (filestrings[i] + ' ' + filestrings[i+1] + ' ' + filestrings[i+2] + ' ' + filestrings[i+3]
-                         + ' ' + filestrings[i+4] + ' ' + filestrings[i+5] + '\n')
-                i = i + 6
+                line = f"{filestrings[i]} {filestrings[i+1]} {filestrings[i+2]} {filestrings[i+3]} {filestrings[i+4]} {filestrings[i+5]}\n"
+                i += 6
             elif i+5 < len(filestrings): #remaining full lines have five columns
-                line = (filestrings[i] + ' ' + filestrings[i+1] + ' ' + filestrings[i+2] + ' '
-                         + filestrings[i+3] + ' ' + filestrings[i+4] + ' ' + '\n')
-                i = i + 5
+                line = f"{filestrings[i]} {filestrings[i+1]} {filestrings[i+2]} {filestrings[i+3]} {filestrings[i+4]}\n"
+                i += 5
             else: #remaining data on last line
                 line = ''
                 while i < len(filestrings):
-                    line = line + filestrings[i]
+                    line += filestrings[i]
                     if i == len(filestrings) - 1:
-                        line = line + '\n'
+                        line += '\n'
                     else:
-                        line = line + ' '
-                    i = i + 1
+                        line += ' '
+                    i += 1
             f_out.write(line)
             
 
@@ -561,45 +585,34 @@ def writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
 
         #formatting latitude string
         if lat >= 0:
-            signstr = ' '
+            latsign = ' '
         else:
-            signstr = '-'
+            latsign = '-'
             lat = abs(lat)
-        latfloor = np.floor(lat)
-        latrem = np.round((lat - latfloor)*1000)
-        latstr = signstr + str(int(latfloor)).zfill(2) + '.' + str(int(latrem)).rjust(3,'0')
 
         #formatting longitude string
         if lon >= 0:
-            signstr = ' '
+            lonsign = ' '
         else:
-            signstr = '-'
+            lonsign = '-'
             lon = abs(lon)
-        lonfloor = np.floor(lon)
-        lonrem = np.round((lon - lonfloor)*1000)
-        lonstr = signstr + str(int(lonfloor)).zfill(3) + '.' + str(int(lonrem)).rjust(3,'0')
 
         #writing header data
-        line = (str(year).zfill(4) + '   ' + str(dayofyear).zfill(3) + '   ' + str(time).zfill(4) + '   ' + latstr + '   ' +
-                lonstr + '   ' + str(num).zfill(2) + '   6   ' + str(len(depth)) + '   0   0   \n')
-        f_out.write(line)
+        f_out.write(f"{year}   {dayofyear:03d}   {time:04d}   {latsign}{lat:06.3f}   {lonsign}{lon:07.3f}   {num:02d}   6   {len(depth)}   0   0   \n")
 
         #writing profile data
         i = 0
         while i < len(depth):
 
             if i+5 < len(depth):
-                line = ('{: 8.3f}'.format(temperature[i]) + '{: 8.1f}'.format(depth[i])
-                + '{: 8.3f}'.format(temperature[i+1]) + '{: 8.1f}'.format(depth[i+1])
-                + '{: 8.3f}'.format(temperature[i+2]) + '{: 8.1f}'.format(depth[i+2])
-                + '{: 8.3f}'.format(temperature[i+3]) + '{: 8.1f}'.format(depth[i+3])
-                + '{: 8.3f}'.format(temperature[i+4]) + '{: 8.1f}'.format(depth[i+4]) + '\n')
+                line = f"{temperature[i]: 8.3f}{depth[i]: 8.1f}{temperature[i+1]: 8.3f}{depth[i+1]: 8.1f}{temperature[i+2]: 8.3f}{depth[i+2]: 8.1f}{temperature[i+3]: 8.3f}{depth[i+3]: 8.1f}{temperature[i+4]: 8.3f}{depth[i+4]: 8.1f}\n"
 
             else:
                 line = ''
                 while i < len(depth):
-                    line = line + '{: 8.3f}'.format(temperature[i]) + '{: 8.1f}'.format(depth[i])
-                    i = i + 1
+                    #line = line + '{: 8.3f}'.format(temperature[i]) + '{: 8.1f}'.format(depth[i])
+                    line += f"{temperature[i]: 8.3f}{depth[i]: 8.1f}"
+                    i += 1
                 line = line + '\n'
 
             f_out.write(line)

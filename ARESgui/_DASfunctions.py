@@ -412,7 +412,7 @@ def startprocessor(self):
                     # building progress bar
                     self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"] = QProgressBar()
                     self.alltabdata[curtabstr]["tablayout"].addWidget(
-                        self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"], 7, 2, 1, 4)
+                        self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"], 7, 2, 1, 7)
                     self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"].setValue(0)
                     QApplication.processEvents()
 
@@ -639,8 +639,9 @@ def updateUIfinal(self,plottabnum):
         
         
 #posts message in main GUI if thread processor fails for some reason
-@pyqtSlot(int)
-def failedWRmessage(self,messagenum):
+@pyqtSlot(int,int)
+def failedWRmessage(self,plottabnum,messagenum):
+    plottabstr = self.gettabstrfromnum(plottabnum)
     if messagenum == 1:
         self.posterror("Failed to connect to specified WiNRADIO!")
     elif messagenum == 2:
@@ -667,6 +668,10 @@ def failedWRmessage(self,messagenum):
         self.posterror("Failed to initialize the signal processor thread")
     elif messagenum == 13:
         self.postwarning("ARES has stopped audio recording as the WAV file has exceeded maximum allowed length. Please start a new processing tab to continue recording AXBT signal to a WAV file.")
+        
+     #reset source if signal processor failed to start
+    if messagenum in [1,2,3,4,5,6,7,9,11,12]:
+        self.alltabdata[plottabstr]["source"] = "none"
 
         
         
