@@ -132,7 +132,7 @@ def getoceanregion(lon,lat):
     
     #set point, initialize region output
     droppoint = Point(lon, lat)
-    region = 'Unassigned'
+    region = False
     
     #load shape file data
     regioninput = shread("qcdata/regions/World_Seas_IHO_v3.shp")
@@ -148,5 +148,31 @@ def getoceanregion(lon,lat):
     for i in range(len(shapes)):
         if Polygon(shapes[i].points[:nanind[i]]).contains(droppoint):
             region = regioninput.record(i).NAME
+            
+    #if point wasn't in any seas distinguished by the shape file, logic to determine ocean basin
+    if not region: 
+        if lat >= 66.5:
+            region = "Arctic Ocean"
+        elif lat <= -60:
+            region = "Southern Ocean"
+        else:
+            indianocn = Polygon([(20, -60), (20, 31), (100, 31), (100, 0), (146.817, 0), (146.817, -60)])
+            pacificeh = Polygon([(146.817, -60), (146.817, 0), (100, 0), (100, 66.5), (180, 66.5), (180, -60)])
+            pacificwh = Polygon([(-180, -60), (-180, 66.5), (-100, 66.5), (-100, 18), (-90, 18), (-90, 14), (-84, 14), (-84, 9), (-70, 9), (-70, -60)])
+            
+            if indianocn.contains(droppoint):
+                region = "Indian Ocean"
+                
+            elif pacificeh.contains(droppoint) or pacificwh.contains(droppoint):
+                if lat >= 0:
+                    region = "Northern Pacific Ocean"
+                else:
+                    region = "Southern Pacific Ocean"
+                    
+            else: #only remaining option is atlantic
+                if lat >= 0:
+                    region = "Northern Atlantic Ocean"
+                else:
+                    region = "Southern Atlantic Ocean"
         
     return region
