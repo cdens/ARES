@@ -112,7 +112,7 @@
 #           described for __init__() required for data to be considered valid.
 #
 #   ThreadProcessorSignals:
-#       o iterated(ctabnum,ctemp, cdepth, cfreq, sigstrength, ctime, i): Passes information collected on the current
+#       o iterated(ctabnum,ctemp, cdepth, fp, sigstrength, ctime, i): Passes information collected on the current
 #           iteration of the thread loop back to the main program, in order to update the corresponding tab. "i" is
 #           the iteration number- plots and tables are updated in the main loop every N iterations, with N specified
 #           independently for plots/tables in main.py
@@ -157,13 +157,13 @@ def btconvert(input,coefficients):
 
 #function to run fft here
 def dofft(pcmdata,fs,flims):
+    
     # apply taper- alpha=0.25
     taper = tukey(len(pcmdata), alpha=0.25)
     pcmdata = taper * pcmdata
 
     # conducting fft, converting to real space
-    rawfft = np.fft.fft(pcmdata)
-    fftdata = np.abs(rawfft)
+    fftdata = np.abs(np.fft.fft(pcmdata))
 
     #building corresponding frequency array
     N = len(pcmdata)
@@ -171,22 +171,21 @@ def dofft(pcmdata,fs,flims):
     df = 1 / T
     f = np.array([df * n if n < N / 2 else df * (n - N) for n in range(N)])
 
-    #limiting frequencies, converting data to ratio form
+    #constraining peak frequency options to frequencies in specified band
     ind = np.all((np.greater_equal(f,flims[0]),np.less_equal(f,flims[1])),axis=0)
     f = f[ind]
     
-    #maximum signal strength in band
-    maxsig = np.max(fftdata[ind]) 
-
-    #ratio maximum signal in band to max signal total (SNR)
-    maxf_all = np.max(fftdata) #max signal strength for entire spectrum
-    fftdata = fftdata[ind]/maxf_all
-    maxratio = np.max(fftdata) #FFT ratio (sig_inband/sig_all) for max freq in band
-    
     #frequency of max signal within band (AXBT-transmitted frequency)
-    freq = f[np.argmax(fftdata)] 
+    fp = f[np.argmax(fftdata[ind])] 
+    
+    #maximum signal strength in band
+    Sp = 10*np.log10(np.max(fftdata[ind]))
 
-    return freq, maxsig, maxratio
+    #ratio of maximum signal in band to max signal total (SNR)
+    Rp = np.max(fftdata[ind])/np.max(fftdata) 
+        
+    
+    return fp, Sp, Rp
     
     
     
@@ -262,9 +261,9 @@ class ThreadProcessor(QRunnable):
         #FFT thresholds
         self.fftwindow = fftwindow
         self.minfftratio = minfftratio
-        self.minsiglev = 10 ** (minsiglev/10) #convert from dB to bits
+        self.minsiglev = minsiglev
         self.triggerfftratio = triggerfftratio
-        self.triggersiglev = 10 ** (triggersiglev/10) #convert from dB to bits
+        self.triggersiglev = triggersiglev
         
         #conversion coefficients + parameters
         self.tcoeff = tcoeff
@@ -497,47 +496,39 @@ class ThreadProcessor(QRunnable):
                     
 
                 #conducting FFT or skipping, depending on signal strength
-                cfreq,actmax,ratiomax = dofft(currentdata, self.f_s, self.flims)
+                fp,Sp,Rp = dofft(currentdata, self.f_s, self.flims)        
+        
+                #rounding before comparisons happen
+                ctime = np.round(ctime, 1)
+                fp = np.round(fp, 2)
+                Sp = np.round(Sp, 2)
+                Rp = np.round(Rp, 3)        
                 
 
                 #writing raw data to sigdata file (ASCII) for current thread- before correcting for minratio/minsiglev
-                cline = str(ctime) + ',' + str(cfreq) + ',' + str(actmax) + ',' + str(ratiomax) + '\n'
                 if self.keepgoing:
-                    self.txtfile.write(cline)
-
-                #changing frequency to zero if below minimum specifications
-                if actmax < self.minsiglev or ratiomax < self.minfftratio:
-                    cfreq = 0
-
-                # if statement to trigger reciever after first valid frequency arrives
-                if not self.istriggered and cfreq != 0 and ratiomax >= self.triggerfftratio and actmax >= self.triggersiglev:
+                    self.txtfile.write(f"{ctime},{fp},{Sp},{Rp}\n")
+                    
+                #logic to determine whether or not profile is triggered
+                if not self.istriggered and Sp >= self.triggersiglev and Rp >= self.triggerfftratio:
                     self.istriggered = True
                     self.firstpointtime = ctime
                     self.signals.triggered.emit(self.curtabnum, ctime)
-                elif not self.istriggered:
-                    cfreq = 0
-
-                #determining temperature/depth using fall rate/frequency conversion functions
-                if self.istriggered:
-                    timefromtrigger = ctime - self.firstpointtime
-                    cdepth = btconvert(timefromtrigger, self.zcoeff)
-                    if cfreq != 0:
-                        ctemp = btconvert(cfreq, self.tcoeff)
-                    else:
-                        ctemp = np.NaN
-
-                else:  # if processor hasnt been triggered yet
-                    cdepth = np.NaN
-                    ctemp = np.NaN
+                        
+                #logic to determine whether or not point is valid
+                if self.istriggered and Sp >= self.minsiglev and Rp >= self.minfftratio:
+                    cdepth = btconvert(ctime - self.firstpointtime, self.zcoeff)
+                    ctemp = btconvert(fp, self.tcoeff)
+                
+                else:
+                    fp = 0
+                    ctemp = cdepth = np.NaN
+                
 
                 # tells GUI to update data structure, plot, and table
                 ctemp = np.round(ctemp, 2)
                 cdepth = np.round(cdepth, 1)
-                cfreq = np.round(cfreq, 2)
-                ctime = np.round(ctime, 1)
-                actmax = np.round(10*np.log10(actmax),2)
-                ratiomax = np.round(100*ratiomax,1)
-                self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, cfreq, actmax, ratiomax, ctime, i)
+                self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, fp, Sp, np.round(100*Rp,1), ctime, i)
 
                 if not self.isfromaudio: 
                     timemodule.sleep(0.1)  #pauses when processing in realtime (fs ~ 10 Hz)
@@ -595,9 +586,9 @@ class ThreadProcessor(QRunnable):
         else:
             self.fftwindow = 1
         self.minfftratio = minfftratio
-        self.minsiglev = 10 ** (minsiglev/10) #convert from dB to bits
+        self.minsiglev = minsiglev 
         self.triggerfftratio = triggerfftratio
-        self.triggersiglev = 10 ** (triggersiglev/10) #convert from dB to bits
+        self.triggersiglev = triggersiglev 
         self.tcoeff = tcoeff
         self.zcoeff = zcoeff
         self.flims = flims       

@@ -58,12 +58,25 @@ from matplotlib.colors import ListedColormap
 
 
 def makeprofileplot(ax,rawtemperature,rawdepth,temperature,depth,climotempfill,climodepthfill,dtg,matchclimo):
+    
+    #plotting climatology, raw/QC profiles
     climohandle = ax.fill(climotempfill,climodepthfill,color='b',alpha=0.3,label='Climo') #fill climo, save handle
     climohandle = climohandle[0]
     ax.plot(rawtemperature,rawdepth,'k',linewidth=2,label='Raw') #plot raw profile
     ax.plot(temperature,depth,'r',linewidth=2,label='QC') #plot QC profile
+    
+    #adding climo mismatch warning if necessary
     if matchclimo == 0:
-        ax.text(np.max(temperature)-10,900,'Climatology Mismatch!',color = 'r') #noting climo mismatch if necessary
+        try: 
+            maxT = np.max(temperature)
+        except:
+            maxT = np.max(rawtemperature)
+            
+        if maxT <= 10:
+            xloc = maxT + 10
+        else:
+            xloc = maxT - 10
+        ax.text(xloc,900,'Climatology Mismatch!',color = 'r') #noting climo mismatch if necessary
 
     #plot labels/ranges
     ax.set_xlabel('Temperature ($^\circ$C)')
@@ -71,7 +84,7 @@ def makeprofileplot(ax,rawtemperature,rawdepth,temperature,depth,climotempfill,c
     ax.set_title('Drop: ' + dtg,fontweight="bold")
     ax.legend()
     ax.grid()
-    ax.set_xlim([-2,32])
+    ax.set_xlim([-3,32])
     ax.set_ylim([-5,1000])
     ax.invert_yaxis()
     

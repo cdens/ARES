@@ -495,7 +495,7 @@ def runqc(self):
         try:
             # running QC, comparing to climo
             temperature, depth = qc.autoqc(rawtemperature, rawdepth, self.settingsdict["smoothlev"],self.settingsdict["profres"], self.settingsdict["maxstdev"], self.settingsdict["checkforgaps"])
-            if self.settingsdict["comparetoclimo"]:
+            if self.settingsdict["comparetoclimo"] and climodepths.size != 0:
                 matchclimo, climobottomcutoff = oci.comparetoclimo(temperature, depth, climotemps, climodepths,climotempfill,climodepthfill)
             else:
                 matchclimo = True
