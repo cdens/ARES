@@ -503,10 +503,10 @@ def parsestringinputs(self,latstr,lonstr,profdatestr,timestr,identifier,checkcoo
 
         if checktime: #checking time
             if len(timestr) != 4:
-                self.postwarning('Invalid Time Format!')
+                self.postwarning('Invalid Time Format (must be HHMM)!')
                 return
             elif len(profdatestr) != 8:
-                self.postwarning('Invalid Date Format!')
+                self.postwarning('Invalid Date Format (must be YYYYMMDD)!')
                 return
 
             try: #checking date
@@ -514,31 +514,47 @@ def parsestringinputs(self,latstr,lonstr,profdatestr,timestr,identifier,checkcoo
                 month = int(profdatestr[4:6])
                 day = int(profdatestr[6:])
             except:
-                self.postwarning('Invalid Date Entered!')
+                self.postwarning('Invalid (non-numeric) Date Entered!')
                 return
             try:
                 time = int(timestr)
                 hour = int(timestr[:2])
                 minute = int(timestr[2:4])
             except:
-                self.postwarning('Invalid Time Entered!')
+                self.postwarning('Invalid (non-numeric) Time Entered!')
                 return
 
-            if year < 1938: #year the bathythermograph was invented
-                self.postwarning('Invalid Year Entered (< 1938 AD)!')
+            if year < 1938 or year > 3000: #year the bathythermograph was invented and the year by which it was probably made obsolete
+                self.postwarning('Invalid Year Entered (< 1938 AD or > 3000 AD)!')
                 return
-            elif month == 0 or month > 12:
+            elif month <= 0 or month > 12:
                 self.postwarning("Invalid Month Entered (must be between 1 and 12)")
-                return
-            elif day == 0 or day > 31:
-                self.postwarning("Invalid Day Entered (must be between 1 and 31")
                 return
             elif hour > 23 or hour < 0:
                 self.postwarning('Invalid Time Entered (hour must be between 0 and 23')
                 return
-            elif minute >= 60:
-                self.postwarning('Invalid Time Entered (minutes must be < 60')
+            elif minute >= 60 or minute < 0:
+                self.postwarning('Invalid Time Entered (minute must be between 0 and 59')
                 return
+            
+            #figuring out number of days in month   
+            monthnames = ['January','February','March','April','May','June','July','August','September','October','November','December'] 
+            if month in [1,3,5,7,8,10,12]:
+                maxdays = 31
+            elif month in [4,6,9,11]:
+                maxdays = 30
+            elif month == 2 and year%4 == 0:
+                maxdays = 29
+            elif month == 2:
+                maxdays = 28
+            else:
+                self.postwarning('Invalid month entered!')
+                
+            #checking to make sure days are in valid range
+            if day <= 0 or day > maxdays:
+                self.postwarning(f"Invalid Day Entered (must be between 1 and {maxdays} for {monthnames[month-1]})")
+                return
+            
 
             #making sure the profile is within 12 hours and not in the future, warning if otherwise
             curtime = timemodule.gmtime()

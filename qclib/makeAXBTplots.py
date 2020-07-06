@@ -69,7 +69,7 @@ def makeprofileplot(ax,rawtemperature,rawdepth,temperature,depth,climotempfill,c
     if matchclimo == 0:
         try: 
             maxT = np.max(temperature)
-        except:
+        except (NameError, ValueError, TypeError):
             maxT = np.max(rawtemperature)
             
         if maxT <= 10:

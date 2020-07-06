@@ -579,7 +579,6 @@ def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,cact,cratio,ctime,i):
             if np.isnan(ctemp):
                 ctemp = stars
                 cdepth = stars
-                #curcolor = QColor(179, 179, 255) #light blue
                 curcolor = QColor(200, 200, 200) #light gray
             else:
                 curcolor = QColor(204, 255, 220) #light green

@@ -610,7 +610,6 @@ def writefinfile(finfile,temperature,depth,day,month,year,time,lat,lon,num):
             else:
                 line = ''
                 while i < len(depth):
-                    #line = line + '{: 8.3f}'.format(temperature[i]) + '{: 8.1f}'.format(depth[i])
                     line += f"{temperature[i]: 8.3f}{depth[i]: 8.1f}"
                     i += 1
                 line = line + '\n'
@@ -659,10 +658,9 @@ def writebufrfile(bufrfile, temperature, depth, year, month, day, time, lon, lat
     # Section 3 info
     sxn3len = 25  # 3 length + 1 reserved + 2 numsubsets + 1 flag + 2 FXY = 9 octets
     numdatasubsets = 1
+    
     # whether data is observed, compressed (bits 1/2), bits 3-8 reserved (=0)
     s3oct7 = int('10000000', 2)
-    # FXY = 3,15,001 (base 10) = 11, 001111, 00000001 (binary) corresponds to underwater sounding w/t optional fields
-    #fxy = int('1100111100000001', 2)
     
     fxy_all = [int('0000000100001011', 2),int('1100000100001011', 2),int('1100000100001100', 2),int('1100000100010111', 2),int('0000001000100000', 2),int('0100001000000000', 2),int('0001111100000010', 2),int('0000011100111110', 2),int('0001011000101010', 2),] #WITH DELAYED (8-bit) REPLICATION
 
@@ -763,9 +761,6 @@ def writebufrfile(bufrfile, temperature, depth, year, month, day, time, lon, lat
         bufr.write(sxn4len.to_bytes(3, byteorder=binarytype, signed=False))
         bufr.write(reserved.to_bytes(1, byteorder=binarytype, signed=False))
         bufr.write(id_utf)
-
-        #writing profile data- bad option as the base 10 integer for the bufrarray may be huge if the profile is long enought
-        # bufr.write(int(bufrarray,2).to_bytes(bufrarraylen,byteorder=binarytype,signed=False)) 
 
         #writing profile data- better option- converts and writes 1 byte at a time
         for cbit in np.arange(0,len(bufrarray),8):
