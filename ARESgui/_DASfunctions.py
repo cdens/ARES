@@ -568,8 +568,9 @@ def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,cact,cratio,ctime,i):
             if i%50 == 0: #draw the canvas every fifty points (~5 sec for 10 Hz sampling)
                 try:
                     del self.alltabdata[plottabstr]["ProcessorAx"].lines[-1]
-                except:
+                except IndexError:
                     pass
+                    
                 self.alltabdata[plottabstr]["ProcessorAx"].plot(self.alltabdata[plottabstr]["rawdata"]["temperature"],self.alltabdata[plottabstr]["rawdata"]["depth"],color='k')
                 self.alltabdata[plottabstr]["ProcessorCanvas"].draw()
 
@@ -622,7 +623,7 @@ def updateUIfinal(self,plottabnum):
         plottabstr = self.gettabstrfromnum(plottabnum)
         try:
             del self.alltabdata[plottabstr]["ProcessorAx"].lines[-1]
-        except:
+        except IndexError:
             pass
         self.alltabdata[plottabstr]["ProcessorAx"].plot(self.alltabdata[plottabstr]["rawdata"]["temperature"],self.alltabdata[plottabstr]["rawdata"]["depth"],color='k')
         self.alltabdata[plottabstr]["ProcessorCanvas"].draw()

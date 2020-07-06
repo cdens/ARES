@@ -36,7 +36,7 @@
 
 from serial import Serial
 from serial.tools import list_ports
-from pynmea2 import parse
+from pynmea2 import parse, nmea
 from traceback import print_exc as trace_error
 from time import sleep
 
@@ -83,7 +83,7 @@ def streamgpsdata(port):
                     try:
                         nmeaobj = parse(ser.readline().decode('ascii', errors='replace').strip())
                         isgood = True
-                    except:
+                    except nmea.ParseError:
                         print("Bad NMEA sentence!")
                         isgood = False
 
@@ -101,7 +101,7 @@ def streamgpsdata(port):
                         print('Date: {}     Latitude: {}{}     Longitude: {}{}'.format(nmeaobj.datetime,abs(lat),latsign,abs(lon),lonsign))
                         ii = 0
 
-                except:
+                except (AttributeError, KeyError):
                     pass
                 finally:
                     sleep(0.1)
@@ -136,9 +136,9 @@ def getcurrentposition(port,numattempts):
                         if lon != 0 or lat != 0: #success
                             return lat,lon,dt,0
 
-                    except: #no lat/lon
+                    except (AttributeError, KeyError): #no lat/lon
                         pass
-                except: #failed to parse line (partial line or non-NMEA feed)
+                except nmea.ParseError: #failed to parse line (partial line or non-NMEA feed)
                     pass
 
                 if ii > numattempts: #timeout

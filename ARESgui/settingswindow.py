@@ -541,7 +541,7 @@ class RunSettings(QMainWindow):
             tc = [float(self.tzconverttabwidgets["F2Tb0"].text()), float(self.tzconverttabwidgets["F2Tb1"].text()), float(self.tzconverttabwidgets["F2Tb2"].text()), float(self.tzconverttabwidgets["F2Tb3"].text())]
             self.tzconverttabwidgets["F2Teqn"].setText(f"T = {tc[0]} + {tc[1]}*f + {tc[2]}*f<sup>2</sup> + {tc[3]}*f<sup>3</sup>")
             self.settingsdict["tcoeff"] = tc
-        except:
+        except ValueError:
             pass
 
        
@@ -551,7 +551,7 @@ class RunSettings(QMainWindow):
             zc = [float(self.tzconverttabwidgets["t2zb0"].text()), float(self.tzconverttabwidgets["t2zb1"].text()), float(self.tzconverttabwidgets["t2zb2"].text()), float(self.tzconverttabwidgets["t2zb3"].text())]
             self.tzconverttabwidgets["t2zeqn"].setText(f"z = {zc[0]} + {zc[1]}*t + {zc[2]}*t<sup>2</sup> + {zc[3]}*t<sup>3</sup>")
             self.settingsdict["zcoeff"] = zc
-        except:
+        except ValueError:
             pass
             
             
