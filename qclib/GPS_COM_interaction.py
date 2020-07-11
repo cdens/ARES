@@ -129,13 +129,12 @@ def getcurrentposition(port,baudrate,numattempts):
 
                 ii += 1
                 try:
-                    print("Attempting to receive initial")
                     #decode the line
                     nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
 
                     try: #exceptions raised if line doesn't include lat/lon
-                        lat = round(nmeaobj.latitude,3)
-                        lon = round(nmeaobj.longitude,3)
+                        lat = nmeaobj.latitude
+                        lon = nmeaobj.longitude
                         dt = nmeaobj.datetime
 
                         if lon != 0 or lat != 0: #success
@@ -191,9 +190,7 @@ class GPSthread(QRunnable):
         while True: #outer loop- always running
             
             self.goodConnection = False
-            
-            print(f"Trying to connect to {self.comport} with baud {self.baudrate}")
-        
+                    
             if self.comport.lower() == "n":
                 self.keepGoing = True
                 self.goodConnection = True
@@ -212,19 +209,20 @@ class GPSthread(QRunnable):
                 else: #failed to get valid points
                     self.signals.update.emit(isGood, 0,0, datetime(1,1,1)) #bad connection
                     
-                
+                c = 0
                 if isGood <= 1: #good connection or request timeout
                     with Serial(self.comport, self.baudrate, timeout=1) as ser:
                         while self.keepGoing: #until interrupted
                         
                             try:
-                                print("attempting to receive main")
                                 nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
-                                self.lat = round(nmeaobj.latitude,3)
-                                self.lon = round(nmeaobj.longitude,3)
+                                self.lat = nmeaobj.latitude
+                                self.lon = nmeaobj.longitude
                                 self.datetime = nmeaobj.datetime
-                                self.signals.update.emit(0, self.lat, self.lon, self.datetime)
-                                sleep(5) #take about 5 sec between each GPS position
+                                
+                                if c%5 == 0:
+                                    self.signals.update.emit(0, self.lat, self.lon, self.datetime)
+                                c += 1
                                 
                             except (AttributeError, KeyError, nmea.ParseError):
                                 pass

@@ -707,8 +707,8 @@ class RunSettings(QMainWindow):
             else:
                 lonsign = 'W'
             self.gpstabwidgets["gpsdate"].setText("Date/Time: {} UTC".format(curdate))
-            self.gpstabwidgets["gpslat"].setText("Latitude: {}{}".format(abs(lat),latsign))
-            self.gpstabwidgets["gpslon"].setText("Longitude: {}{}".format(abs(lon),lonsign))
+            self.gpstabwidgets["gpslat"].setText("Latitude: {}{}".format(abs(round(lat,3)),latsign))
+            self.gpstabwidgets["gpslon"].setText("Longitude: {}{}".format(abs(round(lon,3)),lonsign))
             
         else:
             self.gpstabwidgets["gpsdate"].setText("Date/Time:")

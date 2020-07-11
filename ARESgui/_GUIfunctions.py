@@ -413,7 +413,7 @@ def updateGPSdata(self,isGood,lat,lon,gpsdatetime):
         self.datetime = gpsdatetime
         self.goodPosition = True
         
-        if dlat != 0. or dlon != 0. #only update bearing if position changed
+        if dlat != 0. or dlon != 0.: #only update bearing if position changed
             self.bearing = 90 - np.arctan2(dlat,dlon)*180/np.pi #oversimplified- doesn't account for cosine contraction
             if self.bearing < 0:
                 self.bearing += 360
