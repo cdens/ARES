@@ -482,10 +482,9 @@ def startprocessor(self):
                     curtimestr = str(starttime.hour).zfill(2) + str(starttime.minute).zfill(2)
                     self.alltabdata[curtabstr]["tabwidgets"]["timeedit"].setText(curtimestr)
                 if self.settingsdict["autolocation"] and self.settingsdict["comport"] != 'n':
-                    lat, lon, gpsdate, flag = gps.getcurrentposition(self.settingsdict["comport"], 20)
-                    if flag == 0 and abs((gpsdate - starttime).total_seconds()) <= 60:
-                        self.alltabdata[curtabstr]["tabwidgets"]["latedit"].setText(str(lat))
-                        self.alltabdata[curtabstr]["tabwidgets"]["lonedit"].setText(str(lon))
+                    if abs((self.datetime - starttime).total_seconds()) <= 30: #GPS ob within 30 seconds
+                        self.alltabdata[curtabstr]["tabwidgets"]["latedit"].setText(str(self.lat))
+                        self.alltabdata[curtabstr]["tabwidgets"]["lonedit"].setText(str(self.lon))
                 if self.settingsdict["autoid"]:
                     self.alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.settingsdict["platformid"])
             

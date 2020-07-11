@@ -39,7 +39,11 @@ from serial.tools import list_ports
 from pynmea2 import parse, nmea
 from traceback import print_exc as trace_error
 from time import sleep
+from datetime import datetime
 
+import multiprocessing
+from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject
+from PyQt5.Qt import QRunnable
 
 
 
@@ -69,11 +73,11 @@ def listcomports_verbose():
 
 
     
-def streamgpsdata(port):
+def streamgpsdata(port,baudrate):
     try:
 
         #open/configure port
-        with Serial(port, 4800, timeout=1) as ser:
+        with Serial(port, baudrate, timeout=1) as ser:
             ii = 0
             while ii <= 100:
                 ii += 1
@@ -114,19 +118,20 @@ def streamgpsdata(port):
 
 
 
-def getcurrentposition(port,numattempts):
+def getcurrentposition(port,baudrate,numattempts):
 
     try:
         # try to read a line of data from the serial port and parse
-        with Serial(port, 4800, timeout=1) as ser:
+        with Serial(port, baudrate, timeout=1) as ser:
 
             ii = 0
             while True: #infinite loop
 
                 ii += 1
                 try:
+                    print("Attempting to receive initial")
                     #decode the line
-                    nmeaobj = parse(ser.readline().decode('ascii', errors='replace').strip())
+                    nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
 
                     try: #exceptions raised if line doesn't include lat/lon
                         lat = round(nmeaobj.latitude,3)
@@ -149,3 +154,87 @@ def getcurrentposition(port,numattempts):
     except Exception: #fails to connect to serial port
         trace_error()
         return 0,0,0,2
+        
+        
+        
+        
+        
+        
+
+###############################################################################################################        
+#                                           GPS COM PORT INTERACTION                                          #
+###############################################################################################################
+
+class GPSthreadsignals(QObject): 
+    update = pyqtSignal(int,float,float, datetime) #signal to update postion and time
+
+
+class GPSthread(QRunnable):
+    
+    def __init__(self, comport, baudrate):
+        super(GPSthread, self).__init__()
+        
+        self.comport = comport
+        self.baudrate = baudrate
+        self.keepGoing = True
+        
+        self.lat = 0
+        self.lon = 0
+        self.datetime = datetime(1,1,1)
+        
+        self.signals = GPSthreadsignals()
+        
+        
+        
+    def run(self):
+        
+        while True: #outer loop- always running
+            
+            self.goodConnection = False
+            
+            print(f"Trying to connect to {self.comport} with baud {self.baudrate}")
+        
+            if self.comport.lower() == "n":
+                self.keepGoing = True
+                self.goodConnection = True
+                while self.keepGoing: #loop indefinitely, do nothing, wait for signal to attempt connection with valid GPS receiver
+                    sleep(0.5)
+            
+            else: #different port listed- attempt to connect
+                self.lat, self.lon, self.datetime, isGood = getcurrentposition(self.comport, self.baudrate, 5)
+                    
+                self.keepGoing = True
+                
+                if isGood == 0: #got a valid position/time
+                    self.goodConnection = True
+                    self.signals.update.emit(isGood, self.lat, self.lon, self.datetime)
+                    
+                else: #failed to get valid points
+                    self.signals.update.emit(isGood, 0,0, datetime(1,1,1)) #bad connection
+                    
+                
+                if isGood <= 1: #good connection or request timeout
+                    with Serial(self.comport, self.baudrate, timeout=1) as ser:
+                        while self.keepGoing: #until interrupted
+                        
+                            try:
+                                print("attempting to receive main")
+                                nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
+                                self.lat = round(nmeaobj.latitude,3)
+                                self.lon = round(nmeaobj.longitude,3)
+                                self.datetime = nmeaobj.datetime
+                                self.signals.update.emit(0, self.lat, self.lon, self.datetime)
+                                sleep(5) #take about 5 sec between each GPS position
+                                
+                            except (AttributeError, KeyError, nmea.ParseError):
+                                pass
+                                
+                else:
+                    self.comport = 'n'
+                            
+    @pyqtSlot(str,int)
+    def changeConfig(self,comport,baudrate):
+        self.comport = comport
+        self.baudrate = baudrate
+        self.keepGoing = False #interrupt inner loop to restart connection to different comport
+        

@@ -33,6 +33,7 @@ else:
 from struct import calcsize
 from os import remove, path, listdir
 from traceback import print_exc as trace_error
+from datetime import datetime
 
 if cursys() == 'Windows':
     from ctypes import windll
@@ -45,6 +46,7 @@ from PyQt5.QtCore import pyqtSlot
 from PyQt5.QtGui import QIcon, QFont, QColor
 from PyQt5.Qt import QThreadPool
 
+import numpy as np
 import scipy.io as sio
 
 import qclib.GPS_COM_interaction as gps
@@ -128,7 +130,7 @@ def initUI(self):
 
     # creating threadpool
     self.threadpool = QThreadPool()
-    self.threadpool.setMaxThreadCount(6)
+    self.threadpool.setMaxThreadCount(7)
     
     # variable to prevent recursion errors when updating VHF channel/frequency across multiple tabs
     self.changechannelunlocked = True
@@ -141,6 +143,17 @@ def initUI(self):
             cfileext = cfile[-3:]
             if (cfilestart.lower() == 'temp' and cfileext.lower() == 'wav') or (cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt'):
                 remove(self.tempdir + slash + cfile)
+                
+    #initializing GPS thread
+    self.goodPosition = False
+    self.lat = 0.
+    self.lon = 0.
+    self.datetime = datetime(1,1,1) #default date- January 1st, 0001 so default GPS time is outside valid window for use
+    self.bearing = 0.
+    self.sendGPS2settings = False
+    self.GPSthread = gps.GPSthread(self.settingsdict["comport"],self.settingsdict['gpsbaud'])
+    self.GPSthread.signals.update.connect(self.updateGPSdata) #function located in this file after settingswindow update
+    self.threadpool.start(self.GPSthread)
 
     # loading WiNRADIO DLL API
     if cursys() == 'Windows':
@@ -156,6 +169,7 @@ def initUI(self):
             self.postwarning("Failed to load WiNRADIO driver!")
             self.wrdll = 0
             trace_error()
+            
     else:
         self.postwarning("WiNRADIO communications only supported with Windows! Processing and editing from audio/ASCII files is still available.")
         self.wrdll = 0
@@ -348,6 +362,7 @@ def openpreferencesthread(self):
         self.settingsthread = swin.RunSettings(self.settingsdict)
         self.settingsthread.signals.exported.connect(self.updatesettings)
         self.settingsthread.signals.closed.connect(self.settingsclosed)
+        self.settingsthread.signals.updateGPS.connect(self.updateGPSsettings)
         
     else: #window is opened in background- bring to front
         self.settingsthread.show()
@@ -374,9 +389,45 @@ def updatesettings(self,settingsdict):
 def settingsclosed(self,isclosed):
     if isclosed:
         self.preferencesopened = False
+        self.sendGPS2settings = False #don't try to send GPS position to settings if window is closed
         
+        
+#function to receive request for GPS update from settings window
+@pyqtSlot(str,int)
+def updateGPSsettings(self,comport,baudrate):
+    self.GPSthread.changeConfig(comport,baudrate)
+    self.settingsdict['comport'] = comport
+    self.settingsdict['gpsbaud'] = baudrate
+    self.sendGPS2settings = True
+        
+        
+#slot to receive (and immediately update) GPS port and baud rate
+@pyqtSlot(int,float,float,datetime)
+def updateGPSdata(self,isGood,lat,lon,gpsdatetime):
+    if isGood == 0:
+        dlat = lat - self.lat #for bearing
+        dlon = lon - self.lon
+        
+        self.lat = lat
+        self.lon = lon
+        self.datetime = gpsdatetime
+        self.goodPosition = True
+        
+        if dlat != 0. or dlon != 0. #only update bearing if position changed
+            self.bearing = 90 - np.arctan2(dlat,dlon)*180/np.pi #oversimplified- doesn't account for cosine contraction
+            if self.bearing < 0:
+                self.bearing += 360
+        
+        if self.preferencesopened: #only send GPS data to settings window if it's open
+            self.settingsthread.refreshgpsdata(lat, lon, gpsdatetime, True)
             
-        
-        
-        
+    elif self.preferencesopened:
+        self.settingsthread.refreshgpsdata(0., 0., datetime(1,1,1), False)
+        if self.sendGPS2settings:
+            self.settingsthread.postGPSissue(isGood)
+            self.sendGPS2settings = False
+                
+            
+
+
         

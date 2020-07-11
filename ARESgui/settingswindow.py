@@ -293,7 +293,7 @@ class RunSettings(QMainWindow):
         self.settingsdict["maxstdev"] = self.profeditortabwidgets["maxstdev"].value()
 
         self.updateoriginatingcenter()
-        self.updatecomport()
+        self.updateportandbaud()
         
     
     
@@ -572,11 +572,8 @@ class RunSettings(QMainWindow):
         #    self.tzconverttabwidgets["fhigh"].setValue(self.settingsdict["flims"][1])
             
             
-            
-            
-            
-    
-    
+        
+        
             
             
 
@@ -603,8 +600,8 @@ class RunSettings(QMainWindow):
             self.gpstabwidgets["updateports"] = QPushButton("Update COM Port List") # 1
             self.gpstabwidgets["updateports"].clicked.connect(self.updategpslist)
 
-            self.gpstabwidgets["refreshgpsdata"] = QPushButton("Refresh GPS Info") # 2
-            self.gpstabwidgets["refreshgpsdata"].clicked.connect(self.refreshgpsdata)
+            # self.gpstabwidgets["refreshgpsdata"] = QPushButton("Refresh GPS Info") # 2
+            # self.gpstabwidgets["refreshgpsdata"].clicked.connect(self.refreshgpsdata)
 
             self.gpstabwidgets["gpsdate"] = QLabel("Date/Time: ") # 3
             self.gpstabwidgets["gpslat"] = QLabel("Latitude: ") # 4
@@ -622,7 +619,7 @@ class RunSettings(QMainWindow):
             if self.settingsdict["comport"] != 'n':
                 #if the listed receiver is connected, keep setting and set dropdown box to select that receiver
                 if self.settingsdict["comport"] in self.settingsdict["comports"]: 
-                    self.gpstabwidgets["comport"].setCurrentIndex(self.settingsdict["comports"]. index(self.settingsdict["comport"])+1)
+                    self.gpstabwidgets["comport"].setCurrentIndex(self.settingsdict["comports"].index(self.settingsdict["comport"])+1)
                 #if the listed receiver is not connected, set setting and current index to N/A
                 else:
                     self.settingsdict["comport"] = 'n'    
@@ -631,16 +628,28 @@ class RunSettings(QMainWindow):
                 self.gpstabwidgets["comport"].setCurrentIndex(0)
                 
                 
+            self.gpstabwidgets["baudtitle"] = QLabel('GPS BAUD Rate:')  # 6
+            self.gpstabwidgets["baudrate"] = QComboBox()  # 7
+            self.gpstabwidgets["baudrate"].clear()
+            
+            self.baudrates = [110, 300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200, 128000, 256000]
+            for rate in self.baudrates: #adding previously detected ports
+                self.gpstabwidgets["baudrate"].addItem(str(rate))
+            if not self.settingsdict["gpsbaud"] in self.baudrates:
+                self.settingsdict["gpsbaud"] = 4800
+            self.gpstabwidgets["baudrate"].setCurrentIndex(self.baudrates.index(self.settingsdict["gpsbaud"]))
+            
             #connect comport change to function
-            self.gpstabwidgets["comport"].currentIndexChanged.connect(self.updatecomport)
+            self.gpstabwidgets["comport"].currentIndexChanged.connect(self.updateportandbaud)
+            self.gpstabwidgets["baudrate"].currentIndexChanged.connect(self.updateportandbaud)
             
             # should be 7 entries
-            widgetorder = ["updateports", "refreshgpsdata", "gpsdate", "gpslat", "gpslon","comporttitle","comport"]
+            widgetorder = ["updateports", "gpsdate", "gpslat", "gpslon","comporttitle","comport", "baudtitle", "baudrate"]
 
-            wcols = [1, 2, 1, 1, 1, 1, 1]
-            wrows = [1, 1, 5, 6, 7, 2, 3]
-            wrext = [1, 1, 1, 1, 1, 1, 1]
-            wcolext = [1, 1, 1, 1, 1, 1, 2]
+            wcols = [1, 1, 1, 1, 1, 1, 1, 2]
+            wrows = [1, 6, 7, 8, 2, 3, 4, 4]
+            wrext = [1, 1, 1, 1, 1, 1, 1, 1]
+            wcolext = [1, 1, 1, 1, 1, 2, 1, 1]
 
             # adding user inputs
             for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
@@ -648,8 +657,8 @@ class RunSettings(QMainWindow):
 
             # Applying spacing preferences to grid layout
             self.gpstablayout.setRowStretch(0,4)
-            self.gpstablayout.setRowStretch(4,4)
-            self.gpstablayout.setRowStretch(8,4)
+            self.gpstablayout.setRowStretch(5,4)
+            self.gpstablayout.setRowStretch(9,4)
             self.gpstablayout.setColumnStretch(0,4)
             self.gpstablayout.setColumnStretch(3,4)
 
@@ -662,13 +671,17 @@ class RunSettings(QMainWindow):
 
             
             
-    #updating the selected COM port from the menu
-    def updatecomport(self):
+    #updating the selected COM port and baud rate from the menu
+    def updateportandbaud(self):
         curcomnum = self.gpstabwidgets["comport"].currentIndex()
         if curcomnum > 0:
             self.settingsdict["comport"] = self.settingsdict["comports"][curcomnum - 1]
         else:
             self.settingsdict["comport"] = 'n'
+            
+        self.settingsdict['gpsbaud'] = self.baudrates[self.gpstabwidgets["baudrate"].currentIndex()]
+            
+        self.signals.updateGPS.emit(self.settingsdict["comport"], self.settingsdict["gpsbaud"])
             
             
 
@@ -683,30 +696,32 @@ class RunSettings(QMainWindow):
             
 
     #attempt to refresh GPS data with currently selected COM port
-    def refreshgpsdata(self):
-        if self.settingsdict["comport"] != 'n':
-            lat,lon,curdate,flag = gps.getcurrentposition(self.settingsdict["comport"],5)
-            if flag == 0:
-                if lat > 0:
-                    latsign = 'N'
-                else:
-                    latsign = 'S'
-                if lon > 0:
-                    lonsign = 'E'
-                else:
-                    lonsign = 'W'
-                self.gpstabwidgets["gpsdate"].setText("Date/Time: {} UTC".format(curdate))
-                self.gpstabwidgets["gpslat"].setText("Latitude: {}{}".format(abs(lat),latsign))
-                self.gpstabwidgets["gpslon"].setText("Longitude: {}{}".format(abs(lon),lonsign))
-            elif flag == 1:
-                self.posterror("GPS request timed out!")
-            elif flag == 2:
-                self.posterror("Unable to communicate with specified COM port!")
+    def refreshgpsdata(self, lat, lon, curdate, isgood):
+        if isgood:
+            if lat > 0:
+                latsign = 'N'
+            else:
+                latsign = 'S'
+            if lon > 0:
+                lonsign = 'E'
+            else:
+                lonsign = 'W'
+            self.gpstabwidgets["gpsdate"].setText("Date/Time: {} UTC".format(curdate))
+            self.gpstabwidgets["gpslat"].setText("Latitude: {}{}".format(abs(lat),latsign))
+            self.gpstabwidgets["gpslon"].setText("Longitude: {}{}".format(abs(lon),lonsign))
+            
         else:
             self.gpstabwidgets["gpsdate"].setText("Date/Time:")
             self.gpstabwidgets["gpslat"].setText("Latitude:")
             self.gpstabwidgets["gpslon"].setText("Longitude:")
+            
     
+    #receive warning message about GPS connection     
+    def postGPSissue(self,flag):
+        if flag == 1:
+            self.posterror("GPS request timed out!")
+        elif flag == 2:
+            self.posterror("Unable to communicate with specified COM port!")
     
 
 
@@ -943,7 +958,7 @@ class RunSettings(QMainWindow):
 class SettingsSignals(QObject):
     exported = pyqtSignal(dict)
     closed = pyqtSignal(bool)
-
+    updateGPS = pyqtSignal(str,int)
     
     
 
@@ -992,6 +1007,7 @@ def setdefaultsettings():
     settingsdict["originatingcenter"] = 62 #BUFR table code for NAVO
 
     settingsdict["comport"] = 'n' #default com port is none
+    settingsdict["gpsbaud"] = 4800 #baud rate for GPS- default to 4800
     
     settingsdict["fontsize"] = 14 #font size for general UI
     
@@ -1094,6 +1110,8 @@ def readsettings(filename):
             line = file.readline()
             settingsdict["comport"] = str(line.strip().split()[1]) #GPS setting
             line = file.readline()
+            settingsdict["gpsbaud"] = str(line.strip().split()[1]) #GPS setting
+            line = file.readline()
             settingsdict["fontsize"] = int(line.strip().split()[1]) 
             
     #if settings file doesn't exist or is invalid, rewrites file with default settings
@@ -1162,6 +1180,7 @@ def writesettings(filename,settingsdict):
         file.write('maxstdev: '+str(settingsdict["maxstdev"]) + '\n')
         file.write('originatingcenter: '+str(settingsdict["originatingcenter"]) + '\n')
         file.write('comport: '+str(settingsdict["comport"]) + '\n') #GPS settings
+        file.write('gpsbaud: '+str(settingsdict["gpsbaud"]) + '\n') #GPS settings
         file.write('fontsize: '+str(settingsdict["fontsize"]) + '\n')
         
         
