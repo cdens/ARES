@@ -1,8 +1,8 @@
 # Ignore all QC data in folder
-qcdata/
+qcdata
 
 # Ignore test data files folder
-testdata/
+testdata
 
 #ignore all pycache files
 __pycache__/
