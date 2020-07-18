@@ -48,6 +48,7 @@ from PyQt5.Qt import QThreadPool
 
 import numpy as np
 import scipy.io as sio
+from cartopy.io import shapereader
 
 import qclib.GPS_COM_interaction as gps
 import ARESgui.settingswindow as swin
@@ -174,8 +175,6 @@ def initUI(self):
         self.postwarning("WiNRADIO communications only supported with Windows! Processing and editing from audio/ASCII files is still available.")
         self.wrdll = 0
         
-        
-        
 
 
         
@@ -203,7 +202,12 @@ def loaddata(self):
         self.bathymetrydata["vals"] = bathydata['vals'][:, 0]
         del bathydata
     except:
-        self.posterror("Unable to find/load bathymetry data")    
+        self.posterror("Unable to find/load bathymetry data")  
+            
+    try:
+        self.landshp = shapereader.Reader('qcdata/regions/GSHHS_i_L1.shp')
+    except:
+        self.posterror("Unable to read land area shape file (GSHHS_i_L1.shp)")
         
         
     
@@ -220,11 +224,17 @@ def buildmenu(self):
     FileMenu.addAction(newsigtab)
     
     #File>New Profile Editor Tab
-    newptab = QAction('&New Profile Editing Tab',self)
+    newptab = QAction('&New Profile Editor',self)
     newptab.setShortcut('Ctrl+P')
     newptab.triggered.connect(self.makenewproftab)
     FileMenu.addAction(newptab)
     
+    #File>New Mission Planner Tab
+    newmtab = QAction('&New Mission Planner',self)
+    newmtab.setShortcut('Ctrl+M')
+    newmtab.triggered.connect(self.makenewMissiontab)
+    FileMenu.addAction(newmtab)
+        
     #File>Rename Current Tab
     renametab = QAction('&Rename Current Tab',self)
     renametab.setShortcut('Ctrl+R')
@@ -307,6 +317,7 @@ def configureGuiFont(self):
     daswidgets = ["datasourcetitle", "refreshdataoptions", "datasource","channeltitle", "freqtitle","vhfchannel", "vhffreq", "startprocessing", "stopprocessing","processprofile", "datetitle","dateedit", "timetitle","timeedit", "lattitle", "latedit", "lontitle","lonedit", "idtitle","idedit", "table", "tableheader"] #signal processor (data acquisition system)
     peinputwidgets = ["title", "lattitle", "latedit", "lontitle", "lonedit", "datetitle", "dateedit", "timetitle", "timeedit", "idtitle", "idedit", "logtitle", "logedit", "logbutton", "submitbutton"]
     pewidgets = ["toggleclimooverlay", "addpoint", "removepoint", "removerange", "sfccorrectiontitle", "sfccorrection", "maxdepthtitle", "maxdepth", "depthdelaytitle", "depthdelay", "runqc", "proftxt", "isbottomstrike", "rcodetitle", "rcode"]
+    mpwidgets = ["boundaries", "updateplot", "wboundtitle", "wbound", "eboundtitle", "ebound", "sboundtitle", "sbound", "nboundtitle", "nbound", "overlays", "colortitle", "colors", "linewidthtitle", "linewidth", "radiustitle", "radius", "addline", "addbox", "addcircle"]
     
     self.tabWidget.setFont(self.labelfont)
     
@@ -320,6 +331,8 @@ def configureGuiFont(self):
             curwidgets = peinputwidgets
         elif ctabtype == "ProfileEditor": #profile editor
             curwidgets = pewidgets
+        elif ctabtype == "MissionPlotter": #Mission planner
+            curwidgets = mpwidgets
         else:
             self.posterror(f"Unable to identify tab type when updating font: {ctabtype}")
             curwidgets = []
@@ -421,11 +434,13 @@ def updateGPSdata(self,isGood,lat,lon,gpsdatetime):
         if self.preferencesopened: #only send GPS data to settings window if it's open
             self.settingsthread.refreshgpsdata(lat, lon, gpsdatetime, True)
             
-    elif self.preferencesopened:
-        self.settingsthread.refreshgpsdata(0., 0., datetime(1,1,1), False)
-        if self.sendGPS2settings:
-            self.settingsthread.postGPSissue(isGood)
-            self.sendGPS2settings = False
+    else:
+        self.goodPosition = False
+        if self.preferencesopened:
+            self.settingsthread.refreshgpsdata(0., 0., datetime(1,1,1), False)
+            if self.sendGPS2settings:
+                self.settingsthread.postGPSissue(isGood)
+                self.sendGPS2settings = False
                 
             
 

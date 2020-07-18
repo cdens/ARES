@@ -1,0 +1,414 @@
+#
+#    This file is part of the AXBT Realtime Editing System (ARES).
+#
+#    ARES is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    ARES is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with ARES.  If not, see <https://www.gnu.org/licenses/>.
+#
+#   Mission Plotter functions 
+#       o  
+
+
+from platform import system as cursys
+
+global slash
+if cursys() == 'Windows':
+    slash = '\\'
+else:
+    slash = '/'
+
+from os import path
+from traceback import print_exc as trace_error
+
+from PyQt5.QtWidgets import (QLineEdit, QLabel, QSpinBox, QPushButton, QWidget, QFileDialog, QComboBox, QGridLayout, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QApplication, QMessageBox)
+from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot
+from PyQt5.QtGui import QColor
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap
+
+import cartopy.crs as ccrs
+from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+
+import time as timemodule
+import datetime as dt
+import numpy as np
+
+import qclib.ocean_climatology_interaction as oci
+
+from ._globalfunctions import (addnewtab, whatTab, renametab, setnewtabcolor, closecurrenttab, savedataincurtab, postwarning, posterror, postwarning_option, closeEvent, parsestringinputs, CustomToolbar)
+
+            
+# =============================================================================
+#     MISSION PLOTTER TAB AND INPUTS HERE
+# =============================================================================
+def makenewMissiontab(self):     
+    try:
+
+        newtabnum,curtabstr = self.addnewtab()
+        
+        #default values for tab
+        if self.goodPosition:
+            fillPlot = True
+            clat = round(self.lat)
+            clon = round(self.lon)
+            extent = [clon-15,clon+15,clat-10,clat+10] #W,E,S,N
+            
+        else:
+            extent = [-90,-60,10,35]
+            fillPlot = False
+            
+        lwid = 2
+        linecolor = "k"
+        radius = 75 #miles   
+        
+        #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal Mission to profile editor
+        self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"MissionFig":plt.figure(),
+                  "tabtype":"MissionPlotter","isprocessing":False, "source":"none", "gpshandle":False, "curline":False, "interactivetype":0}
+                  
+        self.alltabdata[curtabstr]["colornames"] = ['Black', 'White', 'Blue', 'Green', 'Red', 'Cyan', 'Magenta', 'Yellow']
+        self.alltabdata[curtabstr]["colors"] = ['k', 'w', 'b', 'g', 'r', 'c', 'm', 'y']
+                  
+        self.setnewtabcolor(self.alltabdata[curtabstr]["tab"])
+        
+        #initializing raw data storage
+        self.alltabdata[curtabstr]["plotlines"] = []
+        
+        self.alltabdata[curtabstr]["tablayout"].setSpacing(10)
+
+        #creating new tab, assigning basic info
+        self.tabWidget.addTab(self.alltabdata[curtabstr]["tab"],'New Tab') 
+        self.tabWidget.setCurrentIndex(newtabnum)
+        self.tabWidget.setTabText(newtabnum, "Mission Planner")
+        self.alltabdata[curtabstr]["tabnum"] = self.totaltabs #assigning unique, unchanging number to current tab
+        self.alltabdata[curtabstr]["tablayout"].setSpacing(10)
+        
+        #ADDING FIGURE TO GRID LAYOUT
+        self.alltabdata[curtabstr]["MissionCanvas"] = FigureCanvas(self.alltabdata[curtabstr]["MissionFig"]) 
+        self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["MissionCanvas"],0,0,20,3)
+        self.alltabdata[curtabstr]["MissionCanvas"].setStyleSheet("background-color:transparent;")
+        self.alltabdata[curtabstr]["MissionFig"].patch.set_facecolor('None')     
+        
+        #and add new buttons and other widgets
+        self.alltabdata[curtabstr]["tabwidgets"] = {}
+        
+        #making widgets
+        self.alltabdata[curtabstr]["tabwidgets"]["boundaries"] = QLabel('Boundaries:') 
+        self.alltabdata[curtabstr]["tabwidgets"]["updateplot"] = QPushButton('Update Plot')  
+        self.alltabdata[curtabstr]["tabwidgets"]["updateplot"].clicked.connect(self.updateMissionPlot)
+        
+        
+        self.alltabdata[curtabstr]["tabwidgets"]["wboundtitle"] = QLabel('West:')
+        self.alltabdata[curtabstr]["tabwidgets"]["eboundtitle"] = QLabel('East:')
+        self.alltabdata[curtabstr]["tabwidgets"]["sboundtitle"] = QLabel('South:')
+        self.alltabdata[curtabstr]["tabwidgets"]["nboundtitle"] = QLabel('North:') 
+        
+        self.alltabdata[curtabstr]["tabwidgets"]["wbound"] = QLineEdit(str(extent[0]))
+        self.alltabdata[curtabstr]["tabwidgets"]["ebound"] = QLineEdit(str(extent[1]))
+        self.alltabdata[curtabstr]["tabwidgets"]["sbound"] = QLineEdit(str(extent[2]))
+        self.alltabdata[curtabstr]["tabwidgets"]["nbound"] = QLineEdit(str(extent[3]))
+        
+        
+        self.alltabdata[curtabstr]["tabwidgets"]["updateposition"] = QPushButton('Update Position')  
+        self.alltabdata[curtabstr]["tabwidgets"]["updateposition"].clicked.connect(self.updateMissionPosition)
+        
+        
+        self.alltabdata[curtabstr]["tabwidgets"]["overlays"] = QLabel('Overlays:') 
+        
+        self.alltabdata[curtabstr]["tabwidgets"]["colortitle"] = QLabel('Line Color:') 
+        self.alltabdata[curtabstr]["tabwidgets"]["colors"] = QComboBox() 
+        for c in self.alltabdata[curtabstr]["colornames"]:
+            self.alltabdata[curtabstr]["tabwidgets"]["colors"].addItem(c) 
+        self.alltabdata[curtabstr]["tabwidgets"]["colors"].setCurrentIndex(self.alltabdata[curtabstr]["colors"].index(linecolor))
+            
+    
+        self.alltabdata[curtabstr]["tabwidgets"]["linewidthtitle"] = QLabel('Line Width:') 
+        self.alltabdata[curtabstr]["tabwidgets"]["linewidth"] = QSpinBox() 
+        self.alltabdata[curtabstr]["tabwidgets"]["linewidth"].setRange(1,10)
+        self.alltabdata[curtabstr]["tabwidgets"]["linewidth"].setSingleStep(1)
+        self.alltabdata[curtabstr]["tabwidgets"]["linewidth"].setValue(lwid)
+        
+        self.alltabdata[curtabstr]["tabwidgets"]["radiustitle"] = QLabel('Radius (mi):') 
+        self.alltabdata[curtabstr]["tabwidgets"]["radius"] = QLineEdit(str(radius)) 
+        
+        self.alltabdata[curtabstr]["tabwidgets"]["addline"] = QPushButton('Draw Line') 
+        self.alltabdata[curtabstr]["tabwidgets"]["addline"].clicked.connect(self.updateMissionPlot_line)
+        self.alltabdata[curtabstr]["tabwidgets"]["addbox"] = QPushButton('Draw Box') 
+        self.alltabdata[curtabstr]["tabwidgets"]["addbox"].clicked.connect(self.updateMissionPlot_box)
+        self.alltabdata[curtabstr]["tabwidgets"]["addcircle"] = QPushButton('Draw Circle') 
+        self.alltabdata[curtabstr]["tabwidgets"]["addcircle"].clicked.connect(self.updateMissionPlot_circle)
+        
+        
+        #formatting widgets
+        self.alltabdata[curtabstr]["tabwidgets"]["wboundtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.alltabdata[curtabstr]["tabwidgets"]["eboundtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.alltabdata[curtabstr]["tabwidgets"]["sboundtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.alltabdata[curtabstr]["tabwidgets"]["nboundtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.alltabdata[curtabstr]["tabwidgets"]["colortitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.alltabdata[curtabstr]["tabwidgets"]["linewidthtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.alltabdata[curtabstr]["tabwidgets"]["radiustitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        
+        
+        #should be XX entries 
+        widgetorder = ["boundaries", "updateplot", "wboundtitle", "wbound", "eboundtitle", "ebound", "sboundtitle", "sbound", "nboundtitle", "nbound", "updateposition", "overlays", "colortitle", "colors", "linewidthtitle", "linewidth", "radiustitle", "radius", "addline", "addbox", "addcircle"]
+        
+        wrows     = [2,3,4,4,4,4,5,5,5,5,6,8,9,9,10,10,11,11,13,14,15]
+        wcols     = [5,5,5,6,8,9,5,6,8,9,5,5,5,8,5,8,5,8,5,5,5] 
+        wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        wcolext   = [5,5,1,1,1,1,1,1,1,1,5,5,3,2,3,2,3,2,5,5,5]
+        
+
+        #adding user inputs
+        for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):
+            self.alltabdata[curtabstr]["tabwidgets"][i].setFont(self.labelfont)
+            self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"][i],r,c,re,ce)
+                
+
+        #adjusting stretch factors for all rows/columns
+        colstretch = [10,10,10,0,1,1,1,1,1,1,3]
+        for col,cstr in enumerate(colstretch):
+            self.alltabdata[curtabstr]["tablayout"].setColumnStretch(col,cstr)
+        
+        rowstretch = [5,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        for row,rstr in enumerate(rowstretch):
+            self.alltabdata[curtabstr]["tablayout"].setRowStretch(row,rstr)
+
+        #making the current layout for the tab
+        self.alltabdata[curtabstr]["tab"].setLayout(self.alltabdata[curtabstr]["tablayout"])
+        
+        #generating/formatting map axes
+        self.alltabdata[curtabstr]["MissionAx"] = plt.axes(projection=ccrs.PlateCarree())
+        if fillPlot:
+            self.updateMissionPlot()
+
+        #prep window to plot data
+        self.alltabdata[curtabstr]["MissionCanvas"].draw() #refresh plots on window
+        # self.alltabdata[curtabstr]["MissionToolbar"] = CustomToolbar(self.alltabdata[curtabstr]["MissionCanvas"], self) 
+        # self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["MissionToolbar"],19,1,1,1)
+        
+        
+    except Exception: #if something breaks
+        trace_error()
+        self.posterror("Failed to build new Mission Planner tab")
+    
+        
+                
+        
+            
+            
+            
+# =============================================================================
+#        MISSION PROCESSOR PLOT UPDATER
+# =============================================================================
+
+
+#populating map axes
+def plotMapAxes(self, fig, ax, extent):
+    ax.cla()
+    
+    gl = ax.gridlines(draw_labels=True)
+    gl.xformatter = LONGITUDE_FORMATTER
+    gl.yformatter = LATITUDE_FORMATTER
+    
+    
+    #checking that positions are within -180 to 180, -90 to 90, setting plot extent
+    for i,maxval in enumerate([180,180,90,90]):
+        if extent[i] > maxval:
+            extent[i] = maxval
+        elif extent[i] < -maxval:
+            extent[i] = -maxval
+    ax.set_extent(extent)
+    
+    #contouring bathymetry data
+    lonstopull = [lon for lon in range(extent[0],extent[1]+1)]
+    latstopull = [lat for lat in range(extent[2],extent[3]+1)]
+    lon,lat,data = oci.getbathydata(latstopull,lonstopull, self.bathymetrydata)
+    lon = lon[::4]
+    lat = lat[::4]
+    data = data[::4,::4]
+    data[data >= 0] = np.NaN
+    
+    conts = [100,250,500,1000,2500,5000,7500]
+    colors = [[0.886271729124078,0.954615491464059,0.740091293728959,1],
+    [0.338576643584847,0.692018371754271,0.641578720328368,1],
+    [0.292203723814070,0.584764950085021,0.624862740533897,1],
+    [0.258394967455256,0.480159292762069,0.601175999802655,1],
+    [0.241741177927927,0.373135022148264,0.578802643189424,1],
+    [0.256832205065477,0.262155154029401,0.499638604613378,1],
+    [0.221762510221711,0.180277856909926,0.327115685990924,1]]
+
+    #cmap = ListedColormap(colors)
+    cmap = LinearSegmentedColormap.from_list("", colors)
+    
+    c = ax.contour(lon, lat, -data.transpose(), conts, cmap=cmap, transform=ccrs.PlateCarree(), zorder=0)
+    
+    contstrings = [str(cc) + " m" for cc in conts]
+    for (i,cnum) in enumerate(conts):
+        c.collections[i].set_label(str(cnum) + " m")
+    l = plt.legend()
+    l.set_zorder(90)
+    
+    
+    for record in self.landshp.records():
+        
+        #checking if plot is within region- cbounds = (minx,miny,maxx,maxy) and extent = (minx,maxx,miny,maxy)
+        cbounds = record.bounds
+        if (((extent[0] >= cbounds[0] and extent[0] <= cbounds[2]) or (extent[1] >= cbounds[0] and extent[1] <= cbounds[2])) and ((extent[2] >= cbounds[1] and extent[2] <= cbounds[3]) or (extent[3] >= cbounds[1] and extent[3] <= cbounds[3]))) or (((cbounds[0] >= extent[0] and cbounds[0] <= extent[1]) or (cbounds[2] >= extent[0] and cbounds[2] <= extent[1])) and ((cbounds[1] >= extent[2] and cbounds[1] <= extent[3]) or (cbounds[3] >= extent[2] and cbounds[3] <= extent[3]))):
+            ax.add_geometries([record.geometry], ccrs.PlateCarree(), facecolor='lightgray', edgecolor='black', zorder=10)
+            
+    ax.set_title('Mission Planner',fontweight="bold")
+    curtabstr = "Tab " + str(self.whatTab())
+    self.alltabdata[curtabstr]["MissionCanvas"].draw()
+    
+    
+    
+    
+
+
+#update background field
+def updateMissionPlot(self):
+    try:
+        curtabstr = "Tab " + str(self.whatTab())
+        
+        try:
+            extent = [int(np.floor(float(self.alltabdata[curtabstr]["tabwidgets"]["wbound"].text()))), int(np.ceil(float(self.alltabdata[curtabstr]["tabwidgets"]["ebound"].text()))), int(np.floor(float(self.alltabdata[curtabstr]["tabwidgets"]["sbound"].text()))), int(np.ceil(float(self.alltabdata[curtabstr]["tabwidgets"]["nbound"].text())))]
+            self.plotMapAxes(self.alltabdata[curtabstr]["MissionFig"], self.alltabdata[curtabstr]["MissionAx"], extent)
+            
+            if self.goodPosition:
+                self.updateMissionPosition()
+            
+        except (ValueError, TypeError):
+            trace_error()
+            self.posterror("Invalid value prescribed in position")
+            
+    except Exception:
+        self.posterror("Failed to update plot")
+        trace_error()
+    
+        
+        
+        
+        
+        
+def updateMissionPosition(self):
+    
+    if self.goodPosition:
+        curtabstr = "Tab " + str(self.whatTab())
+        
+        #pulling position
+        clat = self.lat
+        clon = self.lon
+        cb = self.bearing*np.pi/180 #convert to trig-style
+        
+        #determining arrow size
+        cxlim = self.alltabdata[curtabstr]["MissionAx"].get_xlim()
+        cylim = self.alltabdata[curtabstr]["MissionAx"].get_ylim()
+        C = 0.01*(cxlim[1] - cxlim[0] + cylim[1] - cylim[0])
+            
+        #overlaying plot (creating in polar then converting to cartesian and plotting)
+        rad = np.array([C,C,C/3,C])
+        phi = np.array([np.pi/2, -np.pi/4, -np.pi/2, -3*np.pi/4]) - cb
+        x = clon + rad * np.cos(phi)
+        y = clat + rad * np.sin(phi)
+        
+        #replotting
+        if self.alltabdata[curtabstr]["gpshandle"]:
+            self.alltabdata[curtabstr]["MissionAx"].collections.pop(self.alltabdata[curtabstr]["gpshandle"])
+            self.alltabdata[curtabstr]["gpshandle"] = False #makes sure that anerror in the next line doesn't prevent ability to update position
+        self.alltabdata[curtabstr]["gpshandle"] = self.alltabdata[curtabstr]["MissionAx"].fill(x,y,color="red", edgecolor="k", zorder=100)
+        
+        self.alltabdata[curtabstr]["MissionCanvas"].draw()
+        
+        
+    else:
+        self.postwarning("GPS stream is inactive")
+        
+        
+        
+    
+    
+        
+#add line plot
+def updateMissionPlot_line(self):
+    try:
+        curtabstr = "Tab " + str(self.whatTab())
+        self.alltabdata[curtabstr]["interactivetype"] = 1
+        
+        
+        
+        
+        #while true- get clicked point and update plot
+        print("adding line")
+        self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('button_release_event', self.getPoint)
+
+    except Exception:
+        self.posterror("Failed to update plot")
+        trace_error()
+
+        
+def updateMissionPlot_circle(self):
+    try:
+        curtabstr = "Tab " + str(self.whatTab())
+        self.alltabdata[curtabstr]["interactivetype"] = 2
+        
+        
+        print("adding circle")
+        self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('button_release_event', self.getPoint)
+        
+    except Exception:
+        self.posterror("Failed to update plot")
+        trace_error()    
+        
+        
+        
+def updateMissionPlot_box(self):
+    try:
+        curtabstr = "Tab " + str(self.whatTab())
+        self.alltabdata[curtabstr]["interactivetype"] = 3
+        
+
+        print("adding box")
+        self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('button_release_event', self.getPoint)
+
+    except Exception:
+        self.posterror("Failed to update plot")
+        trace_error()
+        
+        
+        
+#get clicked point
+def getPoint(self, event):
+    curtabstr = "Tab " + str(self.whatTab())
+    print("getting point")
+    
+    xx = event.xdata #selected x and y points
+    yy = event.ydata
+    
+    if self.alltabdata[curtabstr]["curline"] == 1:
+        #draw line
+        pass
+        
+    elif self.alltabdata[curtabstr]["curline"] == 2:
+        #draw circle
+        pass
+        
+    elif self.alltabdata[curtabstr]["curline"] == 3:
+        #draw box
+        pass
+    
+    
+    print(f"X:{xx}, Y:{yy}")
+    self.alltabdata[curtabstr]["MissionCanvas"].mpl_disconnect('button_release_event', self.getPoint)
+    
+    self.alltabdata[curtabstr]["MissionCanvas"].draw()
+        

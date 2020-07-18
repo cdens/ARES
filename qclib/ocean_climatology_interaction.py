@@ -222,6 +222,23 @@ def getoceandepth(lat,lon,dcoord,bathydata):
     lonstopull = [d+lon for d in range(-dcoord-4,dcoord+4+1)]
     latstopull = [d+lat for d in range(-dcoord-1,dcoord+1+1)]
     
+    exportlon,exportlat,exportrelief = getbathydata(latstopull,lonstopull, bathydata)
+    
+    #interpolate maximum ocean depth
+    maxoceandepth = -sint.interpn((exportlon,exportlat),exportrelief,(lon,lat))
+    maxoceandepth = maxoceandepth[0]
+    
+    num = 4 #adjust this to pull every n elements for topographic data
+    exportlat = exportlat[::num]
+    exportlon = exportlon[::num]
+    exportrelief = exportrelief[::num,::num]
+    exportrelief = exportrelief.transpose() #transpose matrix
+    
+    return maxoceandepth,exportlat,exportlon,exportrelief
+    
+    
+def getbathydata(latstopull,lonstopull, bathydata):
+    
     #generate exportlon and exportlat
     exportlon = []
     for l in lonstopull:
@@ -244,17 +261,9 @@ def getoceandepth(lat,lon,dcoord,bathydata):
             if clat >= -90 and clat < 90:
                 curbathydata = sio.loadmat(f"qcdata/bathy/b_N{int(clat)}_E{int(clon)}.mat")
                 exportrelief[i*nv:(i+1)*nv,j*nv:(j+1)*nv] = curbathydata["z"].astype('float64') #int16 -> float64
+                
+                
+    return exportlon,exportlat,exportrelief
     
-    #interpolate maximum ocean depth
-    maxoceandepth = -sint.interpn((exportlon,exportlat),exportrelief,(lon,lat))
-    maxoceandepth = maxoceandepth[0]
-    
-    num = 4 #adjust this to pull every n elements for topographic data
-    exportlat = exportlat[::num]
-    exportlon = exportlon[::num]
-    exportrelief = exportrelief[::num,::num]
-    exportrelief = exportrelief.transpose() #transpose matrix
-    
-    return maxoceandepth,exportlat,exportlon,exportrelief
     
     

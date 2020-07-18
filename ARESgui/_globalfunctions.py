@@ -42,6 +42,8 @@ from PyQt5.QtWidgets import QApplication, QMessageBox, QFileDialog, QInputDialog
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QPalette, QBrush, QLinearGradient
 
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+
 import time as timemodule
 import datetime as dt
 import numpy as np
@@ -586,4 +588,23 @@ def parsestringinputs(self,latstr,lonstr,profdatestr,timestr,identifier,checkcoo
         trace_error()
         self.posterror("Unspecified error in reading profile information!")
         return
+            
+        
+        
+        
+        
+#class to customize nagivation toolbar in profile editor tab
+class CustomToolbar(NavigationToolbar):
+    def __init__(self,canvas_,parent_):
+        self.toolitems = (
+            ('Home', 'Reset Original View', 'home', 'home'),
+            ('Back', 'Go To Previous View', 'back', 'back'),
+            ('Forward', 'Return to Next View', 'forward', 'forward'),
+            (None, None, None, None),
+            ('Pan', 'Click and Drag to Pan', 'move', 'pan'),
+            ('Zoom', 'Select Region to Zoon', 'zoom_to_rect', 'zoom'),)
+        NavigationToolbar.__init__(self,canvas_,parent_)
+            
+            
+            
             

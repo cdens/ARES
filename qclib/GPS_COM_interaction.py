@@ -227,6 +227,9 @@ class GPSthread(QRunnable):
                             except (AttributeError, KeyError, nmea.ParseError):
                                 pass
                                 
+                            except OSError:
+                                pass
+                                
                 else:
                     self.comport = 'n'
                             

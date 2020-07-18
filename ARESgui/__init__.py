@@ -45,6 +45,7 @@ class RunProgram(QMainWindow):
     #importing methods from other files
     from ._DASfunctions import (makenewprocessortab, datasourcerefresh, datasourcechange, changefrequencytomatchchannel, changechanneltomatchfrequency, changechannelandfrequency, updatefftsettings, startprocessor, stopprocessor, gettabstrfromnum, triggerUI, updateUIinfo, updateUIfinal, failedWRmessage, updateaudioprogressbar, processprofile)
     from ._PEfunctions import (makenewproftab, selectdatafile, checkdatainputs_editorinput, continuetoqc, runqc, applychanges, updateprofeditplots, generateprofiledescription, addpoint, removepoint, removerange, on_press_spike, on_release, toggleclimooverlay, CustomToolbar)
+    from ._MissionPlotter import (makenewMissiontab, plotMapAxes, updateMissionPlot, updateMissionPosition, updateMissionPlot_line, updateMissionPlot_circle, updateMissionPlot_box, getPoint)
     from ._GUIfunctions import (initUI, loaddata, buildmenu, configureGuiFont, changeGuiFont, openpreferencesthread, updatesettings, settingsclosed, updateGPSdata, updateGPSsettings)
     from ._globalfunctions import (addnewtab, whatTab, renametab, setnewtabcolor, closecurrenttab, savedataincurtab, postwarning, posterror, postwarning_option, closeEvent, parsestringinputs)
     
@@ -58,7 +59,7 @@ class RunProgram(QMainWindow):
             self.buildmenu() #Creates interactive menu, options to create tabs and run ARES systems
             self.loaddata() #loads climo and bathy data into program first if using the full datasets
             self.makenewprocessortab() #Opens first tab
-
+            
         except Exception:
             trace_error()
             self.posterror("Failed to initialize the program.")

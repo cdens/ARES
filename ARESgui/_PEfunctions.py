@@ -46,7 +46,6 @@ from PyQt5.QtCore import QObjectCleanupHandler, Qt
 
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
 
 import time as timemodule
@@ -58,7 +57,7 @@ import qclib.makeAXBTplots as tplot
 import qclib.autoqc as qc
 import qclib.ocean_climatology_interaction as oci
 
-from ._globalfunctions import (addnewtab, whatTab, renametab, setnewtabcolor, closecurrenttab, savedataincurtab, postwarning, posterror, postwarning_option, closeEvent, parsestringinputs)
+from ._globalfunctions import (addnewtab, whatTab, renametab, setnewtabcolor, closecurrenttab, savedataincurtab, postwarning, posterror, postwarning_option, closeEvent, parsestringinputs, CustomToolbar)
 
 
       
@@ -285,6 +284,7 @@ def continuetoqc(self,curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,t
         try:
             oceandepth, exportlat, exportlon, exportrelief = oci.getoceandepth(lat, lon, 6, self.bathymetrydata)
         except:
+            trace_error()
             oceandepth = np.NaN
             exportlat = exportlon = np.array([0,1])
             exportrelief = np.NaN*np.ones((2,2))
@@ -807,16 +807,4 @@ def toggleclimooverlay(self,pressed):
         
         
         
-        
-#class to customize nagivation toolbar in profile editor tab
-class CustomToolbar(NavigationToolbar):
-    def __init__(self,canvas_,parent_):
-        self.toolitems = (
-            ('Home', 'Reset Original View', 'home', 'home'),
-            ('Back', 'Go To Previous View', 'back', 'back'),
-            ('Forward', 'Return to Next View', 'forward', 'forward'),
-            (None, None, None, None),
-            ('Pan', 'Click and Drag to Pan', 'move', 'pan'),
-            ('Zoom', 'Select Region to Zoon', 'zoom_to_rect', 'zoom'),)
-        NavigationToolbar.__init__(self,canvas_,parent_)
             

@@ -293,8 +293,8 @@ class RunSettings(QMainWindow):
         self.settingsdict["maxstdev"] = self.profeditortabwidgets["maxstdev"].value()
 
         self.updateoriginatingcenter()
-        self.updateportandbaud()
         
+        #NOTE: GPS thread is not updated from here since it is configured to autoupdate every time port or baud rate are changed        
     
     
 
