@@ -62,7 +62,7 @@ def makenewMissiontab(self):
             fillPlot = True
             clat = round(self.lat)
             clon = round(self.lon)
-            extent = [clon-15,clon+15,clat-10,clat+10] #W,E,S,N
+            extent = [clon-5,clon+5,clat-3,clat+3] #W,E,S,N
             
         else:
             extent = [-90,-60,10,35]
@@ -70,14 +70,16 @@ def makenewMissiontab(self):
             
         lwid = 2
         linecolor = "k"
-        radius = 75 #miles   
-        
+        radius = 120 #km   
+            
         #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal Mission to profile editor
         self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"MissionFig":plt.figure(),
-                  "tabtype":"MissionPlotter","isprocessing":False, "source":"none", "gpshandle":False, "curline":False, "interactivetype":0}
+                  "tabtype":"MissionPlotter","isprocessing":False, "source":"none", "gpshandle":False, "lineactive":False, "linex":[], "liney":[], "interactivetype":0, "overlayhandles":[], "plotEvent":False}
                   
         self.alltabdata[curtabstr]["colornames"] = ['Black', 'White', 'Blue', 'Green', 'Red', 'Cyan', 'Magenta', 'Yellow']
         self.alltabdata[curtabstr]["colors"] = ['k', 'w', 'b', 'g', 'r', 'c', 'm', 'y']
+        self.alltabdata[curtabstr]["units"] = ["km","mi","nm"] 
+        self.alltabdata[curtabstr]["unitconversion"] = [1, 1.60934, 1.852]
                   
         self.setnewtabcolor(self.alltabdata[curtabstr]["tab"])
         
@@ -138,10 +140,15 @@ def makenewMissiontab(self):
         self.alltabdata[curtabstr]["tabwidgets"]["linewidth"].setSingleStep(1)
         self.alltabdata[curtabstr]["tabwidgets"]["linewidth"].setValue(lwid)
         
-        self.alltabdata[curtabstr]["tabwidgets"]["radiustitle"] = QLabel('Radius (mi):') 
+        self.alltabdata[curtabstr]["tabwidgets"]["radiustitle"] = QLabel('Radius:') 
         self.alltabdata[curtabstr]["tabwidgets"]["radius"] = QLineEdit(str(radius)) 
+        self.alltabdata[curtabstr]["tabwidgets"]["radiusunits"] = QComboBox()
+        for unit in self.alltabdata[curtabstr]["units"]:
+            self.alltabdata[curtabstr]["tabwidgets"]["radiusunits"].addItem(unit)
         
         self.alltabdata[curtabstr]["tabwidgets"]["addline"] = QPushButton('Draw Line') 
+        self.alltabdata[curtabstr]["tabwidgets"]["addline"].setCheckable(True)
+        self.alltabdata[curtabstr]["tabwidgets"]["addline"].setChecked(False)
         self.alltabdata[curtabstr]["tabwidgets"]["addline"].clicked.connect(self.updateMissionPlot_line)
         self.alltabdata[curtabstr]["tabwidgets"]["addbox"] = QPushButton('Draw Box') 
         self.alltabdata[curtabstr]["tabwidgets"]["addbox"].clicked.connect(self.updateMissionPlot_box)
@@ -160,12 +167,12 @@ def makenewMissiontab(self):
         
         
         #should be XX entries 
-        widgetorder = ["boundaries", "updateplot", "wboundtitle", "wbound", "eboundtitle", "ebound", "sboundtitle", "sbound", "nboundtitle", "nbound", "updateposition", "overlays", "colortitle", "colors", "linewidthtitle", "linewidth", "radiustitle", "radius", "addline", "addbox", "addcircle"]
+        widgetorder = ["boundaries", "updateplot", "wboundtitle", "wbound", "eboundtitle", "ebound", "sboundtitle", "sbound", "nboundtitle", "nbound", "updateposition", "overlays", "colortitle", "colors", "linewidthtitle", "linewidth", "radiustitle", "radius", "radiusunits", "addline", "addbox", "addcircle"]
         
-        wrows     = [2,3,4,4,4,4,5,5,5,5,6,8,9,9,10,10,11,11,13,14,15]
-        wcols     = [5,5,5,6,8,9,5,6,8,9,5,5,5,8,5,8,5,8,5,5,5] 
-        wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-        wcolext   = [5,5,1,1,1,1,1,1,1,1,5,5,3,2,3,2,3,2,5,5,5]
+        wrows     = [2,3,4,4,4,4,5,5,5,5,6,8,9,9,10,10,11,11,11,13,14,15]
+        wcols     = [5,5,5,6,8,9,5,6,8,9,5,5,5,8,5,8,5,8,9,5,5,5] 
+        wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        wcolext   = [5,5,1,1,1,1,1,1,1,1,5,5,3,2,3,2,3,1,1,5,5,5]
         
 
         #adding user inputs
@@ -266,7 +273,6 @@ def plotMapAxes(self, fig, ax, extent):
         if (((extent[0] >= cbounds[0] and extent[0] <= cbounds[2]) or (extent[1] >= cbounds[0] and extent[1] <= cbounds[2])) and ((extent[2] >= cbounds[1] and extent[2] <= cbounds[3]) or (extent[3] >= cbounds[1] and extent[3] <= cbounds[3]))) or (((cbounds[0] >= extent[0] and cbounds[0] <= extent[1]) or (cbounds[2] >= extent[0] and cbounds[2] <= extent[1])) and ((cbounds[1] >= extent[2] and cbounds[1] <= extent[3]) or (cbounds[3] >= extent[2] and cbounds[3] <= extent[3]))):
             ax.add_geometries([record.geometry], ccrs.PlateCarree(), facecolor='lightgray', edgecolor='black', zorder=10)
             
-    ax.set_title('Mission Planner',fontweight="bold")
     curtabstr = "Tab " + str(self.whatTab())
     self.alltabdata[curtabstr]["MissionCanvas"].draw()
     
@@ -323,33 +329,44 @@ def updateMissionPosition(self):
         
         #replotting
         if self.alltabdata[curtabstr]["gpshandle"]:
-            self.alltabdata[curtabstr]["MissionAx"].collections.pop(self.alltabdata[curtabstr]["gpshandle"])
-            self.alltabdata[curtabstr]["gpshandle"] = False #makes sure that anerror in the next line doesn't prevent ability to update position
+            self.alltabdata[curtabstr]["gpshandle"].set_visible(False)
+            
         self.alltabdata[curtabstr]["gpshandle"] = self.alltabdata[curtabstr]["MissionAx"].fill(x,y,color="red", edgecolor="k", zorder=100)
+        self.alltabdata[curtabstr]["gpshandle"] = self.alltabdata[curtabstr]["gpshandle"][0]
         
+        if clat >= 0:
+            ns = 'N'
+        else:
+            ns = 'S'
+        if clon >= 0:
+            ew = 'E'
+        else:
+            ew = 'W'
+        
+        self.alltabdata[curtabstr]["MissionAx"].set_title(f"Current Position: {abs(clat):6.3f}\xB0{ns}, {abs(clon):7.3f}\xB0{ew}",fontweight="bold")
         self.alltabdata[curtabstr]["MissionCanvas"].draw()
         
         
     else:
         self.postwarning("GPS stream is inactive")
-        
-        
-        
-    
+
     
         
 #add line plot
-def updateMissionPlot_line(self):
+def updateMissionPlot_line(self, pressed):
     try:
         curtabstr = "Tab " + str(self.whatTab())
-        self.alltabdata[curtabstr]["interactivetype"] = 1
         
-        
-        
-        
-        #while true- get clicked point and update plot
-        print("adding line")
-        self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('button_release_event', self.getPoint)
+        if pressed:
+            self.alltabdata[curtabstr]["interactivetype"] = 1
+            QApplication.setOverrideCursor(Qt.CrossCursor)
+            self.alltabdata[curtabstr]["plotEvent"] = self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('button_release_event', self.getPoint)
+            
+        else:
+            self.alltabdata[curtabstr]["lineactive"] = False
+            self.alltabdata[curtabstr]["MissionCanvas"].mpl_disconnect(self.alltabdata[curtabstr]["plotEvent"])
+            QApplication.restoreOverrideCursor()
+            self.alltabdata[curtabstr]["interactivetype"] = 0
 
     except Exception:
         self.posterror("Failed to update plot")
@@ -359,11 +376,11 @@ def updateMissionPlot_line(self):
 def updateMissionPlot_circle(self):
     try:
         curtabstr = "Tab " + str(self.whatTab())
-        self.alltabdata[curtabstr]["interactivetype"] = 2
         
-        
-        print("adding circle")
-        self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('button_release_event', self.getPoint)
+        if self.alltabdata[curtabstr]["interactivetype"] == 0:
+            self.alltabdata[curtabstr]["interactivetype"] = 2
+            QApplication.setOverrideCursor(Qt.CrossCursor)
+            self.alltabdata[curtabstr]["plotEvent"] = self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('button_release_event', self.getPoint)
         
     except Exception:
         self.posterror("Failed to update plot")
@@ -374,11 +391,10 @@ def updateMissionPlot_circle(self):
 def updateMissionPlot_box(self):
     try:
         curtabstr = "Tab " + str(self.whatTab())
-        self.alltabdata[curtabstr]["interactivetype"] = 3
-        
-
-        print("adding box")
-        self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('button_release_event', self.getPoint)
+        if self.alltabdata[curtabstr]["interactivetype"] == 0:
+            self.alltabdata[curtabstr]["interactivetype"] = 3
+            QApplication.setOverrideCursor(Qt.CrossCursor)
+            self.alltabdata[curtabstr]["plotEvent"] = self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('button_release_event', self.getPoint)
 
     except Exception:
         self.posterror("Failed to update plot")
@@ -388,27 +404,96 @@ def updateMissionPlot_box(self):
         
 #get clicked point
 def getPoint(self, event):
-    curtabstr = "Tab " + str(self.whatTab())
-    print("getting point")
-    
-    xx = event.xdata #selected x and y points
-    yy = event.ydata
-    
-    if self.alltabdata[curtabstr]["curline"] == 1:
-        #draw line
-        pass
+    try:
+        curtabstr = "Tab " + str(self.whatTab())
         
-    elif self.alltabdata[curtabstr]["curline"] == 2:
-        #draw circle
-        pass
         
-    elif self.alltabdata[curtabstr]["curline"] == 3:
-        #draw box
-        pass
-    
-    
-    print(f"X:{xx}, Y:{yy}")
-    self.alltabdata[curtabstr]["MissionCanvas"].mpl_disconnect('button_release_event', self.getPoint)
-    
-    self.alltabdata[curtabstr]["MissionCanvas"].draw()
+        if self.alltabdata[curtabstr]["interactivetype"] == 0:
+            self.alltabdata[curtabstr]["MissionCanvas"].mpl_disconnect(self.alltabdata[curtabstr]["plotEvent"])
+            return
+        
+        xx = event.xdata #selected x and y points
+        yy = event.ydata
+        
+        goodPoint = True
+        if xx == None or yy == None:
+            goodPoint = False
+            
+        try:
+            linecolor = self.alltabdata[curtabstr]["colors"][self.alltabdata[curtabstr]["tabwidgets"]["colors"].currentIndex()]
+            lwid = self.alltabdata[curtabstr]["tabwidgets"]["linewidth"].value()
+            radius = int(self.alltabdata[curtabstr]["tabwidgets"]["radius"].text())
+            radunitconv = self.alltabdata[curtabstr]["unitconversion"][self.alltabdata[curtabstr]["tabwidgets"]["radiusunits"].currentIndex()]
+            
+            #converting to km
+            radius *= radunitconv
+            
+        except:
+            trace_error()
+            self.posterror("Invalid plot specification (e.g. radius, line width)")
+        
+        if self.alltabdata[curtabstr]["interactivetype"] == 1: #draw line
+            if goodPoint:
+                
+                if self.alltabdata[curtabstr]["lineactive"]: #if line is already active, append point
+                    self.alltabdata[curtabstr]["linex"].append(xx)
+                    self.alltabdata[curtabstr]["liney"].append(yy)
+                    
+                    try: #attempt to delete last line handle from tab, axes
+                        if len(self.alltabdata[curtabstr]["linex"]) == 2: #previous point was scatter
+                            self.alltabdata[curtabstr]["overlayhandles"][-1].remove()
+                        else: #previous point was line
+                            self.alltabdata[curtabstr]["MissionAx"].lines[-1]
+                            
+                        del self.alltabdata[curtabstr]["overlayhandles"][-1]
+                        
+                    except IndexError:
+                        pass #if no handles added yet
+                    
+                else: #if line isn't active, activate it and initialize first point
+                    self.alltabdata[curtabstr]["lineactive"] = True
+                    self.alltabdata[curtabstr]["linex"] = [xx]
+                    self.alltabdata[curtabstr]["liney"] = [yy]
+                    
+                xvals = self.alltabdata[curtabstr]["linex"]
+                yvals = self.alltabdata[curtabstr]["liney"]
+            
+            else:
+                self.alltabdata[curtabstr]["lineactive"] = False
+                self.alltabdata[curtabstr]["tabwidgets"]["addline"].setChecked(False)
+                        
+        elif goodPoint:
+            mi2dlat = 111
+            mi2dlon = 111.3*np.cos(yy*np.pi/180)
+            
+            if self.alltabdata[curtabstr]["interactivetype"] == 2: #draw circle
+                phi = np.arange(0,2*np.pi+np.pi/32,np.pi/32)
+                rad = np.ones(len(phi))
+                xcirc = rad * np.cos(phi)
+                ycirc = rad * np.sin(phi)
+                xvals = xcirc*radius/mi2dlon + xx 
+                yvals = ycirc*radius/mi2dlat + yy
+                
+            elif self.alltabdata[curtabstr]["interactivetype"] == 3: #draw box
+                xvals = np.array([-1,-1,1,1,-1])*radius/mi2dlon + xx
+                yvals = np.array([-1,1,1,-1,-1])*radius/mi2dlat + yy
+                
+        if goodPoint: #if a valid point was given
+            if len(xvals) > 1:
+                chandle = self.alltabdata[curtabstr]["MissionAx"].plot(xvals,yvals,color=linecolor,linewidth=lwid, zorder=95)
+            elif len(xvals) == 1:
+                chandle = self.alltabdata[curtabstr]["MissionAx"].scatter(xvals[0],yvals[0],color=linecolor, zorder=95)
+                
+            self.alltabdata[curtabstr]["overlayhandles"].append(chandle)
+            self.alltabdata[curtabstr]["MissionCanvas"].draw()
+        
+        if self.alltabdata[curtabstr]["interactivetype"] != 1 or not goodPoint: #if line terminated or circle/box were drawn
+            self.alltabdata[curtabstr]["MissionCanvas"].mpl_disconnect(self.alltabdata[curtabstr]["plotEvent"])
+            QApplication.restoreOverrideCursor()
+            self.alltabdata[curtabstr]["interactivetype"] = 0
+                        
+            
+        
+    except Exception:
+        trace_error()
         
