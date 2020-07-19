@@ -30,14 +30,14 @@ This program was developed in Python 3.6, with the GUI built using PyQt5.
 pip3 install -r requirements.txt
 ```
 
-NOTE: You may need to install the libgeos library (e.g. *brew install libgeos* on MacOS) for Shapely to work
+NOTE: You may need to install the libgeos library (e.g. *brew install libgeos* on MacOS) for Shapely to work, as well as the Proj library (e.g. *brew install proj* on MacOS) for Cartopy
 
 ### Installing on Windows:
 
 First, comment out the entry for Shapely in `requirements.txt` (using a # sign). Then, install all other modules:
 
 ```
-pip install requirements.txt
+pip install -r requirements.txt
 ```
 
 Next, download Shapely wheel for Python v3.x from https://www.lfd.uci.edu/~gohlke/pythonlibs/- 
@@ -52,8 +52,8 @@ pip install Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl
 
 
 
-## Data Dependencies
+## Data Dependencies and Additional Information
 
 ARES also requires driver and data files in the qcdata folder and test files in the testdata folder. Due to size constraints, these are not included in the repository but are instead available in a compressed folder at http://mmmfire.whoi.edu/ares/. 
 
-Details for where to move these folders within the ARES repository are also provided in the user manual at http://mmmfire.whoi.edu/ares/. 
+This website also hosts a the user manual with details on where to move these folders within the ARES repository, how to use ARES, operating principles, and a bundled version of ARES (with PyInstaller) and executable installer file for Windows 10 x64. 
