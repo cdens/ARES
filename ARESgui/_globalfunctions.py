@@ -359,7 +359,11 @@ def savedataincurtab(self):
                         shcopy(oldfile, newfile)
                     except Exception:
                         trace_error()
-
+        
+        elif self.alltabdata[curtabstr]["tabtype"] == "MissionPlotter":
+            filename = str(self.tabWidget.tabText(self.tabWidget.currentIndex())) #filename is name of tab
+            self.alltabdata[curtabstr]["MissionFig"].savefig(outdir + slash + filename + '.png',format='png')
+        
         else:
             self.postwarning('You must process a profile before attempting to save data!')
             
