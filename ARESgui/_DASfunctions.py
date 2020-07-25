@@ -510,8 +510,8 @@ def stopprocessor(self):
             if datasource != 'Test' and datasource != 'Audio':
                 for ctab in self.alltabdata:
                     if self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == datasource:
+                        self.alltabdata[ctab]["isprocessing"] = False  # BEFORE ABORT CALL TO FIX DOUBLECLICK ISSUE
                         self.alltabdata[ctab]["processor"].abort()
-                        self.alltabdata[ctab]["isprocessing"] = False  # processing is done
                         self.alltabdata[ctab]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
                 
     except Exception:

@@ -221,62 +221,66 @@ def makenewMissiontab(self):
 
 #populating map axes
 def plotMapAxes(self, fig, ax, extent):
-    ax.cla()
     
-    gl = ax.gridlines(draw_labels=True)
-    gl.xformatter = LONGITUDE_FORMATTER
-    gl.yformatter = LATITUDE_FORMATTER
-    
-    
-    #checking that positions are within -180 to 180, -90 to 90, setting plot extent
-    for i,maxval in enumerate([180,180,90,90]):
-        if extent[i] > maxval:
-            extent[i] = maxval
-        elif extent[i] < -maxval:
-            extent[i] = -maxval
-    ax.set_extent(extent)
-    
-    #contouring bathymetry data
-    lonstopull = [lon for lon in range(extent[0],extent[1]+1)]
-    latstopull = [lat for lat in range(extent[2],extent[3]+1)]
-    lon,lat,data = oci.getbathydata(latstopull,lonstopull, self.bathymetrydata)
-    lon = lon[::4]
-    lat = lat[::4]
-    data = data[::4,::4]
-    data[data >= 0] = np.NaN
-    
-    conts = [100,250,500,1000,2500,5000,7500]
-    colors = [[0.886271729124078,0.954615491464059,0.740091293728959,1],
-    [0.338576643584847,0.692018371754271,0.641578720328368,1],
-    [0.292203723814070,0.584764950085021,0.624862740533897,1],
-    [0.258394967455256,0.480159292762069,0.601175999802655,1],
-    [0.241741177927927,0.373135022148264,0.578802643189424,1],
-    [0.256832205065477,0.262155154029401,0.499638604613378,1],
-    [0.221762510221711,0.180277856909926,0.327115685990924,1]]
-
-    #cmap = ListedColormap(colors)
-    cmap = LinearSegmentedColormap.from_list("", colors)
-    
-    c = ax.contour(lon, lat, -data.transpose(), conts, cmap=cmap, transform=ccrs.PlateCarree(), zorder=0)
-    
-    contstrings = [str(cc) + " m" for cc in conts]
-    for (i,cnum) in enumerate(conts):
-        c.collections[i].set_label(str(cnum) + " m")
-    l = plt.legend()
-    l.set_zorder(90)
-    
-    
-    for record in self.landshp.records():
+    try:
+        ax.cla()
         
-        #checking if plot is within region- cbounds = (minx,miny,maxx,maxy) and extent = (minx,maxx,miny,maxy)
-        cbounds = record.bounds
-        if (((extent[0] >= cbounds[0] and extent[0] <= cbounds[2]) or (extent[1] >= cbounds[0] and extent[1] <= cbounds[2])) and ((extent[2] >= cbounds[1] and extent[2] <= cbounds[3]) or (extent[3] >= cbounds[1] and extent[3] <= cbounds[3]))) or (((cbounds[0] >= extent[0] and cbounds[0] <= extent[1]) or (cbounds[2] >= extent[0] and cbounds[2] <= extent[1])) and ((cbounds[1] >= extent[2] and cbounds[1] <= extent[3]) or (cbounds[3] >= extent[2] and cbounds[3] <= extent[3]))):
-            ax.add_geometries([record.geometry], ccrs.PlateCarree(), facecolor='lightgray', edgecolor='black', zorder=10)
+        gl = ax.gridlines(draw_labels=True)
+        gl.xformatter = LONGITUDE_FORMATTER
+        gl.yformatter = LATITUDE_FORMATTER
+        
+        
+        #checking that positions are within -180 to 180, -90 to 90, setting plot extent
+        for i,maxval in enumerate([180,180,90,90]):
+            if extent[i] > maxval:
+                extent[i] = maxval
+            elif extent[i] < -maxval:
+                extent[i] = -maxval
+        ax.set_extent(extent)
+        
+        #contouring bathymetry data
+        lonstopull = [lon for lon in range(extent[0],extent[1]+1)]
+        latstopull = [lat for lat in range(extent[2],extent[3]+1)]
+        lon,lat,data = oci.getbathydata(latstopull,lonstopull, self.bathymetrydata)
+        lon = lon[::4]
+        lat = lat[::4]
+        data = data[::4,::4]
+        data[data >= 0] = np.NaN
+        
+        conts = [100,250,500,1000,2500,5000,7500]
+        colors = [[0.886271729124078,0.954615491464059,0.740091293728959,1],
+        [0.338576643584847,0.692018371754271,0.641578720328368,1],
+        [0.292203723814070,0.584764950085021,0.624862740533897,1],
+        [0.258394967455256,0.480159292762069,0.601175999802655,1],
+        [0.241741177927927,0.373135022148264,0.578802643189424,1],
+        [0.256832205065477,0.262155154029401,0.499638604613378,1],
+        [0.221762510221711,0.180277856909926,0.327115685990924,1]]
+    
+        #cmap = ListedColormap(colors)
+        cmap = LinearSegmentedColormap.from_list("", colors)
+        
+        c = ax.contour(lon, lat, -data.transpose(), conts, cmap=cmap, transform=ccrs.PlateCarree(), zorder=0)
+        
+        contstrings = [str(cc) + " m" for cc in conts]
+        for (i,cnum) in enumerate(conts):
+            c.collections[i].set_label(str(cnum) + " m")
+        l = plt.legend()
+        l.set_zorder(90)
+        
+        
+        for record in self.landshp.records():
             
-    curtabstr = "Tab " + str(self.whatTab())
-    self.alltabdata[curtabstr]["MissionCanvas"].draw()
+            #checking if plot is within region- cbounds = (minx,miny,maxx,maxy) and extent = (minx,maxx,miny,maxy)
+            cbounds = record.bounds
+            if (((extent[0] >= cbounds[0] and extent[0] <= cbounds[2]) or (extent[1] >= cbounds[0] and extent[1] <= cbounds[2])) and ((extent[2] >= cbounds[1] and extent[2] <= cbounds[3]) or (extent[3] >= cbounds[1] and extent[3] <= cbounds[3]))) or (((cbounds[0] >= extent[0] and cbounds[0] <= extent[1]) or (cbounds[2] >= extent[0] and cbounds[2] <= extent[1])) and ((cbounds[1] >= extent[2] and cbounds[1] <= extent[3]) or (cbounds[3] >= extent[2] and cbounds[3] <= extent[3]))):
+                ax.add_geometries([record.geometry], ccrs.PlateCarree(), facecolor='lightgray', edgecolor='black', zorder=10)
+                
+        curtabstr = "Tab " + str(self.whatTab())
+        self.alltabdata[curtabstr]["MissionCanvas"].draw()
     
-    
+    except Exception:
+        trace_error()
+        self.posterror("Failed to update map axes")
     
     
 
@@ -308,48 +312,52 @@ def updateMissionPlot(self):
         
 def updateMissionPosition(self):
     
-    if self.goodPosition:
-        curtabstr = "Tab " + str(self.whatTab())
-        
-        #pulling position
-        clat = self.lat
-        clon = self.lon
-        cb = self.bearing*np.pi/180 #convert to trig-style
-        
-        #determining arrow size
-        cxlim = self.alltabdata[curtabstr]["MissionAx"].get_xlim()
-        cylim = self.alltabdata[curtabstr]["MissionAx"].get_ylim()
-        C = 0.01*(cxlim[1] - cxlim[0] + cylim[1] - cylim[0])
+    try:
+        if self.goodPosition:
+            curtabstr = "Tab " + str(self.whatTab())
             
-        #overlaying plot (creating in polar then converting to cartesian and plotting)
-        rad = np.array([C,C,C/3,C])
-        phi = np.array([np.pi/2, -np.pi/4, -np.pi/2, -3*np.pi/4]) - cb
-        x = clon + rad * np.cos(phi)
-        y = clat + rad * np.sin(phi)
-        
-        #replotting
-        if self.alltabdata[curtabstr]["gpshandle"]:
-            self.alltabdata[curtabstr]["gpshandle"].set_visible(False)
+            #pulling position
+            clat = self.lat
+            clon = self.lon
+            cb = self.bearing*np.pi/180 #convert to trig-style
             
-        self.alltabdata[curtabstr]["gpshandle"] = self.alltabdata[curtabstr]["MissionAx"].fill(x,y,color="red", edgecolor="k", zorder=100)
-        self.alltabdata[curtabstr]["gpshandle"] = self.alltabdata[curtabstr]["gpshandle"][0]
-        
-        if clat >= 0:
-            ns = 'N'
+            #determining arrow size
+            cxlim = self.alltabdata[curtabstr]["MissionAx"].get_xlim()
+            cylim = self.alltabdata[curtabstr]["MissionAx"].get_ylim()
+            C = 0.01*(cxlim[1] - cxlim[0] + cylim[1] - cylim[0])
+                
+            #overlaying plot (creating in polar then converting to cartesian and plotting)
+            rad = np.array([C,C,C/3,C])
+            phi = np.array([np.pi/2, -np.pi/4, -np.pi/2, -3*np.pi/4]) - cb
+            x = clon + rad * np.cos(phi)
+            y = clat + rad * np.sin(phi)
+            
+            #replotting
+            if self.alltabdata[curtabstr]["gpshandle"]:
+                self.alltabdata[curtabstr]["gpshandle"].set_visible(False)
+                
+            self.alltabdata[curtabstr]["gpshandle"] = self.alltabdata[curtabstr]["MissionAx"].fill(x,y,color="red", edgecolor="k", zorder=100)
+            self.alltabdata[curtabstr]["gpshandle"] = self.alltabdata[curtabstr]["gpshandle"][0]
+            
+            if clat >= 0:
+                ns = 'N'
+            else:
+                ns = 'S'
+            if clon >= 0:
+                ew = 'E'
+            else:
+                ew = 'W'
+            
+            self.alltabdata[curtabstr]["MissionAx"].set_title(f"Current Position: {abs(clat):6.3f}\xB0{ns}, {abs(clon):7.3f}\xB0{ew}",fontweight="bold")
+            self.alltabdata[curtabstr]["MissionCanvas"].draw()
+            
+            
         else:
-            ns = 'S'
-        if clon >= 0:
-            ew = 'E'
-        else:
-            ew = 'W'
+            self.postwarning("GPS stream is inactive")
         
-        self.alltabdata[curtabstr]["MissionAx"].set_title(f"Current Position: {abs(clat):6.3f}\xB0{ns}, {abs(clon):7.3f}\xB0{ew}",fontweight="bold")
-        self.alltabdata[curtabstr]["MissionCanvas"].draw()
-        
-        
-    else:
-        self.postwarning("GPS stream is inactive")
-
+    except Exception:
+        trace_error()
+        self.posterror("Failed to update current position")
     
         
 #add line plot
@@ -369,7 +377,7 @@ def updateMissionPlot_line(self, pressed):
             self.alltabdata[curtabstr]["interactivetype"] = 0
 
     except Exception:
-        self.posterror("Failed to update plot")
+        self.posterror("Failed to add point to line")
         trace_error()
 
         
@@ -383,7 +391,7 @@ def updateMissionPlot_circle(self):
             self.alltabdata[curtabstr]["plotEvent"] = self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('button_release_event', self.getPoint)
         
     except Exception:
-        self.posterror("Failed to update plot")
+        self.posterror("Failed to add circle")
         trace_error()    
         
         
@@ -397,7 +405,7 @@ def updateMissionPlot_box(self):
             self.alltabdata[curtabstr]["plotEvent"] = self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('button_release_event', self.getPoint)
 
     except Exception:
-        self.posterror("Failed to update plot")
+        self.posterror("Failed to add box")
         trace_error()
         
         
@@ -496,4 +504,5 @@ def getPoint(self, event):
         
     except Exception:
         trace_error()
+        self.posterror("Failed to draw overlay")
         

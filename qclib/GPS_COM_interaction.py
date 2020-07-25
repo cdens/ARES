@@ -216,9 +216,14 @@ class GPSthread(QRunnable):
                         
                             try:
                                 nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
-                                self.lat = nmeaobj.latitude
-                                self.lon = nmeaobj.longitude
-                                self.datetime = nmeaobj.datetime
+                                clat = nmeaobj.latitude
+                                clon = nmeaobj.longitude
+                                
+                                if self.lat != 0 or self.lon != 0:
+                                    self.lat = clat
+                                    self.lon = clon
+                                    clon = self.lon
+                                    self.datetime = nmeaobj.datetime
                                 
                                 if c%5 == 0:
                                     self.signals.update.emit(0, self.lat, self.lon, self.datetime)

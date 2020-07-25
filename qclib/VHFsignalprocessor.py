@@ -408,47 +408,49 @@ class ThreadProcessor(QRunnable):
         #if the Run() method gets this far, __init__ has completed successfully (and set self.startthread = 100)
 
         
-        if not self.isfromaudio and not self.isfromtest: #if source is a receiver
-        
-            #Declaring the callbuck function to update the audio buffer
-            @CFUNCTYPE(None, c_void_p, c_void_p, c_ulong, c_ulong)
-            def updateaudiobuffer(streampointer_int, bufferpointer_int, size, samplerate):
-                self.numcontacts += 1 #note that the buffer has been pulled again
-                bufferlength = int(size / 2)
-                bufferpointer = cast(bufferpointer_int, POINTER(c_int16 * bufferlength))
-                bufferdata = bufferpointer.contents
-                self.f_s = samplerate
-                self.nframes += bufferlength
-                self.audiostream.extend(bufferdata[:]) #append data to end
-                del self.audiostream[:bufferlength] #remove data from start
-                
-                #recording to wav file: this terminates if the file exceeds a certain length
-                if self.isrecordingaudio and self.nframes > self.maxsavedframes:
-                    self.isrecordingaudio = False
-                    self.killaudiorecording()
-                elif self.isrecordingaudio:
-                    wave.Wave_write.writeframes(self.wavfile,bytearray(bufferdata))
-            #end of callback function
-                    
-                    
-            # initializes audio callback function
-            if self.wrdll.SetupStreams(self.hradio, None, None, updateaudiobuffer, c_int(self.curtabnum)) == 0:
-                self.kill(7)
-            else:
-                timemodule.sleep(0.3)  # gives the buffer time to populate
-
-                
-        else: #if source is an audio file
-            #configuring sample times for the audio file
-            self.lensignal = len(self.audiostream)
-            self.maxtime = self.lensignal/self.f_s
-            self.sampletimes = np.arange(0.1,self.maxtime-0.1,0.1)
-
-
         try:
+        
+            if not self.isfromaudio and not self.isfromtest: #if source is a receiver
+            
+                #Declaring the callbuck function to update the audio buffer
+                @CFUNCTYPE(None, c_void_p, c_void_p, c_ulong, c_ulong)
+                def updateaudiobuffer(streampointer_int, bufferpointer_int, size, samplerate):
+                    self.numcontacts += 1 #note that the buffer has been pulled again
+                    bufferlength = int(size / 2)
+                    bufferpointer = cast(bufferpointer_int, POINTER(c_int16 * bufferlength))
+                    bufferdata = bufferpointer.contents
+                    self.f_s = samplerate
+                    self.nframes += bufferlength
+                    self.audiostream.extend(bufferdata[:]) #append data to end
+                    del self.audiostream[:bufferlength] #remove data from start
+                    
+                    #recording to wav file: this terminates if the file exceeds a certain length
+                    if self.isrecordingaudio and self.nframes > self.maxsavedframes:
+                        self.isrecordingaudio = False
+                        self.killaudiorecording()
+                    elif self.isrecordingaudio:
+                        wave.Wave_write.writeframes(self.wavfile,bytearray(bufferdata))
+                #end of callback function
+                        
+                        
+                # initializes audio callback function
+                if self.wrdll.SetupStreams(self.hradio, None, None, updateaudiobuffer, c_int(self.curtabnum)) == 0:
+                    self.kill(7)
+                else:
+                    timemodule.sleep(0.3)  # gives the buffer time to populate
+    
+                    
+            else: #if source is an audio file
+                #configuring sample times for the audio file
+                self.lensignal = len(self.audiostream)
+                self.maxtime = self.lensignal/self.f_s
+                self.sampletimes = np.arange(0.1,self.maxtime-0.1,0.1)
+    
+                
             # setting up thread while loop- terminates when user clicks "STOP" or audio file finishes processing
             i = -1
-
+                
+            #MAIN PROCESSOR LOOP
             while self.keepgoing:
                 i += 1
 
@@ -481,7 +483,7 @@ class ThreadProcessor(QRunnable):
                     if (self.isfromtest and ctime >= self.maxtime - self.fftwindow) or (self.isfromaudio and i >= len(self.sampletimes)-1):
                         self.keepgoing = False
                         self.kill(0)
-                        
+                        return
                         
                     #getting current time to sample from audio file
                     if self.isfromaudio:
@@ -547,21 +549,28 @@ class ThreadProcessor(QRunnable):
         
         if reason != 0: #notify event loop that processor failed if non-zero exit code provided
             self.signals.failed.emit(self.curtabnum, reason)
-
-        if not self.isfromaudio and not self.isfromtest:
-            wave.Wave_write.close(self.wavfile)
-            self.wrdll.SetupStreams(self.hradio, None, None, None, None)
-            self.wrdll.CloseRadioDevice(self.hradio)
-        self.signals.terminated.emit(curtabnum)  # emits signal that processor has been terminated
-        self.txtfile.close()
         
+        try:
+            if not self.isfromaudio and not self.isfromtest:
+                wave.Wave_write.close(self.wavfile)
+                self.wrdll.SetupStreams(self.hradio, None, None, None, None)
+                self.wrdll.CloseRadioDevice(self.hradio)
+                
+            self.signals.terminated.emit(curtabnum)  # emits signal that processor has been terminated
+            self.txtfile.close()
+        except Exception:
+            trace_error()
+            self.kill(10)
         
         
     #terminate the audio file recording (for WINRADIO processor tabs) if it exceeds a certain length set by maxframenum
     def killaudiorecording(self):
-        wave.Wave_write.close(self.wavfile) #close WAV file
-        self.signals.failed.emit(self.curtabnum, 13) #pass warning message back to GUI
-
+        try:
+            wave.Wave_write.close(self.wavfile) #close WAV file
+            self.signals.failed.emit(self.curtabnum, 13) #pass warning message back to GUI
+        except Exception:
+            trace_error()
+            self.kill(10)
         
         
     @pyqtSlot()
@@ -573,10 +582,13 @@ class ThreadProcessor(QRunnable):
     @pyqtSlot(float)
     def changecurrentfrequency(self, newfreq): #update VHF frequency for WiNRADIO
         # change frequency- kill if failed
-        self.vhffreq_2WR = c_ulong(int(newfreq * 1E6))
-        if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
+        try:
+            self.vhffreq_2WR = c_ulong(int(newfreq * 1E6))
+            if self.wrdll.SetFrequency(self.hradio, self.vhffreq_2WR) == 0:
+                self.kill(4)
+        except Exception:
+            trace_error()
             self.kill(4)
-            
             
 
     @pyqtSlot(float,float,int,float,int)
