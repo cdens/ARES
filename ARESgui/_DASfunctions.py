@@ -501,12 +501,13 @@ def stopprocessor(self):
         if self.alltabdata[curtabstr]["isprocessing"]:
             curtabstr = "Tab " + str(self.whatTab())
             datasource = self.alltabdata[curtabstr]["datasource"]
-
-            self.alltabdata[curtabstr]["processor"].abort()
+            
             self.alltabdata[curtabstr]["isprocessing"] = False #processing is done
+            self.alltabdata[curtabstr]["processor"].abort()
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 
             # checks to make sure all other tabs with same receiver are stopped (because the radio device is stopped)
+            # it should be impossible to have multiple 
             if datasource != 'Test' and datasource != 'Audio':
                 for ctab in self.alltabdata:
                     if self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == datasource:
@@ -640,37 +641,42 @@ def updateUIfinal(self,plottabnum):
 #posts message in main GUI if thread processor fails for some reason
 @pyqtSlot(int,int)
 def failedWRmessage(self,plottabnum,messagenum):
-    plottabstr = self.gettabstrfromnum(plottabnum)
-    if messagenum == 1:
-        self.posterror("Failed to connect to specified WiNRADIO!")
-    elif messagenum == 2:
-        self.posterror("Failed to power on specified WiNRADIO!")
-    elif messagenum == 3:
-        self.posterror("Failed to initialize demodulator for specified WiNRADIO!")
-    elif messagenum == 4:
-        self.posterror("Failed to set VHF frequency for specified WiNRADIO!")
-    elif messagenum == 5:
-        self.postwarning("Failed to adjust volume on the specified WiNRADIO!")
-    elif messagenum == 6:
-        self.posterror("Error configuring the current WiNRADIO device!")
-    elif messagenum == 7:
-        self.posterror("Failed to configure the WiNRADIO audio stream!")
-    elif messagenum == 8:
-        self.posterror("Contact lost with WiNRADIO receiver! Please ensure device is connected and powered on!")
-    elif messagenum == 9:
-        self.posterror("Selected audio file is too large! Please trim the audio file before processing")
-    elif messagenum == 10:
-        self.posterror("Unspecified processing error raised during SignalProcessor.Run()")
-    elif messagenum == 11:
-        self.posterror("Unable to read audio file")
-    elif messagenum == 12:
-        self.posterror("Failed to initialize the signal processor thread")
-    elif messagenum == 13:
-        self.postwarning("ARES has stopped audio recording as the WAV file has exceeded maximum allowed length. Please start a new processing tab to continue recording AXBT signal to a WAV file.")
-        
-     #reset source if signal processor failed to start
-    if messagenum in [1,2,3,4,5,6,7,9,11,12]:
-        self.alltabdata[plottabstr]["source"] = "none"
+    try:
+        plottabstr = self.gettabstrfromnum(plottabnum)
+        if messagenum == 1:
+            self.posterror("Failed to connect to specified WiNRADIO!")
+        elif messagenum == 2:
+            self.posterror("Failed to power on specified WiNRADIO!")
+        elif messagenum == 3:
+            self.posterror("Failed to initialize demodulator for specified WiNRADIO!")
+        elif messagenum == 4:
+            self.posterror("Failed to set VHF frequency for specified WiNRADIO!")
+        elif messagenum == 5:
+            self.postwarning("Failed to adjust volume on the specified WiNRADIO!")
+        elif messagenum == 6:
+            self.posterror("Error configuring the current WiNRADIO device!")
+        elif messagenum == 7:
+            self.posterror("Failed to configure the WiNRADIO audio stream!")
+        elif messagenum == 8:
+            self.posterror("Contact lost with WiNRADIO receiver! Please ensure device is connected and powered on!")
+        elif messagenum == 9:
+            self.posterror("Selected audio file is too large! Please trim the audio file before processing")
+        elif messagenum == 10:
+            self.posterror("Unspecified processing error raised during SignalProcessor.Run()")
+        elif messagenum == 11:
+            self.posterror("Unable to read audio file")
+        elif messagenum == 12:
+            self.posterror("Failed to initialize the signal processor thread")
+        elif messagenum == 13:
+            self.postwarning("ARES has stopped audio recording as the WAV file has exceeded maximum allowed length. Please start a new processing tab to continue recording AXBT signal to a WAV file.")
+            
+        #reset data source if signal processor failed to start
+        if messagenum in [1,2,3,4,5,6,7,9,11,12]:
+            self.alltabdata[plottabstr]["source"] = "none"
+    
+    except Exception:
+        trace_error()
+        self.posterror("Error in signal processor thread triggered secondary error in handling!")
 
         
         

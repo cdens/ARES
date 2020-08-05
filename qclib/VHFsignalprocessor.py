@@ -184,7 +184,6 @@ def dofft(pcmdata,fs,flims):
     #ratio of maximum signal in band to max signal total (SNR)
     Rp = np.max(fftdata[ind])/np.max(fftdata) 
         
-    
     return fp, Sp, Rp
     
     
@@ -544,13 +543,14 @@ class ThreadProcessor(QRunnable):
             
             
     def kill(self,reason):
-        self.keepgoing = False  # kills while loop
-        curtabnum = self.curtabnum
-        
-        if reason != 0: #notify event loop that processor failed if non-zero exit code provided
-            self.signals.failed.emit(self.curtabnum, reason)
         
         try:
+            self.keepgoing = False  # kills while loop
+            curtabnum = self.curtabnum
+            
+            if reason != 0: #notify event loop that processor failed if non-zero exit code provided
+                self.signals.failed.emit(self.curtabnum, reason)
+            
             if not self.isfromaudio and not self.isfromtest:
                 wave.Wave_write.close(self.wavfile)
                 self.wrdll.SetupStreams(self.hradio, None, None, None, None)
@@ -558,6 +558,7 @@ class ThreadProcessor(QRunnable):
                 
             self.signals.terminated.emit(curtabnum)  # emits signal that processor has been terminated
             self.txtfile.close()
+            
         except Exception:
             trace_error()
             self.kill(10)
@@ -577,7 +578,6 @@ class ThreadProcessor(QRunnable):
     def abort(self): #executed when user selects "Stop" button
         self.kill(0) #tell processor to terminate with 0 (success) exit code
         
-
         
     @pyqtSlot(float)
     def changecurrentfrequency(self, newfreq): #update VHF frequency for WiNRADIO

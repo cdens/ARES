@@ -340,7 +340,7 @@ def savedataincurtab(self):
                         oldfile = self.tempdir + slash + 'tempwav_' + str(self.alltabdata[curtabstr]["tabnum"]) + '.WAV'
                         newfile = outdir + slash + filename + '.WAV'
 
-                        if path.exists(newfile):
+                        if path.exists(oldfile) and path.exists(newfile) and oldfile != newfile: #if file already exists
                             remove(newfile)
 
                         shcopy(oldfile,newfile)
@@ -353,7 +353,7 @@ def savedataincurtab(self):
                         oldfile = self.tempdir + slash + 'sigdata_' + str(self.alltabdata[curtabstr]["tabnum"]) + '.txt'
                         newfile = outdir + slash + filename + '.sigdata'
 
-                        if path.exists(newfile):
+                        if path.exists(oldfile) and path.exists(newfile) and oldfile != newfile:
                             remove(newfile)
 
                         shcopy(oldfile, newfile)

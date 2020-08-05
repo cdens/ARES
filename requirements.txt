@@ -1,4 +1,5 @@
 Cartopy==0.18.0 #interactive map plots
+chardet==3.0.4 #cahracter detection for input file types
 geopy==2.0.0 #distance conversions for mission plotter
 matplotlib==3.1.1
 numpy==1.16.4

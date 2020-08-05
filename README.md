@@ -34,13 +34,16 @@ NOTE: You may need to install the libgeos library (e.g. *brew install libgeos* o
 
 ### Installing on Windows:
 
-First, comment out the entry for Shapely in `requirements.txt` (using a # sign). Then, install all other modules:
+First, comment out the entry for Shapely and Cartopy in `requirements.txt` (using a # sign). Then, install all other modules:
 
 ```
 pip install -r requirements.txt
 ```
 
-Next, download Shapely wheel for Python v3.x from https://www.lfd.uci.edu/~gohlke/pythonlibs/- 
+Next, download the Shapely and Cartopy wheels for Python v3.x from https://www.lfd.uci.edu/~gohlke/pythonlibs/- 
+
+Using Shapely as an example:
+
 The file should be named Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl depending on Python version and windows type (e.g. Shapely-1.6.4.post2-cp37-cp37m-win_amd64.whl for Python v3.7, Windows x64-bit).
 
 Finally, install Shapely for Windows with:
@@ -48,7 +51,8 @@ Finally, install Shapely for Windows with:
 ```
 pip install Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl 
 ```
-***(again, fill in necessary info there)
+
+(again, fill in necessary info and repeat this process for both Shapely and Cartopy).
 
 
 
