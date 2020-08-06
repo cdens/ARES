@@ -1110,7 +1110,7 @@ def readsettings(filename):
             line = file.readline()
             settingsdict["comport"] = str(line.strip().split()[1]) #GPS setting
             line = file.readline()
-            settingsdict["gpsbaud"] = str(line.strip().split()[1]) #GPS setting
+            settingsdict["gpsbaud"] = int(line.strip().split()[1]) #GPS setting
             line = file.readline()
             settingsdict["fontsize"] = int(line.strip().split()[1]) 
             

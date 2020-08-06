@@ -198,12 +198,13 @@ class GPSthread(QRunnable):
                     sleep(0.5)
             
             else: #different port listed- attempt to connect
-                self.lat, self.lon, self.datetime, isGood = getcurrentposition(self.comport, self.baudrate, 5)
+                self.lat, self.lon, cdt, isGood = getcurrentposition(self.comport, self.baudrate, 5)
                     
                 self.keepGoing = True
                 
                 if isGood == 0: #got a valid position/time
                     self.goodConnection = True
+                    self.datetime = cdt #only write to self.datetime if cdt is a valid datetime otherwise causes error w/ slot
                     self.signals.update.emit(isGood, self.lat, self.lon, self.datetime)
                     
                 else: #failed to get valid points
