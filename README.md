@@ -13,6 +13,8 @@ The AXBT Realtime Editing System (ARES) Data Acquisition System is designed to r
 
 The AXBT Realtime Editing System (ARES) Profile Editing System is meant to enable users to quality control AXBT temperature-depth profiles, guided by an automated quality control algorithm and further aided by climatology and bathymetry data for the region of interest to reduce the background oceanographic knowledge necessary on the part of the user. 
 
+ARES also comes with a mission planner feature, enabling users to overlay land masses, bathymetry contours, current position, and additional annotated shapes to identify ideal expendable probe drop locations.
+
 
 ## Platform Support
 ARES is currently only fully functional in Windows as there is currently
