@@ -435,7 +435,6 @@ class ThreadProcessor(QRunnable):
                     except Exception: #error handling for callback
                         trace_error()  
                         self.kill(10)
-                        
                 #end of callback function
                         
                         
@@ -514,14 +513,15 @@ class ThreadProcessor(QRunnable):
                 
 
                 #writing raw data to sigdata file (ASCII) for current thread- before correcting for minratio/minsiglev
-                if self.keepgoing:
+                if self.keepgoing: #only writes if thread hasn't been stopped since start of current segment
                     self.txtfile.write(f"{ctime},{fp},{Sp},{Rp}\n")
                     
                 #logic to determine whether or not profile is triggered
                 if not self.istriggered and Sp >= self.triggersiglev and Rp >= self.triggerfftratio:
                     self.istriggered = True
                     self.firstpointtime = ctime
-                    self.signals.triggered.emit(self.curtabnum, ctime)
+                    if self.keepgoing: #won't send if keepgoing stopped since current iteration began
+                        self.signals.triggered.emit(self.curtabnum, ctime)
                         
                 #logic to determine whether or not point is valid
                 if self.istriggered and Sp >= self.minsiglev and Rp >= self.minfftratio:
@@ -536,7 +536,8 @@ class ThreadProcessor(QRunnable):
                 # tells GUI to update data structure, plot, and table
                 ctemp = np.round(ctemp, 2)
                 cdepth = np.round(cdepth, 1)
-                self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, fp, Sp, np.round(100*Rp,1), ctime, i)
+                if self.keepgoing: #won't send if keepgoing stopped since current iteration began
+                    self.signals.iterated.emit(self.curtabnum, ctemp, cdepth, fp, Sp, np.round(100*Rp,1), ctime, i)
 
                 if not self.isfromaudio: 
                     timemodule.sleep(0.1)  #pauses when processing in realtime (fs ~ 10 Hz)
@@ -550,10 +551,12 @@ class ThreadProcessor(QRunnable):
             
             
     def kill(self,reason):
-        
+        #NOTE: function contains 0.3 seconds of sleep to prevent race conditions between the processor loop, callback function and main GUI event loop
         try:
             self.keepgoing = False  # kills while loop
             curtabnum = self.curtabnum
+            
+            timemodule.sleep(0.1) #gives thread 0.1 seconds to finish current segment
             
             if reason != 0: #notify event loop that processor failed if non-zero exit code provided
                 self.signals.failed.emit(self.curtabnum, reason)
@@ -561,7 +564,9 @@ class ThreadProcessor(QRunnable):
             self.isrecordingaudio = False
             if not self.isfromaudio and not self.isfromtest:
                 self.wrdll.SetupStreams(self.hradio, None, None, None, None)
+                timemodule.sleep(0.1) #additional 0.1 seconds after stream directed to null before closing wav file
                 wave.Wave_write.close(self.wavfile)
+                timemodule.sleep(0.1) #additional 0.1 seconds before closing receiver 
                 self.wrdll.CloseRadioDevice(self.hradio)
                 
             self.signals.terminated.emit(curtabnum)  # emits signal that processor has been terminated
