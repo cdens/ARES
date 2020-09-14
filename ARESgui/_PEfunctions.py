@@ -69,7 +69,7 @@ def makenewproftab(self):
         #tab indexing update
         newtabnum,curtabstr = self.addnewtab()
 
-        self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"tabtype":"ProfileEditorInput", "isprocessing":False, "datasource":"None"} #isprocessing and datasource are only relevant for processor tabs
+        self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"tabtype":"ProfileEditorInput", "isprocessing":False, "datasource":None} #isprocessing and datasource are only relevant for processor tabs
         self.alltabdata[curtabstr]["tablayout"].setSpacing(10)
         
         self.setnewtabcolor(self.alltabdata[curtabstr]["tab"])
@@ -386,7 +386,7 @@ def continuetoqc(self,curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,t
         self.alltabdata[curtabstr]["tabwidgets"]["depthdelay"].setValue(0)
 
         self.alltabdata[curtabstr]["tabwidgets"]["runqc"] = QPushButton('Re-QC Profile (Reset)') #11
-        self.alltabdata[curtabstr]["tabwidgets"]["runqc"].clicked.connect(self.runqc)    
+        self.alltabdata[curtabstr]["tabwidgets"]["runqc"].clicked.connect(self.runqc) 
         
         
         #Second column: profile information
@@ -404,6 +404,11 @@ def continuetoqc(self,curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,t
         self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Bottom Strike")
         self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Climatology Mismatch")
         self.alltabdata[curtabstr]["tabwidgets"]["rcode"].addItem("Action Required/Reprocess")
+        
+        #profile save button
+        self.alltabdata[curtabstr]["tabwidgets"]["saveprof"] = QPushButton('Save Profile') #11
+        self.alltabdata[curtabstr]["tabwidgets"]["saveprof"].clicked.connect(self.savedataincurtab)    
+        
             
         #formatting widgets
         self.alltabdata[curtabstr]["tabwidgets"]["proftxt"].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
@@ -414,12 +419,12 @@ def continuetoqc(self,curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,t
         
         
         #should be 15 entries
-        widgetorder = ["toggleclimooverlay", "addpoint", "removepoint", "removerange", "sfccorrectiontitle", "sfccorrection", "maxdepthtitle", "maxdepth", "depthdelaytitle", "depthdelay", "runqc", "proftxt", "isbottomstrike", "rcodetitle", "rcode"]
+        widgetorder = ["toggleclimooverlay", "addpoint", "removepoint", "removerange", "sfccorrectiontitle", "sfccorrection", "maxdepthtitle", "maxdepth", "depthdelaytitle", "depthdelay", "runqc", "proftxt", "isbottomstrike", "rcodetitle", "rcode", "saveprof"]
         
-        wrows     = [3,4,4,5,6,6,7,7,8,8,9,5,3,3,4]
-        wcols     = [2,2,3,2,2,3,2,3,2,3,2,5,6,5,5]
-        wrext     = [1,1,1,1,1,1,1,1,1,1,1,4,1,1,1]
-        wcolext   = [2,1,1,2,1,1,1,1,1,1,2,2,1,1,2]
+        wrows     = [3,4,4,5,6,6,7,7,8,8,9,5,3,3,4,9]
+        wcols     = [2,2,3,2,2,3,2,3,2,3,2,5,6,5,5,5]
+        wrext     = [1,1,1,1,1,1,1,1,1,1,1,4,1,1,1,1]
+        wcolext   = [2,1,1,2,1,1,1,1,1,1,2,2,1,1,2,2]
         
         #adding user inputs
         for i,r,c,re,ce in zip(widgetorder,wrows,wcols,wrext,wcolext):

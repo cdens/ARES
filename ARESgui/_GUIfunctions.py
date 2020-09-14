@@ -88,8 +88,11 @@ def initUI(self):
     #setting up file dialog options
     self.fileoptions = QFileDialog.Options()
     self.fileoptions |= QFileDialog.DontUseNativeDialog
-    self.defaultfilereaddir = path.expanduser("~")
-    self.defaultfilewritedir = path.expanduser("~")
+    defaultpath = path.expanduser("~")
+    if path.exists(path.join(defaultpath,"Documents")): #default to Documents directory if it exists, otherwise home directory
+        defaultpath = path.join(defaultpath,"Documents")
+    self.defaultfilereaddir = defaultpath
+    self.defaultfilewritedir = defaultpath
 
     #setting up dictionary to store data for each tab
     self.alltabdata = {}

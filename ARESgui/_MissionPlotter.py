@@ -74,7 +74,7 @@ def makenewMissiontab(self):
             
         #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal Mission to profile editor
         self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"MissionFig":plt.figure(),
-                  "tabtype":"MissionPlotter","isprocessing":False, "source":"none", "gpshandle":False, "lineactive":False, "linex":[], "liney":[], "interactivetype":0, "overlayhandles":[], "plotEvent":False}
+                  "tabtype":"MissionPlotter","isprocessing":False, "datasource":None, "gpshandle":False, "lineactive":False, "linex":[], "liney":[], "interactivetype":0, "overlayhandles":[], "plotEvent":False}
                   
         self.alltabdata[curtabstr]["colornames"] = ['Black', 'White', 'Blue', 'Green', 'Red', 'Cyan', 'Magenta', 'Yellow']
         self.alltabdata[curtabstr]["colors"] = ['k', 'w', 'b', 'g', 'r', 'c', 'm', 'y']

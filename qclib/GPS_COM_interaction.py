@@ -71,10 +71,30 @@ def listcomports_verbose():
     return portnums,portinfo
     
 
+    
+def streamserialdata(port,baudrate):
+    try:
+        
+        #open/configure port
+        with Serial(port, baudrate, timeout=1) as ser:
+            ii = 0
+            while ii <= 100:
+                ii += 1
+
+                print(ser.readline(96).decode('ascii', errors='replace').strip())
+                    
+                sleep(0.1)
+
+    except KeyboardInterrupt:
+        print('Terminated with keyboard interrupt!')
+    except Exception:
+        trace_error()
 
     
 def streamgpsdata(port,baudrate):
     try:
+        
+        fixtypes = ["Not Valid", "GPS", "DGPS", "PPS", "RTK", "Float RTK", "Estimated", "Manual Input", "Simulation"]
 
         #open/configure port
         with Serial(port, baudrate, timeout=1) as ser:
@@ -85,7 +105,7 @@ def streamgpsdata(port,baudrate):
                 try:  # exceptions raised if line doesn't include lat/lon
                     #get and decode current line
                     try:
-                        nmeaobj = parse(ser.readline().decode('ascii', errors='replace').strip())
+                        nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
                         isgood = True
                     except nmea.ParseError:
                         print("Bad NMEA sentence!")
@@ -102,7 +122,11 @@ def streamgpsdata(port,baudrate):
                             lonsign = 'E'
                         else:
                             lonsign = 'W'
-                        print('Date: {}     Latitude: {}{}     Longitude: {}{}'.format(nmeaobj.datetime,abs(lat),latsign,abs(lon),lonsign))
+                            
+                        alt = float(nmeaobj.altitude)
+                        nsat = int(nmeaobj.num_sats)
+                        qual = int(nmeaobj.gps_qual)
+                        print(f"Date: {nmeaobj.datetime},  Latitude: {abs(lat)}{latsign},  Longitude: {abs(lon)}{lonsign}  , Altitude: {alt} m,  #sat: {nsat},  GPS quality: {fixtypes[qual]}")
                         ii = 0
 
                 except (AttributeError, KeyError):
@@ -136,9 +160,19 @@ def getcurrentposition(port,baudrate,numattempts):
                         lat = nmeaobj.latitude
                         lon = nmeaobj.longitude
                         dt = nmeaobj.datetime
+                        
+                        alt = -5000
+                        nsat = 0
+                        qual = 10
+                        try:
+                            alt = float(nmeaobj.altitude)
+                            nsat = int(nmeaobj.num_sats)
+                            qual = int(nmeaobj.gps_qual)
+                        except (AttributeError, KeyError, TypeError):
+                            pass
 
                         if lon != 0 or lat != 0: #success
-                            return lat,lon,dt,0
+                            return lat,lon,dt,0,alt,nsat,qual
 
                     except (AttributeError, KeyError): #no lat/lon
                         pass
@@ -146,13 +180,13 @@ def getcurrentposition(port,baudrate,numattempts):
                     pass
 
                 if ii > numattempts: #timeout
-                    return 0, 0, 0, 1
+                    return 0, 0, 0, 1, 0, 0, 0
 
-        return 0,0,0,2 #somehow exits loop successfully and ends "with" statement w/t getting position
+        return 0,0,0,2,0,0,0 #somehow exits loop successfully and ends "with" statement w/t getting position
 
     except Exception: #fails to connect to serial port
         trace_error()
-        return 0,0,0,2
+        return 0,0,0,2,0,0,0
         
         
         
