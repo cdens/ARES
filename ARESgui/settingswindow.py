@@ -154,6 +154,7 @@ class RunSettings(QMainWindow):
         self.label_minsigrat = "Minimum Signal Ratio (%): "
         self.label_trigsiglev = "Trigger Signal Level (dB): "
         self.label_trigsigrat = "Trigger Signal Ratio (%): "
+        self.fixtypes = ["Not Valid", "GPS", "DGPS", "PPS", "RTK", "Float RTK", "Estimated", "Manual Input", "Simulation"]
         
         
         
@@ -603,13 +604,16 @@ class RunSettings(QMainWindow):
             # self.gpstabwidgets["refreshgpsdata"] = QPushButton("Refresh GPS Info") # 2
             # self.gpstabwidgets["refreshgpsdata"].clicked.connect(self.refreshgpsdata)
 
-            self.gpstabwidgets["gpsdate"] = QLabel("Date/Time: ") # 3
-            self.gpstabwidgets["gpslat"] = QLabel("Latitude: ") # 4
-            self.gpstabwidgets["gpslon"] = QLabel("Longitude: ") # 5
+            self.gpstabwidgets["gpsdate"] = QLabel("Date/Time: ") # 2
+            self.gpstabwidgets["gpslat"] = QLabel("Latitude: ") # 3
+            self.gpstabwidgets["gpslon"] = QLabel("Longitude: ") # 4
+            self.gpstabwidgets["gpsnsat"] = QLabel("Connected Satellites:") #5
+            self.gpstabwidgets["gpsqual"] = QLabel("Fix Type:") #6
+            self.gpstabwidgets["gpsalt"] = QLabel("GPS Altitude:") #7
             
             #creating drop-down selection menu for available serial connections
-            self.gpstabwidgets["comporttitle"] = QLabel('Available Serial Connections:')  # 6
-            self.gpstabwidgets["comport"] = QComboBox()  # 7
+            self.gpstabwidgets["comporttitle"] = QLabel('Available Serial Connections:')  # 8
+            self.gpstabwidgets["comport"] = QComboBox()  # 9
             self.gpstabwidgets["comport"].clear()
             self.gpstabwidgets["comport"].addItem('No Serial Connection Selected')
             for cport in self.settingsdict["comportdetails"]: #adding previously detected ports
@@ -628,8 +632,8 @@ class RunSettings(QMainWindow):
                 self.gpstabwidgets["comport"].setCurrentIndex(0)
                 
                 
-            self.gpstabwidgets["baudtitle"] = QLabel('GPS BAUD Rate:')  # 6
-            self.gpstabwidgets["baudrate"] = QComboBox()  # 7
+            self.gpstabwidgets["baudtitle"] = QLabel('GPS BAUD Rate:')  # 10
+            self.gpstabwidgets["baudrate"] = QComboBox()  # 11
             self.gpstabwidgets["baudrate"].clear()
             
             self.baudrates = [110, 300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200, 128000, 256000]
@@ -644,12 +648,12 @@ class RunSettings(QMainWindow):
             self.gpstabwidgets["baudrate"].currentIndexChanged.connect(self.updateportandbaud)
             
             # should be 7 entries
-            widgetorder = ["updateports", "gpsdate", "gpslat", "gpslon","comporttitle","comport", "baudtitle", "baudrate"]
+            widgetorder = ["updateports", "gpsdate", "gpslat", "gpslon", "gpsnsat", "gpsqual", "gpsalt", "comporttitle","comport", "baudtitle", "baudrate"]
 
-            wcols = [1, 1, 1, 1, 1, 1, 1, 2]
-            wrows = [1, 6, 7, 8, 2, 3, 4, 4]
-            wrext = [1, 1, 1, 1, 1, 1, 1, 1]
-            wcolext = [1, 1, 1, 1, 1, 2, 1, 1]
+            wcols = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2]
+            wrows = [1, 6, 7, 8, 9, 10, 11, 2, 3, 4, 4]
+            wrext = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            wcolext = [1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1]
 
             # adding user inputs
             for i, r, c, re, ce in zip(widgetorder, wrows, wcols, wrext, wcolext):
@@ -696,7 +700,7 @@ class RunSettings(QMainWindow):
             
 
     #attempt to refresh GPS data with currently selected COM port
-    def refreshgpsdata(self, lat, lon, curdate, isgood):
+    def refreshgpsdata(self, isgood, lat, lon, curdate, nsat, qual, alt):
         if isgood:
             if lat > 0:
                 latsign = 'N'
@@ -709,11 +713,17 @@ class RunSettings(QMainWindow):
             self.gpstabwidgets["gpsdate"].setText("Date/Time: {} UTC".format(curdate))
             self.gpstabwidgets["gpslat"].setText("Latitude: {}{}".format(abs(round(lat,3)),latsign))
             self.gpstabwidgets["gpslon"].setText("Longitude: {}{}".format(abs(round(lon,3)),lonsign))
+            self.gpstabwidgets["gpsnsat"].setText(f"Connected Satellites: {nsat}")
+            self.gpstabwidgets["gpsqual"].setText(f"Fix Type: {self.fixtypes[qual]}")
+            self.gpstabwidgets["gpsalt"].setText(f"GPS Altitude: {alt} m")
             
         else:
             self.gpstabwidgets["gpsdate"].setText("Date/Time:")
             self.gpstabwidgets["gpslat"].setText("Latitude:")
             self.gpstabwidgets["gpslon"].setText("Longitude:")
+            self.gpstabwidgets["gpsnsat"].setText("Connected Satellites:")
+            self.gpstabwidgets["gpsqual"].setText("Fix Type:")
+            self.gpstabwidgets["gpsalt"].setText("GPS Altitude:")
             
     
     #receive warning message about GPS connection     

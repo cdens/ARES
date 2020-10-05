@@ -39,13 +39,17 @@ from serial.tools import list_ports
 from pynmea2 import parse, nmea
 from traceback import print_exc as trace_error
 from time import sleep
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import multiprocessing
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject
 from PyQt5.Qt import QRunnable
 
 
+
+###############################################################################################################        
+#                                         BASIC COM PORT INTERACTION                                          #
+###############################################################################################################
 
 def listcomports():
     portnums = []
@@ -90,11 +94,78 @@ def streamserialdata(port,baudrate):
     except Exception:
         trace_error()
 
+
     
+    
+###############################################################################################################        
+#                                           GPS COM PORT INTERACTION                                          #
+###############################################################################################################    
+
+#parse input GPS data (returns success flag and tuple with data)
+def parsegpsdata(nmeaobj):
+    dt = datetime(1,1,1)
+    lat = 0
+    lon = 0
+    nsat = -1
+    qual = -1
+    alt = -1E7
+    
+    try:
+        
+        #lat/lon required for function to return success
+        lat = nmeaobj.latitude
+        lon = nmeaobj.longitude
+                        
+        #pull datetime (required- tries 2 ways, if both fail then skips round)
+        try: #get date and time from NMEA message
+            dt = nmeaobj.datetime
+        except (AttributeError, KeyError): #only get time from NMEA message, requires that GPS day = system day (UTC)
+            systemdt = datetime.utcnow()
+            dt = datetime.combine(systemdt.date(),nmeaobj.timestamp)
+        
+        #trying to get each additional parameter separately
+        try:
+            alt = float(nmeaobj.altitude)
+        except (AttributeError, KeyError):
+            pass
+        try:
+            nsat = int(nmeaobj.num_sats)
+        except (AttributeError, KeyError):
+            pass
+        try:
+            qual = int(nmeaobj.gps_qual)
+        except (AttributeError, KeyError):
+            pass
+            
+        return True, (lat,lon,dt,nsat,qual,alt)
+            
+    except (AttributeError, KeyError):
+        return False, (lat,lon,dt,nsat,qual,alt)
+
+        
+        
+        
+        
+        
+
+#stream GPS data to command line
 def streamgpsdata(port,baudrate):
     try:
         
         fixtypes = ["Not Valid", "GPS", "DGPS", "PPS", "RTK", "Float RTK", "Estimated", "Manual Input", "Simulation"]
+        
+        #initialize fields
+        curdatetime = datetime(1,1,1)
+        lat = 0
+        latsign = 'N'
+        lon = 0
+        lonsign = 'E'
+        
+        alt = -1E7
+        nsat = 0
+        qual = 0
+        
+        
 
         #open/configure port
         with Serial(port, baudrate, timeout=1) as ser:
@@ -104,16 +175,36 @@ def streamgpsdata(port,baudrate):
 
                 try:  # exceptions raised if line doesn't include lat/lon
                     #get and decode current line
+                    
+                    isgood = False
+                    success = False
+                    
                     try:
                         nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
                         isgood = True
+                        success, data = parsegpsdata(nmeaobj)
+                        
                     except nmea.ParseError:
                         print("Bad NMEA sentence!")
-                        isgood = False
 
-                    if isgood:
-                        lat = round(nmeaobj.latitude,3)
-                        lon = round(nmeaobj.longitude,3)
+                    if isgood and success:
+                        
+                        #required fields
+                        lat = data[0]
+                        lon = data[1]
+                        curdatetime = data[2]
+                        
+                        #optional fields
+                        if data[3] >= 0:
+                            nsat = data[3]
+                        if data[4] >= 0:
+                            qual = data[4]
+                        if data[5] >= -1E3:
+                            alt = data[5]
+                        
+                        #prep lat/lon strings
+                        lat = round(lat,3)
+                        lon = round(lat,3)
                         if lat > 0:
                             latsign = 'N'
                         else:
@@ -123,28 +214,36 @@ def streamgpsdata(port,baudrate):
                         else:
                             lonsign = 'W'
                             
-                        alt = float(nmeaobj.altitude)
-                        nsat = int(nmeaobj.num_sats)
-                        qual = int(nmeaobj.gps_qual)
-                        print(f"Date: {nmeaobj.datetime},  Latitude: {abs(lat)}{latsign},  Longitude: {abs(lon)}{lonsign}  , Altitude: {alt} m,  #sat: {nsat},  GPS quality: {fixtypes[qual]}")
+                        #printing current data
+                        print(f"Date: {curdatetime},  Latitude: {abs(lat)}{latsign},  Longitude: {abs(lon)}{lonsign}  , Altitude: {alt} m,  #sat: {nsat},  GPS quality: {fixtypes[qual]}")
                         ii = 0
 
                 except (AttributeError, KeyError):
                     pass
                 finally:
                     sleep(0.1)
-
+        
+        print("Device timeout")
+        
     except KeyboardInterrupt:
         print('Terminated with keyboard interrupt!')
     except Exception:
         trace_error()
 
 
-
-
+        
+        
+        
+        
+#get one fix
 def getcurrentposition(port,baudrate,numattempts):
 
     try:
+        
+        alt = -1E7
+        nsat = 0
+        qual = 0
+                        
         # try to read a line of data from the serial port and parse
         with Serial(port, baudrate, timeout=1) as ser:
 
@@ -155,38 +254,38 @@ def getcurrentposition(port,baudrate,numattempts):
                 try:
                     #decode the line
                     nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
-
-                    try: #exceptions raised if line doesn't include lat/lon
-                        lat = nmeaobj.latitude
-                        lon = nmeaobj.longitude
-                        dt = nmeaobj.datetime
+                    success, data = parsegpsdata(nmeaobj)
+                    
+                    if success:
                         
-                        alt = -5000
-                        nsat = 0
-                        qual = 10
-                        try:
-                            alt = float(nmeaobj.altitude)
-                            nsat = int(nmeaobj.num_sats)
-                            qual = int(nmeaobj.gps_qual)
-                        except (AttributeError, KeyError, TypeError):
-                            pass
-
-                        if lon != 0 or lat != 0: #success
-                            return lat,lon,dt,0,alt,nsat,qual
-
-                    except (AttributeError, KeyError): #no lat/lon
-                        pass
+                        #required fields
+                        lat = data[0]
+                        lon = data[1]
+                        dt = data[2]
+                        
+                        #optional fields
+                        if data[3] >= 0:
+                            nsat = data[3]
+                        if data[4] >= 0:
+                            qual = data[4]
+                        if data[5] >= -1E3:
+                            alt = data[5]
+                        
+                        #success, give a chance to pull GPS metadata as well
+                        if (lon != 0 or lat != 0) and ii > 5: 
+                            return 0,(lat,lon,dt,nsat,qual,alt)
+                            
                 except nmea.ParseError: #failed to parse line (partial line or non-NMEA feed)
                     pass
 
                 if ii > numattempts: #timeout
-                    return 0, 0, 0, 1, 0, 0, 0
+                    return 1, (0, 0, 0, 0, 0, 0)
 
-        return 0,0,0,2,0,0,0 #somehow exits loop successfully and ends "with" statement w/t getting position
+        return 2, (0,0,0,0,0,0) #somehow exits loop successfully and ends "with" statement w/t getting position
 
     except Exception: #fails to connect to serial port
         trace_error()
-        return 0,0,0,2,0,0,0
+        return 2, (0,0,0,0,0,0)
         
         
         
@@ -195,11 +294,11 @@ def getcurrentposition(port,baudrate,numattempts):
         
 
 ###############################################################################################################        
-#                                           GPS COM PORT INTERACTION                                          #
+#                                           GPS THREAD FOR ARES                                               #
 ###############################################################################################################
 
 class GPSthreadsignals(QObject): 
-    update = pyqtSignal(int,float,float, datetime) #signal to update postion and time
+    update = pyqtSignal(int,float,float, datetime, int, int, float) #signal to update postion and time
 
 
 class GPSthread(QRunnable):
@@ -214,6 +313,9 @@ class GPSthread(QRunnable):
         self.lat = 0
         self.lon = 0
         self.datetime = datetime(1,1,1)
+        self.nsat = -1
+        self.alt = -1E7
+        self.qual = -1
         
         self.signals = GPSthreadsignals()
         
@@ -232,17 +334,20 @@ class GPSthread(QRunnable):
                     sleep(0.5)
             
             else: #different port listed- attempt to connect
-                self.lat, self.lon, cdt, isGood = getcurrentposition(self.comport, self.baudrate, 5)
-                    
+                isGood, data = getcurrentposition(self.comport, self.baudrate, 15) #data -> (lat,lon,dt,nsat,qual,alt)
+                
                 self.keepGoing = True
                 
                 if isGood == 0: #got a valid position/time
                     self.goodConnection = True
-                    self.datetime = cdt #only write to self.datetime if cdt is a valid datetime otherwise causes error w/ slot
-                    self.signals.update.emit(isGood, self.lat, self.lon, self.datetime)
+                    self.lat = data[0]
+                    self.lon = data[1]
+                    self.datetime = data[2] #only write to self.datetime if cdt is a valid datetime otherwise causes error w/ slot
+                    self.nsat = data[3]
+                    self.qual = data[4]
+                    self.alt = data[5]
                     
-                else: #failed to get valid points
-                    self.signals.update.emit(isGood, 0,0, datetime(1,1,1)) #bad connection
+                self.signals.update.emit(isGood, self.lat, self.lon, self.datetime, self.nsat, self.qual, self.alt) #bad connection
                     
                 c = 0
                 if isGood <= 1: #good connection or request timeout
@@ -251,17 +356,21 @@ class GPSthread(QRunnable):
                         
                             try:
                                 nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
-                                clat = nmeaobj.latitude
-                                clon = nmeaobj.longitude
+                                success, data = parsegpsdata(nmeaobj)
                                 
-                                if self.lat != 0 or self.lon != 0:
-                                    self.lat = clat
-                                    self.lon = clon
-                                    clon = self.lon
-                                    self.datetime = nmeaobj.datetime
+                                if success and (self.lat != 0 or self.lon != 0):
+                                    self.lat = data[0]
+                                    self.lon = data[1]
+                                    self.datetime = data[2]
+                                    if data[3] >= 0:
+                                        self.nsat = data[3]
+                                    if data[4] >= 0:
+                                        self.qual = data[4]
+                                    if data[5] >= -1E3:
+                                        self.alt = data[5]
                                 
-                                if c%5 == 0:
-                                    self.signals.update.emit(0, self.lat, self.lon, self.datetime)
+                                if c%10 == 0: #every 5 seconds b/c should be reading 2 sentences per second
+                                    self.signals.update.emit(0, self.lat, self.lon, self.datetime, self.nsat, self.qual, self.alt)
                                 c += 1
                                 
                             except (AttributeError, KeyError, nmea.ParseError):

@@ -1,4 +1,3 @@
-
 #
 #    This file is part of the AXBT Realtime Editing System (ARES).
 #
@@ -139,6 +138,7 @@ def initUI(self):
     
     # variable to prevent recursion errors when updating VHF channel/frequency across multiple tabs
     self.changechannelunlocked = True
+    self.selectedChannel = -2 #-2=no box opened, -1 = box opened, 0 = box closed w/t selection, > 0 = selected channel
 
     # delete all temporary files
     allfilesanddirs = listdir(self.tempdir)
@@ -155,6 +155,9 @@ def initUI(self):
     self.lon = 0.
     self.datetime = datetime(1,1,1) #default date- January 1st, 0001 so default GPS time is outside valid window for use
     self.bearing = 0.
+    self.qual = -1
+    self.nsat = -1
+    self.alt = 0.
     self.sendGPS2settings = False
     self.GPSthread = gps.GPSthread(self.settingsdict["comport"],self.settingsdict['gpsbaud'])
     self.GPSthread.signals.update.connect(self.updateGPSdata) #function located in this file after settingswindow update
@@ -419,8 +422,8 @@ def updateGPSsettings(self,comport,baudrate):
         
         
 #slot to receive (and immediately update) GPS port and baud rate
-@pyqtSlot(int,float,float,datetime)
-def updateGPSdata(self,isGood,lat,lon,gpsdatetime):
+@pyqtSlot(int,float,float,datetime,int,int,float)
+def updateGPSdata(self,isGood,lat,lon,gpsdatetime,nsat,qual,alt):
     if isGood == 0:
         dlat = lat - self.lat #for bearing
         dlon = lon - self.lon
@@ -428,6 +431,9 @@ def updateGPSdata(self,isGood,lat,lon,gpsdatetime):
         self.lat = lat
         self.lon = lon
         self.datetime = gpsdatetime
+        self.nsat = nsat
+        self.qual = qual
+        self.alt = alt
         self.goodPosition = True
         
         if dlat != 0. or dlon != 0.: #only update bearing if position changed
@@ -436,12 +442,12 @@ def updateGPSdata(self,isGood,lat,lon,gpsdatetime):
                 self.bearing += 360
         
         if self.preferencesopened: #only send GPS data to settings window if it's open
-            self.settingsthread.refreshgpsdata(lat, lon, gpsdatetime, True)
+            self.settingsthread.refreshgpsdata(True, lat, lon, gpsdatetime, nsat, qual, alt)
             
     else:
         self.goodPosition = False
         if self.preferencesopened:
-            self.settingsthread.refreshgpsdata(0., 0., datetime(1,1,1), False)
+            self.settingsthread.refreshgpsdata(False, 0., 0., datetime(1,1,1), 0, 0, 0.)
             if self.sendGPS2settings:
                 self.settingsthread.postGPSissue(isGood)
                 self.sendGPS2settings = False

@@ -43,8 +43,8 @@ else:
 from os import path
 from traceback import print_exc as trace_error
 
-from PyQt5.QtWidgets import (QLineEdit, QLabel, QSpinBox, QPushButton, QWidget, QFileDialog, QComboBox, QGridLayout, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QApplication, QMessageBox)
-from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot
+from PyQt5.QtWidgets import (QLineEdit, QLabel, QSpinBox, QPushButton, QWidget, QFileDialog, QComboBox, QGridLayout, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QApplication, QMessageBox, QVBoxLayout)
+from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot, pyqtSignal, QObject
 from PyQt5.QtGui import QColor
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -53,6 +53,7 @@ import matplotlib.pyplot as plt
 import time as timemodule
 import datetime as dt
 import numpy as np
+import wave
 
 import qclib.VHFsignalprocessor as vsp
 import qclib.GPS_COM_interaction as gps
@@ -386,7 +387,7 @@ def startprocessor(self):
                 
             oldsource = self.alltabdata[curtabstr]["source"]
             if oldsource == "none":
-                self.alltabdata[curtabstr]["source"] = newsource #assign current source as processor if previously unassigned
+                pass #wait to change source until method has made it past possible catching points (so user can restart in same tab)
                 
             elif oldsource == "audio": #once you have stopped an audio processing tab, ARES won't let you restart it
                 self.postwarning(f"You cannot restart an audio processing instance after stopping. Please open a new tab to process additional audio files.")
@@ -406,8 +407,45 @@ def startprocessor(self):
                     else:
                         splitpath = path.split(fname)
                         self.defaultfilereaddir = splitpath[0]
-
-                    datasource = datasource + '_' + fname
+                        
+                    #determining which channel to use
+                    #selec-2=no box opened, -1 = box opened, 0 = box closed w/t selection, > 0 = selected channel
+                    try:
+                        file_info = wave.open(fname)
+                    except:
+                        self.postwarning("Unable to read audio file")
+                        return
+                        
+                    nchannels = file_info.getnchannels()
+                    if nchannels == 1:
+                        chselect = -1
+                    else:
+                        if self.selectedChannel >= -1: #active tab already opened 
+                            self.postwarning("An audio channel selector dialog box has already been opened in another tab. Please close that box before processing an audio file with multiple channels in this tab.")
+                            return
+                        else:
+                            self.audioChannelSelector = AudioWindow(nchannels) #creating and connecting window
+                            self.audioChannelSelector.signals.closed.connect(self.audioWindowClosed)
+                            self.audioChannelSelector.show() #bring window to front
+                            self.audioChannelSelector.raise_()
+                            self.audioChannelSelector.activateWindow()
+                            
+                            print("About to enter loop now")
+                            return
+                            while self.selectedChannel < 0:
+                                timemodule.sleep(0.2) #wait for change
+                            
+                            #store selected channel output before resetting so other boxes can be opened
+                            chselect = self.selectedChannel 
+                            self.selectedChannel = -2
+                            if chselect == 0: #if box was closed without hitting select
+                                return
+                                
+                    #format is Audio<channel#><filename> e.g. Audio0002/My/File.WAV
+                    #allowing for 5-digit channels since WAV file channel is a 16-bit integer, can go to 65,536
+                    datasource = f"{datasource}{chselect:05d}{fname}" 
+                    
+                    print(f"Made it here: channel = {chselect}")
                     
                     # building progress bar
                     self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"] = QProgressBar()
@@ -455,6 +493,7 @@ def startprocessor(self):
                 return
 
             #initializing thread, connecting signals/slots
+            self.alltabdata[curtabstr]["source"] = newsource #assign current source as processor if previously unassigned (no restarting in this tab beyond this point)
             vhffreq = self.alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
             self.alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum,  starttime, self.alltabdata[curtabstr]["rawdata"]["istriggered"], self.alltabdata[curtabstr]["rawdata"]["firstpointtime"], self.settingsdict["fftwindow"], self.settingsdict["minfftratio"],self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"],self.settingsdict["triggersiglev"], self.settingsdict["tcoeff"], self.settingsdict["zcoeff"], self.settingsdict["flims"], slash, self.tempdir)
             
@@ -519,8 +558,68 @@ def stopprocessor(self):
         trace_error()
         self.posterror("Failed to stop processor!")
             
+
+
+
+# =============================================================================
+#        POPUP WINDOW FOR AUDIO CHANNEL SELECTION
+# =============================================================================
+
+class AudioWindow(QWidget):
+    
+    def __init__(self, nchannels):
+        super(AudioWindow, self).__init__()
+        
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+        
+        self.selectedChannel = 1
+        self.wasClosed = False
+        
+        self.signals = AudioWindowSignals()
+        
+        self.title = QLabel("Select channel to read\n(for 2-channel WAV files,\nCh1 = left and Ch2 = right):")
+        self.spinbox = QSpinBox()
+        self.spinbox.setMinimum(1)
+        self.spinbox.setMaximum(nchannels)
+        self.spinbox.setSingleStep(1)
+        self.spinbox.setValue(self.selectedChannel)
+        self.finish = QPushButton("Select Channel")
+        self.finish.clicked.connect(self.selectChannel)
+        
+        self.layout.addWidget(self.title)
+        self.layout.addWidget(self.spinbox)
+        self.layout.addWidget(self.finish)
+        
+        self.show()
+        
+        print("Initialized window")
+        
+    def selectChannel(self):
+        self.selectedChannel = self.spinbox.value()
+        self.signals.closed.emit(self.selectedChannel)
+        self.wasClosed = True
+        self.close()
+        
+    # add warning message on exit
+    def closeEvent(self, event):
+        event.accept()
+        if not self.wasClosed:
+            self.signals.closed.emit(0)
+            self.wasClosed = True
             
-            
+#initializing signals for data to be passed back to main loop
+class AudioWindowSignals(QObject): 
+    closed = pyqtSignal(int)
+    
+#slot in main program to close window (only one channel selector window can be open at a time)
+@pyqtSlot(int)
+def audioWindowClosed(self, selectedChannel):
+    self.selectedChannel = selectedChannel
+
+
+
+    
 # =============================================================================
 #        SIGNAL PROCESSOR SLOTS AND OTHER CODE
 # =============================================================================

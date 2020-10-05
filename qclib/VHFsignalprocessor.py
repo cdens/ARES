@@ -284,7 +284,8 @@ class ThreadProcessor(QRunnable):
         
         
         if datasource[:5] == 'Audio':
-            self.audiofile = datasource[6:]
+            self.chselect = int(datasource[5:10])
+            self.audiofile = datasource[10:]
             self.isfromaudio = True
             
             #checking file length- wont process files with more frames than max size
@@ -305,8 +306,11 @@ class ThreadProcessor(QRunnable):
             ndims = len(sndshape) #number of dimensions
             if ndims == 1: #if one channel, use that
                 self.audiostream = snd
-            elif ndims == 2: #if two channels, sum them up
-                self.audiostream = np.sum(snd,axis=1)
+            elif ndims == 2: #if two channels, pick selected channel, otherwise sum
+                if chselect >= 0:
+                    self.audiostream = snd[:,chselect]
+                else:
+                    self.audiostream = np.sum(snd,axis=1)
                     
             else: #if more than 2D- not a valid file
                 self.audiostream = [0]*10000
