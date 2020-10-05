@@ -43,7 +43,7 @@ from traceback import print_exc as trace_error
 class RunProgram(QMainWindow):
     
     #importing methods from other files
-    from ._DASfunctions import (makenewprocessortab, datasourcerefresh, datasourcechange, changefrequencytomatchchannel, changechanneltomatchfrequency, changechannelandfrequency, updatefftsettings, startprocessor, stopprocessor, gettabstrfromnum, triggerUI, updateUIinfo, updateUIfinal, failedWRmessage, updateaudioprogressbar, AudioWindow, AudioWindowSignals, audioWindowClosed, processprofile)
+    from ._DASfunctions import (makenewprocessortab, datasourcerefresh, datasourcechange, changefrequencytomatchchannel, changechanneltomatchfrequency, changechannelandfrequency, updatefftsettings, startprocessor, prepprocessor, runprocessor, stopprocessor, gettabstrfromnum, triggerUI, updateUIinfo, updateUIfinal, failedWRmessage, updateaudioprogressbar, AudioWindow, AudioWindowSignals, audioWindowClosed, processprofile)
     from ._PEfunctions import (makenewproftab, selectdatafile, checkdatainputs_editorinput, continuetoqc, runqc, applychanges, updateprofeditplots, generateprofiledescription, addpoint, removepoint, removerange, on_press_spike, on_release, toggleclimooverlay, CustomToolbar)
     from ._MissionPlotter import (makenewMissiontab, plotMapAxes, updateMissionPlot, updateMissionPosition, updateMissionPlot_line, updateMissionPlot_circle, updateMissionPlot_box, getPoint)
     from ._GUIfunctions import (initUI, loaddata, buildmenu, configureGuiFont, changeGuiFont, openpreferencesthread, updatesettings, settingsclosed, updateGPSdata, updateGPSsettings)

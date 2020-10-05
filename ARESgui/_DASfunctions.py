@@ -367,171 +367,172 @@ def startprocessor(self):
     try:
         curtabstr = "Tab " + str(self.whatTab())
         if not self.alltabdata[curtabstr]["isprocessing"]:
-
-            datasource = self.alltabdata[curtabstr]["datasource"]
-            #running processor here
             
-            #if too many signal processor threads are already running
-            if self.threadpool.activeThreadCount() + 1 > self.threadpool.maxThreadCount():
-                self.postwarning("The maximum number of simultaneous processing threads has been exceeded. This processor will automatically begin collecting data when STOP is selected on another tab.")
-                return
+            status, datasource, newsource = self.prepprocessor(curtabstr)
+            if status:
+                self.runprocessor(curtabstr, datasource, newsource)
                 
-                
-            #checks to make sure that this tab hasn't been used to process from a different source (e.g. user is attempting to switch from "Test" to "Audio" or a receiver), raise error if so
-            if datasource == 'Audio':
-                newsource = "audio"
-            elif datasource == "Test":
-                newsource = "test"
-            else:
-                newsource = "rf"
-                
-            oldsource = self.alltabdata[curtabstr]["source"]
-            if oldsource == "none":
-                pass #wait to change source until method has made it past possible catching points (so user can restart in same tab)
-                
-            elif oldsource == "audio": #once you have stopped an audio processing tab, ARES won't let you restart it
-                self.postwarning(f"You cannot restart an audio processing instance after stopping. Please open a new tab to process additional audio files.")
-                return
-                
-            elif oldsource != newsource: #if "Start" has been selected previously and a source type (test, audio, or rf) was assigned
-                self.postwarning(f"You cannot switch between Test, Audio, and RF data sources after starting processing. Please open a new tab to process a profile from a different source and reset this profile's source to {oldsource} to continue processing.")
-                return
-
-            if datasource == 'Audio': #gets audio file to process
-                try:
-                    # getting filename
-                    fname, ok = QFileDialog.getOpenFileName(self, 'Open file',self.defaultfilereaddir,"Source Data Files (*.WAV *.Wav *.wav *PCM *Pcm *pcm *MP3 *Mp3 *mp3)","",self.fileoptions)
-                    if not ok or fname == "":
-                        self.alltabdata[curtabstr]["isprocessing"] = False
-                        return
-                    else:
-                        splitpath = path.split(fname)
-                        self.defaultfilereaddir = splitpath[0]
-                        
-                    #determining which channel to use
-                    #selec-2=no box opened, -1 = box opened, 0 = box closed w/t selection, > 0 = selected channel
-                    try:
-                        file_info = wave.open(fname)
-                    except:
-                        self.postwarning("Unable to read audio file")
-                        return
-                        
-                    nchannels = file_info.getnchannels()
-                    if nchannels == 1:
-                        chselect = -1
-                    else:
-                        if self.selectedChannel >= -1: #active tab already opened 
-                            self.postwarning("An audio channel selector dialog box has already been opened in another tab. Please close that box before processing an audio file with multiple channels in this tab.")
-                            return
-                        else:
-                            self.audioChannelSelector = AudioWindow(nchannels) #creating and connecting window
-                            self.audioChannelSelector.signals.closed.connect(self.audioWindowClosed)
-                            self.audioChannelSelector.show() #bring window to front
-                            self.audioChannelSelector.raise_()
-                            self.audioChannelSelector.activateWindow()
-                            
-                            print("About to enter loop now")
-                            return
-                            while self.selectedChannel < 0:
-                                timemodule.sleep(0.2) #wait for change
-                            
-                            #store selected channel output before resetting so other boxes can be opened
-                            chselect = self.selectedChannel 
-                            self.selectedChannel = -2
-                            if chselect == 0: #if box was closed without hitting select
-                                return
-                                
-                    #format is Audio<channel#><filename> e.g. Audio0002/My/File.WAV
-                    #allowing for 5-digit channels since WAV file channel is a 16-bit integer, can go to 65,536
-                    datasource = f"{datasource}{chselect:05d}{fname}" 
-                    
-                    print(f"Made it here: channel = {chselect}")
-                    
-                    # building progress bar
-                    self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"] = QProgressBar()
-                    self.alltabdata[curtabstr]["tablayout"].addWidget(
-                        self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"], 7, 2, 1, 7)
-                    self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"].setValue(0)
-                    QApplication.processEvents()
-
-                except Exception:
-                    self.posterror("Failed to execute audio processor!")
-                    trace_error()
-
-            elif datasource != "Test":
-                
-                #checks to make sure current receiver isn't busy
-                for ctab in self.alltabdata:
-                    if ctab != curtabstr and self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == datasource:
-                        self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
-                        return
-                        
-                        
-            #gets current tab number
-            curtabnum = self.alltabdata[curtabstr]["tabnum"]
-            
-            #gets rid of scroll bar on table
-            self.alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            
-            autopopulate = False #tracking whether to autopopulate fields (waits until after thread has been started to prevent from hanging on GPS stream)
-
-            #saving start time for current drop
-            if self.alltabdata[curtabstr]["rawdata"]["starttime"] == 0:
-                starttime = dt.datetime.utcnow()
-                self.alltabdata[curtabstr]["rawdata"]["starttime"] = starttime
-                
-                #autopopulating selected fields
-                if datasource[:5] != 'Audio': #but not if reprocessing from audio file
-                    autopopulate = True
-                        
-            else:
-                starttime = self.alltabdata[curtabstr]["rawdata"]["starttime"]
-                
-            #this should never happen (if there is no DLL loaded there shouldn't be any receivers detected), but just in case
-            if self.wrdll == 0 and datasource != 'Test' and datasource[:5] != 'Audio':
-                self.postwarning("The WiNRADIO driver was not successfully loaded! Please restart the program in order to initiate a processing tab with a connected WiNRADIO")
-                return
-
-            #initializing thread, connecting signals/slots
-            self.alltabdata[curtabstr]["source"] = newsource #assign current source as processor if previously unassigned (no restarting in this tab beyond this point)
-            vhffreq = self.alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
-            self.alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum,  starttime, self.alltabdata[curtabstr]["rawdata"]["istriggered"], self.alltabdata[curtabstr]["rawdata"]["firstpointtime"], self.settingsdict["fftwindow"], self.settingsdict["minfftratio"],self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"],self.settingsdict["triggersiglev"], self.settingsdict["tcoeff"], self.settingsdict["zcoeff"], self.settingsdict["flims"], slash, self.tempdir)
-            
-            self.alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
-            self.alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
-            self.alltabdata[curtabstr]["processor"].signals.triggered.connect(self.triggerUI)
-            self.alltabdata[curtabstr]["processor"].signals.terminated.connect(self.updateUIfinal)
-
-            #connecting audio file-specific signal (to update progress bar on GUI)
-            if datasource[:5] == 'Audio':
-                self.alltabdata[curtabstr]["processor"].signals.updateprogress.connect(self.updateaudioprogressbar)
-            
-            #starting thread
-            self.threadpool.start(self.alltabdata[curtabstr]["processor"])
-            self.alltabdata[curtabstr]["isprocessing"] = True
-            
-            #the code is still running but data collection has at least been initialized. This allows self.savecurrenttab() to save raw data files
-            self.alltabdata[curtabstr]["tabtype"] = "SignalProcessor_completed"
-            
-            #autopopulating fields if necessary
-            if autopopulate:
-                if self.settingsdict["autodtg"]:#populates date and time if requested
-                    curdatestr = str(starttime.year) + str(starttime.month).zfill(2) + str(starttime.day).zfill(2)
-                    self.alltabdata[curtabstr]["tabwidgets"]["dateedit"].setText(curdatestr)
-                    curtimestr = str(starttime.hour).zfill(2) + str(starttime.minute).zfill(2)
-                    self.alltabdata[curtabstr]["tabwidgets"]["timeedit"].setText(curtimestr)
-                if self.settingsdict["autolocation"] and self.settingsdict["comport"] != 'n':
-                    if abs((self.datetime - starttime).total_seconds()) <= 30: #GPS ob within 30 seconds
-                        self.alltabdata[curtabstr]["tabwidgets"]["latedit"].setText(str(round(self.lat,3)))
-                        self.alltabdata[curtabstr]["tabwidgets"]["lonedit"].setText(str(round(self.lon,3)))
-                if self.settingsdict["autoid"]:
-                    self.alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.settingsdict["platformid"])
-            
     except Exception:
         trace_error()
         self.posterror("Failed to start processor!")
         
         
+        
+        
+def prepprocessor(self, curtabstr):
+    datasource = self.alltabdata[curtabstr]["datasource"]
+    #running processor here
+    
+    #if too many signal processor threads are already running
+    if self.threadpool.activeThreadCount() + 1 > self.threadpool.maxThreadCount():
+        self.postwarning("The maximum number of simultaneous processing threads has been exceeded. This processor will automatically begin collecting data when STOP is selected on another tab.")
+        return False,"No","No"
+        
+    #checks to make sure that this tab hasn't been used to process from a different source (e.g. user is attempting to switch from "Test" to "Audio" or a receiver), raise error if so
+    if datasource == 'Audio':
+        newsource = "audio"
+    elif datasource == "Test":
+        newsource = "test"
+    else:
+        newsource = "rf"
+        
+    oldsource = self.alltabdata[curtabstr]["source"]
+    if oldsource == "none":
+        pass #wait to change source until method has made it past possible catching points (so user can restart in same tab)
+        
+    elif oldsource == "audio": #once you have stopped an audio processing tab, ARES won't let you restart it
+        self.postwarning(f"You cannot restart an audio processing instance after stopping. Please open a new tab to process additional audio files.")
+        return False,"No","No"
+        
+    elif oldsource != newsource: #if "Start" has been selected previously and a source type (test, audio, or rf) was assigned
+        self.postwarning(f"You cannot switch between Test, Audio, and RF data sources after starting processing. Please open a new tab to process a profile from a different source and reset this profile's source to {oldsource} to continue processing.")
+        return False,"No","No"
+
+    if datasource == 'Audio': #gets audio file to process
+        try:
+            # getting filename
+            fname, ok = QFileDialog.getOpenFileName(self, 'Open file',self.defaultfilereaddir,"Source Data Files (*.WAV *.Wav *.wav *PCM *Pcm *pcm *MP3 *Mp3 *mp3)","",self.fileoptions)
+            if not ok or fname == "":
+                self.alltabdata[curtabstr]["isprocessing"] = False
+                return False,"No","No"
+            else:
+                splitpath = path.split(fname)
+                self.defaultfilereaddir = splitpath[0]
+                
+            #determining which channel to use
+            #selec-2=no box opened, -1 = box opened, 0 = box closed w/t selection, > 0 = selected channel
+            try:
+                file_info = wave.open(fname)
+            except:
+                self.postwarning("Unable to read audio file")
+                return False,"No","No"
+                
+            nchannels = file_info.getnchannels()
+            if nchannels == 1:
+                datasource = f"Audio-0001{fname}"
+            else:
+                if self.selectedChannel >= -1: #active tab already opened 
+                    self.postwarning("An audio channel selector dialog box has already been opened in another tab. Please close that box before processing an audio file with multiple channels in this tab.")
+                    return False,"No","No"
+                    
+                else:
+                    self.audioChannelSelector = AudioWindow(nchannels, curtabstr, fname) #creating and connecting window
+                    self.audioChannelSelector.signals.closed.connect(self.audioWindowClosed)
+                    self.audioChannelSelector.show() #bring window to front
+                    self.audioChannelSelector.raise_()
+                    self.audioChannelSelector.activateWindow()
+                    
+                    return False,"No","No"
+            
+        except Exception:
+            self.posterror("Failed to execute audio processor!")
+            trace_error()
+
+    elif datasource != "Test":
+        
+        #checks to make sure current receiver isn't busy
+        for ctab in self.alltabdata:
+            if ctab != curtabstr and self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == datasource:
+                self.posterror("This WINRADIO appears to currently be in use! Please stop any other active tabs using this device before proceeding.")
+                return False,"No"
+    
+    #success            
+    return True, datasource, newsource
+    
+    
+    
+    
+def runprocessor(self, curtabstr, datasource, newsource):
+                
+    #gets current tab number
+    curtabnum = self.alltabdata[curtabstr]["tabnum"]
+    
+    #gets rid of scroll bar on table
+    self.alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    
+    autopopulate = False #tracking whether to autopopulate fields (waits until after thread has been started to prevent from hanging on GPS stream)
+
+    #saving start time for current drop
+    if self.alltabdata[curtabstr]["rawdata"]["starttime"] == 0:
+        starttime = dt.datetime.utcnow()
+        self.alltabdata[curtabstr]["rawdata"]["starttime"] = starttime
+        
+        #autopopulating selected fields
+        if datasource[:5] != 'Audio': #but not if reprocessing from audio file
+            autopopulate = True
+                
+    else:
+        starttime = self.alltabdata[curtabstr]["rawdata"]["starttime"]
+        
+    #this should never happen (if there is no DLL loaded there shouldn't be any receivers detected), but just in case
+    if self.wrdll == 0 and datasource != 'Test' and datasource[:5] != 'Audio':
+        self.postwarning("The WiNRADIO driver was not successfully loaded! Please restart the program in order to initiate a processing tab with a connected WiNRADIO")
+        return
+    elif datasource[:5] == 'Audio': #build audio progress bar
+        # building progress bar
+        self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"] = QProgressBar()
+        self.alltabdata[curtabstr]["tablayout"].addWidget(
+            self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"], 7, 2, 1, 7)
+        self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"].setValue(0)
+        QApplication.processEvents()
+        
+        
+    #initializing thread, connecting signals/slots
+    self.alltabdata[curtabstr]["source"] = newsource #assign current source as processor if previously unassigned (no restarting in this tab beyond this point)
+    vhffreq = self.alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
+    self.alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum,  starttime, self.alltabdata[curtabstr]["rawdata"]["istriggered"], self.alltabdata[curtabstr]["rawdata"]["firstpointtime"], self.settingsdict["fftwindow"], self.settingsdict["minfftratio"],self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"],self.settingsdict["triggersiglev"], self.settingsdict["tcoeff"], self.settingsdict["zcoeff"], self.settingsdict["flims"], slash, self.tempdir)
+    
+    self.alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
+    self.alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
+    self.alltabdata[curtabstr]["processor"].signals.triggered.connect(self.triggerUI)
+    self.alltabdata[curtabstr]["processor"].signals.terminated.connect(self.updateUIfinal)
+
+    #connecting audio file-specific signal (to update progress bar on GUI)
+    if datasource[:5] == 'Audio':
+        self.alltabdata[curtabstr]["processor"].signals.updateprogress.connect(self.updateaudioprogressbar)
+    
+    #starting thread
+    self.threadpool.start(self.alltabdata[curtabstr]["processor"])
+    self.alltabdata[curtabstr]["isprocessing"] = True
+    
+    #the code is still running but data collection has at least been initialized. This allows self.savecurrenttab() to save raw data files
+    self.alltabdata[curtabstr]["tabtype"] = "SignalProcessor_completed"
+    
+    #autopopulating fields if necessary
+    if autopopulate:
+        if self.settingsdict["autodtg"]:#populates date and time if requested
+            curdatestr = str(starttime.year) + str(starttime.month).zfill(2) + str(starttime.day).zfill(2)
+            self.alltabdata[curtabstr]["tabwidgets"]["dateedit"].setText(curdatestr)
+            curtimestr = str(starttime.hour).zfill(2) + str(starttime.minute).zfill(2)
+            self.alltabdata[curtabstr]["tabwidgets"]["timeedit"].setText(curtimestr)
+        if self.settingsdict["autolocation"] and self.settingsdict["comport"] != 'n':
+            if abs((self.datetime - starttime).total_seconds()) <= 30: #GPS ob within 30 seconds
+                self.alltabdata[curtabstr]["tabwidgets"]["latedit"].setText(str(round(self.lat,3)))
+                self.alltabdata[curtabstr]["tabwidgets"]["lonedit"].setText(str(round(self.lon,3)))
+        if self.settingsdict["autoid"]:
+            self.alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.settingsdict["platformid"])
+            
+    
         
 #aborting processor
 def stopprocessor(self):
@@ -567,7 +568,7 @@ def stopprocessor(self):
 
 class AudioWindow(QWidget):
     
-    def __init__(self, nchannels):
+    def __init__(self, nchannels, curtabstr, fname):
         super(AudioWindow, self).__init__()
         
         self.layout = QVBoxLayout()
@@ -575,13 +576,16 @@ class AudioWindow(QWidget):
         
         self.selectedChannel = 1
         self.wasClosed = False
+        self.nchannels = nchannels
+        self.fname = fname
+        self.curtabstr = curtabstr
         
         self.signals = AudioWindowSignals()
         
         self.title = QLabel("Select channel to read\n(for 2-channel WAV files,\nCh1 = left and Ch2 = right):")
         self.spinbox = QSpinBox()
         self.spinbox.setMinimum(1)
-        self.spinbox.setMaximum(nchannels)
+        self.spinbox.setMaximum(self.nchannels)
         self.spinbox.setSingleStep(1)
         self.spinbox.setValue(self.selectedChannel)
         self.finish = QPushButton("Select Channel")
@@ -592,30 +596,42 @@ class AudioWindow(QWidget):
         self.layout.addWidget(self.finish)
         
         self.show()
-        
-        print("Initialized window")
+                
         
     def selectChannel(self):
         self.selectedChannel = self.spinbox.value()
-        self.signals.closed.emit(self.selectedChannel)
+        
+        #format is Audio<channel#><filename> e.g. Audio0002/My/File.WAV
+        #allowing for 5-digit channels since WAV file channel is a 16-bit integer, can go to 65,536
+        self.datasource = f"Audio{self.selectedChannel:05d}{self.fname}" 
+        
+        #emit signal
+        self.signals.closed.emit(True, self.curtabstr, self.datasource)
+        
+        #close dialogue box
         self.wasClosed = True
         self.close()
+        
         
     # add warning message on exit
     def closeEvent(self, event):
         event.accept()
         if not self.wasClosed:
-            self.signals.closed.emit(0)
+            self.signals.closed.emit(False, "No", "No")
             self.wasClosed = True
             
 #initializing signals for data to be passed back to main loop
 class AudioWindowSignals(QObject): 
-    closed = pyqtSignal(int)
-    
+    closed = pyqtSignal(int, str, str)
+
+
 #slot in main program to close window (only one channel selector window can be open at a time)
-@pyqtSlot(int)
-def audioWindowClosed(self, selectedChannel):
-    self.selectedChannel = selectedChannel
+@pyqtSlot(int, str, str)
+def audioWindowClosed(self, wasGood, curtabstr, datasource):
+    if wasGood:
+        self.runprocessor(curtabstr, datasource, "audio")
+    
+    
 
 
 

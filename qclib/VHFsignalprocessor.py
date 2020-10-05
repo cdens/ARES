@@ -307,8 +307,8 @@ class ThreadProcessor(QRunnable):
             if ndims == 1: #if one channel, use that
                 self.audiostream = snd
             elif ndims == 2: #if two channels, pick selected channel, otherwise sum
-                if chselect >= 0:
-                    self.audiostream = snd[:,chselect]
+                if self.chselect >= 1:
+                    self.audiostream = snd[:,self.chselect-1]
                 else:
                     self.audiostream = np.sum(snd,axis=1)
                     
