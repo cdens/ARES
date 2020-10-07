@@ -72,7 +72,7 @@ def makenewprocessortab(self):
 
         #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal processor to profile editor
         self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"ProcessorFig":plt.figure(),
-                  "tabtype":"SignalProcessor_incomplete","isprocessing":False, "source":"none"}
+                  "tabtype":"SignalProcessor_incomplete","isprocessing":False, "source":"none", "profileSaved":False}
 
         self.setnewtabcolor(self.alltabdata[curtabstr]["tab"])
         
@@ -92,7 +92,7 @@ def makenewprocessortab(self):
         
         #ADDING FIGURE TO GRID LAYOUT
         self.alltabdata[curtabstr]["ProcessorCanvas"] = FigureCanvas(self.alltabdata[curtabstr]["ProcessorFig"]) 
-        self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["ProcessorCanvas"],0,0,10,1)
+        self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["ProcessorCanvas"],0,0,11,1)
         self.alltabdata[curtabstr]["ProcessorCanvas"].setStyleSheet("background-color:transparent;")
         self.alltabdata[curtabstr]["ProcessorFig"].patch.set_facecolor('None')
 
@@ -128,6 +128,19 @@ def makenewprocessortab(self):
         self.alltabdata[curtabstr]["tabwidgets"]["datasource"].addItem('Audio')
         for wr in winradiooptions:
             self.alltabdata[curtabstr]["tabwidgets"]["datasource"].addItem(wr) #ADD COLOR OPTION
+        
+        #default receiver selection if 1+ receivers are connected and not actively processing
+        self.alltabdata[curtabstr]["datasource"] = "Initializing" #filler value for loop, overwritten after active receivers identified
+        if len(winradiooptions) > 0:
+            isnotbusy = [True]*len(winradiooptions)
+            for iii,serialnum in enumerate(winradiooptions):
+                for ctab in self.alltabdata:
+                    if ctab != curtabstr and  self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == serialnum:
+                        isnotbusy[iii] = False
+            if sum(isnotbusy) > 0:
+                self.alltabdata[curtabstr]["tabwidgets"]["datasource"].setCurrentIndex(np.where(isnotbusy)[0][0]+2)
+        
+        #connect datasource dropdown to changer function, pull current datasource
         self.alltabdata[curtabstr]["tabwidgets"]["datasource"].currentIndexChanged.connect(self.datasourcechange)
         self.alltabdata[curtabstr]["datasource"] = self.alltabdata[curtabstr]["tabwidgets"]["datasource"].currentText()
         
@@ -147,12 +160,14 @@ def makenewprocessortab(self):
         self.alltabdata[curtabstr]["tabwidgets"]["vhffreq"].setValue(170.5)
         self.alltabdata[curtabstr]["tabwidgets"]["vhffreq"].valueChanged.connect(self.changechanneltomatchfrequency)
         
-        self.alltabdata[curtabstr]["tabwidgets"]["startprocessing"] = QPushButton('START') #8
+        self.alltabdata[curtabstr]["tabwidgets"]["startprocessing"] = QPushButton('Start') #8
         self.alltabdata[curtabstr]["tabwidgets"]["startprocessing"].clicked.connect(self.startprocessor)
-        self.alltabdata[curtabstr]["tabwidgets"]["stopprocessing"] = QPushButton('STOP') #9
+        self.alltabdata[curtabstr]["tabwidgets"]["stopprocessing"] = QPushButton('Stop') #9
         self.alltabdata[curtabstr]["tabwidgets"]["stopprocessing"].clicked.connect(self.stopprocessor)
-        self.alltabdata[curtabstr]["tabwidgets"]["processprofile"] = QPushButton('PROCESS PROFILE') #10
+        self.alltabdata[curtabstr]["tabwidgets"]["processprofile"] = QPushButton('Process Profile') #10
         self.alltabdata[curtabstr]["tabwidgets"]["processprofile"].clicked.connect(self.processprofile)
+        self.alltabdata[curtabstr]["tabwidgets"]["saveprofile"] = QPushButton('Save Profile') #21
+        self.alltabdata[curtabstr]["tabwidgets"]["saveprofile"].clicked.connect(self.savedataincurtab)
         
         self.alltabdata[curtabstr]["tabwidgets"]["datetitle"] = QLabel('Date: ') #11
         self.alltabdata[curtabstr]["tabwidgets"]["dateedit"] = QLineEdit('YYYYMMDD') #12
@@ -175,11 +190,11 @@ def makenewprocessortab(self):
         self.alltabdata[curtabstr]["tabwidgets"]["idtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         
         #should be 19 entries 
-        widgetorder = ["datasourcetitle","refreshdataoptions","datasource","channeltitle","freqtitle","vhfchannel","vhffreq","startprocessing","stopprocessing","processprofile","datetitle","dateedit","timetitle","timeedit","lattitle","latedit","lontitle","lonedit","idtitle","idedit"]
-        wrows     = [1,1,2,3,4,3,4,5,6,6,1,1,2,2,3,3,4,4,5,5]
-        wcols     = [3,4,3,3,3,4,4,3,3,6,6,7,6,7,6,7,6,7,6,7]
-        wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-        wcolext   = [1,1,2,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1,1,1]
+        widgetorder = ["datasourcetitle","refreshdataoptions","datasource","channeltitle","freqtitle","vhfchannel","vhffreq","startprocessing","stopprocessing","processprofile","saveprofile","datetitle","dateedit","timetitle","timeedit","lattitle","latedit","lontitle","lonedit","idtitle","idedit"]
+        wrows     = [1,1,2,3,4,3,4,5,6,7,6,1,1,2,2,3,3,4,4,5,5]
+        wcols     = [3,4,3,3,3,4,4,3,3,6,6,6,7,6,7,6,7,6,7,6,7]
+        wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        wcolext   = [1,1,2,1,1,1,1,2,2,2,2,1,1,1,1,1,1,1,1,1,1]
         
 
         #adding user inputs
@@ -200,13 +215,13 @@ def makenewprocessortab(self):
         for ii in range(0,6):
             self.alltabdata[curtabstr]["tabwidgets"]["tableheader"].setSectionResizeMode(ii, QHeaderView.Stretch)  
         self.alltabdata[curtabstr]["tabwidgets"]["table"].setEditTriggers(QTableWidget.NoEditTriggers)
-        self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"]["table"],8,2,2,7)
+        self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["tabwidgets"]["table"],9,2,2,7)
 
         #adjusting stretch factors for all rows/columns
         colstretch = [8,0,1,1,1,1,1,1,1]
         for col,cstr in enumerate(colstretch):
             self.alltabdata[curtabstr]["tablayout"].setColumnStretch(col,cstr)
-        rowstretch = [1,1,1,1,1,1,1,1,10]
+        rowstretch = [1,1,1,1,1,1,1,1,1,10]
         for row,rstr in enumerate(rowstretch):
             self.alltabdata[curtabstr]["tablayout"].setRowStretch(row,rstr)
 
@@ -492,7 +507,7 @@ def runprocessor(self, curtabstr, datasource, newsource):
         # building progress bar
         self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"] = QProgressBar()
         self.alltabdata[curtabstr]["tablayout"].addWidget(
-            self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"], 7, 2, 1, 7)
+            self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"], 8, 2, 1, 7)
         self.alltabdata[curtabstr]["tabwidgets"]["audioprogressbar"].setValue(0)
         QApplication.processEvents()
         
@@ -545,15 +560,6 @@ def stopprocessor(self):
             self.alltabdata[curtabstr]["isprocessing"] = False #processing is done
             self.alltabdata[curtabstr]["processor"].abort()
             self.alltabdata[curtabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-
-            # checks to make sure all other tabs with same receiver are stopped (because the radio device is stopped)
-            # it should be impossible to have multiple 
-            if datasource != 'Test' and datasource != 'Audio':
-                for ctab in self.alltabdata:
-                    if self.alltabdata[ctab]["isprocessing"] and self.alltabdata[ctab]["datasource"] == datasource:
-                        self.alltabdata[ctab]["isprocessing"] = False  # BEFORE ABORT CALL TO FIX DOUBLECLICK ISSUE
-                        self.alltabdata[ctab]["processor"].abort()
-                        self.alltabdata[ctab]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
                 
     except Exception:
         trace_error()
@@ -666,64 +672,66 @@ def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,cact,cratio,ctime,i):
     try:
         plottabstr = self.gettabstrfromnum(plottabnum)
         
-        #defaults so the last depth will be different unless otherwise explicitly stored (z > 0 here)
-        lastdepth = -1
-        if len(self.alltabdata[plottabstr]["rawdata"]["depth"]) > 0:
-            lastdepth = self.alltabdata[plottabstr]["rawdata"]["depth"][-1]
+        if self.alltabdata[plottabstr]["isprocessing"]:
             
-        #only appending a datapoint if depths are different
-        if cdepth != lastdepth:
-            #writing data to tab dictionary
-            self.alltabdata[plottabstr]["rawdata"]["time"] = np.append(self.alltabdata[plottabstr]["rawdata"]["time"],ctime)
-            self.alltabdata[plottabstr]["rawdata"]["depth"] = np.append(self.alltabdata[plottabstr]["rawdata"]["depth"],cdepth)
-            self.alltabdata[plottabstr]["rawdata"]["frequency"] = np.append(self.alltabdata[plottabstr]["rawdata"]["frequency"],cfreq)
-            self.alltabdata[plottabstr]["rawdata"]["temperature"] = np.append(self.alltabdata[plottabstr]["rawdata"]["temperature"],ctemp)
-
-            #plot the most recent point
-            if i%50 == 0: #draw the canvas every fifty points (~5 sec for 10 Hz sampling)
-                try:
-                    del self.alltabdata[plottabstr]["ProcessorAx"].lines[-1]
-                except IndexError:
-                    pass
-                    
-                self.alltabdata[plottabstr]["ProcessorAx"].plot(self.alltabdata[plottabstr]["rawdata"]["temperature"],self.alltabdata[plottabstr]["rawdata"]["depth"],color='k')
-                self.alltabdata[plottabstr]["ProcessorCanvas"].draw()
-
-            #coloring new cell based on whether or not it has good data
-            stars = '------'
-            if np.isnan(ctemp):
-                ctemp = stars
-                cdepth = stars
-                curcolor = QColor(200, 200, 200) #light gray
-            else:
-                curcolor = QColor(204, 255, 220) #light green
-
-            #updating table
-            tabletime = QTableWidgetItem(str(ctime))
-            tabletime.setBackground(curcolor)
-            tabledepth = QTableWidgetItem(str(cdepth))
-            tabledepth.setBackground(curcolor)
-            tablefreq = QTableWidgetItem(str(cfreq))
-            tablefreq.setBackground(curcolor)
-            tabletemp = QTableWidgetItem(str(ctemp))
-            tabletemp.setBackground(curcolor)
-            tableact = QTableWidgetItem(str(cact))
-            tableact.setBackground(curcolor)
-            tablerat = QTableWidgetItem(str(cratio))
-            tablerat.setBackground(curcolor)
-
-            table = self.alltabdata[plottabstr]["tabwidgets"]["table"]
-            crow = table.rowCount()
-            table.insertRow(crow)
-            table.setItem(crow, 0, tabletime)
-            table.setItem(crow, 1, tablefreq)
-            table.setItem(crow, 2, tableact)
-            table.setItem(crow, 3, tablerat)
-            table.setItem(crow, 4, tabledepth)
-            table.setItem(crow, 5, tabletemp)
-            table.scrollToBottom()
-            #        if crow > 20: #uncomment to remove old rows
-            #            table.removeRow(0)
+            #defaults so the last depth will be different unless otherwise explicitly stored (z > 0 here)
+            lastdepth = -1
+            if len(self.alltabdata[plottabstr]["rawdata"]["depth"]) > 0:
+                lastdepth = self.alltabdata[plottabstr]["rawdata"]["depth"][-1]
+                
+            #only appending a datapoint if depths are different
+            if cdepth != lastdepth:
+                #writing data to tab dictionary
+                self.alltabdata[plottabstr]["rawdata"]["time"] = np.append(self.alltabdata[plottabstr]["rawdata"]["time"],ctime)
+                self.alltabdata[plottabstr]["rawdata"]["depth"] = np.append(self.alltabdata[plottabstr]["rawdata"]["depth"],cdepth)
+                self.alltabdata[plottabstr]["rawdata"]["frequency"] = np.append(self.alltabdata[plottabstr]["rawdata"]["frequency"],cfreq)
+                self.alltabdata[plottabstr]["rawdata"]["temperature"] = np.append(self.alltabdata[plottabstr]["rawdata"]["temperature"],ctemp)
+    
+                #plot the most recent point
+                if i%50 == 0: #draw the canvas every fifty points (~5 sec for 10 Hz sampling)
+                    try:
+                        del self.alltabdata[plottabstr]["ProcessorAx"].lines[-1]
+                    except IndexError:
+                        pass
+                        
+                    self.alltabdata[plottabstr]["ProcessorAx"].plot(self.alltabdata[plottabstr]["rawdata"]["temperature"],self.alltabdata[plottabstr]["rawdata"]["depth"],color='k')
+                    self.alltabdata[plottabstr]["ProcessorCanvas"].draw()
+    
+                #coloring new cell based on whether or not it has good data
+                stars = '------'
+                if np.isnan(ctemp):
+                    ctemp = stars
+                    cdepth = stars
+                    curcolor = QColor(200, 200, 200) #light gray
+                else:
+                    curcolor = QColor(204, 255, 220) #light green
+    
+                #updating table
+                tabletime = QTableWidgetItem(str(ctime))
+                tabletime.setBackground(curcolor)
+                tabledepth = QTableWidgetItem(str(cdepth))
+                tabledepth.setBackground(curcolor)
+                tablefreq = QTableWidgetItem(str(cfreq))
+                tablefreq.setBackground(curcolor)
+                tabletemp = QTableWidgetItem(str(ctemp))
+                tabletemp.setBackground(curcolor)
+                tableact = QTableWidgetItem(str(cact))
+                tableact.setBackground(curcolor)
+                tablerat = QTableWidgetItem(str(cratio))
+                tablerat.setBackground(curcolor)
+    
+                table = self.alltabdata[plottabstr]["tabwidgets"]["table"]
+                crow = table.rowCount()
+                table.insertRow(crow)
+                table.setItem(crow, 0, tabletime)
+                table.setItem(crow, 1, tablefreq)
+                table.setItem(crow, 2, tableact)
+                table.setItem(crow, 3, tablerat)
+                table.setItem(crow, 4, tabledepth)
+                table.setItem(crow, 5, tabletemp)
+                table.scrollToBottom()
+                #        if crow > 20: #uncomment to remove old rows
+                #            table.removeRow(0)
             
     except Exception:
         trace_error()
@@ -735,13 +743,8 @@ def updateUIinfo(self,plottabnum,ctemp,cdepth,cfreq,cact,cratio,ctime,i):
 def updateUIfinal(self,plottabnum):
     try:
         plottabstr = self.gettabstrfromnum(plottabnum)
-        try:
-            del self.alltabdata[plottabstr]["ProcessorAx"].lines[-1]
-        except IndexError:
-            pass
-        self.alltabdata[plottabstr]["ProcessorAx"].plot(self.alltabdata[plottabstr]["rawdata"]["temperature"],self.alltabdata[plottabstr]["rawdata"]["depth"],color='k')
-        self.alltabdata[plottabstr]["ProcessorCanvas"].draw()
         self.alltabdata[plottabstr]["isprocessing"] = False
+        timemodule.sleep(0.25)
         self.alltabdata[plottabstr]["tabwidgets"]["table"].setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 
         if "audioprogressbar" in self.alltabdata[plottabstr]["tabwidgets"]:
@@ -852,18 +855,19 @@ def processprofile(self):
         self.alltabdata[curtabstr]["rawdata"]["ID"] = identifier
         
         #saves profile if necessary
-        if self.settingsdict["autosave"]:
-            if not self.savedataincurtab(): #try to save profile, terminate function if failed
-                return
-        else:
-            reply = QMessageBox.question(self, 'Save Raw Data?',
-            "Would you like to save the raw data file? \n Filetype options can be adjusted in File>Raw Data File Types \n All unsaved work will be lost!", 
-            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel, QMessageBox.Cancel)
-            if reply == QMessageBox.Yes:
+        if not self.alltabdata[curtabstr]["profileSaved"]: #only if it hasn't been saved
+            if self.settingsdict["autosave"]:
                 if not self.savedataincurtab(): #try to save profile, terminate function if failed
                     return
-            elif reply == QMessageBox.Cancel:
-                return
+            else:
+                reply = QMessageBox.question(self, 'Save Raw Data?',
+                "Would you like to save the raw data file? \n Filetype options can be adjusted in File>Raw Data File Types \n All unsaved work will be lost!", 
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel, QMessageBox.Cancel)
+                if reply == QMessageBox.Yes:
+                    if not self.savedataincurtab(): #try to save profile, terminate function if failed
+                        return
+                elif reply == QMessageBox.Cancel:
+                    return
                 
         #prevent processor from continuing if there is no data
         if len(rawdepth) == 0:

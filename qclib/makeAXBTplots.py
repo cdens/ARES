@@ -1,4 +1,4 @@
-# =============================================================================
+ # =============================================================================
 #     Code: makeAXBTplots.py
 #     Author: ENS Casey R. Densmore, 20JUN2019
 #     
@@ -56,7 +56,6 @@ from matplotlib.colors import ListedColormap
 
 
 
-
 def makeprofileplot(ax,rawtemperature,rawdepth,temperature,depth,climotempfill,climodepthfill,dtg,matchclimo):
     
     #plotting climatology, raw/QC profiles
@@ -86,6 +85,8 @@ def makeprofileplot(ax,rawtemperature,rawdepth,temperature,depth,climotempfill,c
     ax.grid()
     ax.set_xlim([-3,32])
     ax.set_ylim([-5,1000])
+    ax.set_yticks([0,100,200,400,600,800,1000])
+    ax.set_yticklabels([0,100,200,400,600,800,1000])
     ax.invert_yaxis()
     
     return climohandle

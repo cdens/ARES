@@ -374,6 +374,7 @@ def savedataincurtab(self):
         successval = False #notes that process failed
     finally:
         QApplication.restoreOverrideCursor() #restore cursor here
+        self.alltabdata[curtabstr]["profileSaved"] = True #note that profile has been saved
         
     return successval
     

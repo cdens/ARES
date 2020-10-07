@@ -69,7 +69,7 @@ def makenewproftab(self):
         #tab indexing update
         newtabnum,curtabstr = self.addnewtab()
 
-        self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"tabtype":"ProfileEditorInput", "isprocessing":False, "datasource":None} #isprocessing and datasource are only relevant for processor tabs
+        self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"tabtype":"ProfileEditorInput", "isprocessing":False, "datasource":None, "profileSaved":False} #isprocessing and datasource are only relevant for processor tabs
         self.alltabdata[curtabstr]["tablayout"].setSpacing(10)
         
         self.setnewtabcolor(self.alltabdata[curtabstr]["tab"])
@@ -298,7 +298,7 @@ def continuetoqc(self,curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,t
             climotempfill = climodepthfill = np.array([np.NaN,np.NaN,np.NaN,np.NaN])
             self.posterror("Unable to find/load climatology data for profile location!")
             
-            
+        self.alltabdata[curtabstr]["profileSaved"] = False #profile hasn't been saved yet
         self.alltabdata[curtabstr]["profdata"] = {"temp_raw": rawtemperature, "depth_raw": rawdepth,
                                              "lat": lat, "lon": lon, "year": year, "month": month, "day": day,
                                              "time": time, "DTG": dtg,

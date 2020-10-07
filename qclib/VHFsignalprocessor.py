@@ -500,7 +500,7 @@ class ThreadProcessor(QRunnable):
                         if i % 10 == 0: #updates progress every 10 data points
                             self.signals.updateprogress.emit(self.curtabnum,int(ctime / self.maxtime * 100))
 
-                    #getting current data to sample from audio file !!using indices like this is much more efficient than calculating times and using logical arrays
+                    #getting current data to sample from audio file- using indices like this is much more efficient than calculating times and using logical arrays
                     ctrind = int(np.round(ctime*self.f_s))
                     pmind = int(np.min([np.round(self.f_s*self.fftwindow/2),ctrind,self.lensignal-ctrind-1])) #uses minimum value so no overflow
                     currentdata = self.audiostream[ctrind-pmind:ctrind+pmind]
@@ -550,7 +550,8 @@ class ThreadProcessor(QRunnable):
 
         except Exception: #if the thread encounters an error, terminate
             trace_error()  # if there is an error, terminates processing
-            self.kill(10)
+            if self.keepgoing:
+                self.kill(10)
             
             
             
@@ -560,7 +561,7 @@ class ThreadProcessor(QRunnable):
             self.keepgoing = False  # kills while loop
             curtabnum = self.curtabnum
             
-            timemodule.sleep(0.1) #gives thread 0.1 seconds to finish current segment
+            timemodule.sleep(0.3) #gives thread 0.1 seconds to finish current segment
             
             if reason != 0: #notify event loop that processor failed if non-zero exit code provided
                 self.signals.failed.emit(self.curtabnum, reason)
@@ -568,9 +569,8 @@ class ThreadProcessor(QRunnable):
             self.isrecordingaudio = False
             if not self.isfromaudio and not self.isfromtest:
                 self.wrdll.SetupStreams(self.hradio, None, None, None, None)
-                timemodule.sleep(0.1) #additional 0.1 seconds after stream directed to null before closing wav file
+                timemodule.sleep(0.3) #additional 0.1 seconds after stream directed to null before closing wav file
                 wave.Wave_write.close(self.wavfile)
-                timemodule.sleep(0.1) #additional 0.1 seconds before closing receiver 
                 self.wrdll.CloseRadioDevice(self.hradio)
                 
             self.signals.terminated.emit(curtabnum)  # emits signal that processor has been terminated
