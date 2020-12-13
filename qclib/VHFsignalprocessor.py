@@ -255,6 +255,7 @@ class ThreadProcessor(QRunnable):
         self.firstpointtime = firstpointtime
 
         self.keepgoing = True  # signal connections
+        self.waittoterminate = False #whether to pause on termination of run loop for kill process to complete
         self.signals = ThreadProcessorSignals()
 
         #FFT thresholds
@@ -552,12 +553,16 @@ class ThreadProcessor(QRunnable):
             trace_error()  # if there is an error, terminates processing
             if self.keepgoing:
                 self.kill(10)
+                
+        while self.waittoterminate: #waits for kill process to complete to avoid race conditions with audio buffer callback
+            timemodule.sleep(0.1)
             
             
             
     def kill(self,reason):
         #NOTE: function contains 0.3 seconds of sleep to prevent race conditions between the processor loop, callback function and main GUI event loop
         try:
+            self.waittoterminate = True #keeps run method from terminating until kill process completes
             self.keepgoing = False  # kills while loop
             curtabnum = self.curtabnum
             
@@ -579,6 +584,8 @@ class ThreadProcessor(QRunnable):
         except Exception:
             trace_error()
             self.signals.failed.emit(self.curtabnum, 10)
+            
+        self.waittoterminate = False #allow run method to terminate
         
         
     #terminate the audio file recording (for WINRADIO processor tabs) if it exceeds a certain length set by maxframenum

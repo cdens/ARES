@@ -321,7 +321,7 @@ def configureGuiFont(self):
     self.labelfont.setPointSize(self.settingsdict["fontsize"])        
     
     #list of widgets to be updated for each type:
-    daswidgets = ["datasourcetitle", "refreshdataoptions", "datasource","channeltitle", "freqtitle","vhfchannel", "vhffreq", "startprocessing", "stopprocessing","processprofile", "datetitle","dateedit", "timetitle","timeedit", "lattitle", "latedit", "lontitle","lonedit", "idtitle","idedit", "table", "tableheader"] #signal processor (data acquisition system)
+    daswidgets = ["datasourcetitle", "refreshdataoptions", "datasource","channeltitle", "freqtitle","vhfchannel", "vhffreq", "startprocessing", "stopprocessing","processprofile", "saveprofile", "datetitle","dateedit", "timetitle","timeedit", "lattitle", "latedit", "lontitle","lonedit", "idtitle","idedit", "table", "tableheader"] #signal processor (data acquisition system)
     peinputwidgets = ["title", "lattitle", "latedit", "lontitle", "lonedit", "datetitle", "dateedit", "timetitle", "timeedit", "idtitle", "idedit", "logtitle", "logedit", "logbutton", "submitbutton"]
     pewidgets = ["toggleclimooverlay", "addpoint", "removepoint", "removerange", "sfccorrectiontitle", "sfccorrection", "maxdepthtitle", "maxdepth", "depthdelaytitle", "depthdelay", "runqc", "proftxt", "isbottomstrike", "rcodetitle", "rcode"]
     mpwidgets = ["boundaries", "updateplot", "wboundtitle", "wbound", "eboundtitle", "ebound", "sboundtitle", "sbound", "nboundtitle", "nbound", "updateposition", "overlays", "colortitle", "colors", "linewidthtitle", "linewidth", "radiustitle", "radius", "radiusunits", "addline", "addbox", "addcircle"]
