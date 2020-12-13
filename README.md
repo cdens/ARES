@@ -27,34 +27,18 @@ To obtain full (including realtime processing) support in Linux or MacOS, ARES c
 This program was developed in Python 3.6, with the GUI built using PyQt5.
 
 	
-### Installing on Linux/MacOs:
-```
-pip3 install -r requirements.txt
-```
+### Installing Dependencies:
+Windows: `pip install -r requirements.txt`  
+Linux/MacOs: `pip3 install -r requirements.txt`
 
-NOTE: You may need to install the libgeos library (e.g. *brew install libgeos* on MacOS) for Shapely to work, as well as the Proj library (e.g. *brew install proj* on MacOS) for Cartopy
+NOTE: You may need to install the libgeos library (e.g. *brew install libgeos* on MacOS) for Shapely to work, as well as the Proj library (e.g. *brew install proj* on MacOS) for Cartopy. On Windows, python modules with all dependencies can be installed from wheel files downloadable at https://www.lfd.uci.edu/~gohlke/pythonlibs
 
-### Installing on Windows:
-
-First, comment out the entry for Shapely and Cartopy in `requirements.txt` (using a # sign). Then, install all other modules:
-
-```
-pip install -r requirements.txt
-```
-
-Next, download the Shapely and Cartopy wheels for Python v3.x from https://www.lfd.uci.edu/~gohlke/pythonlibs/- 
-
-Using Shapely as an example:
-
-The file should be named Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl depending on Python version and windows type (e.g. Shapely-1.6.4.post2-cp37-cp37m-win_amd64.whl for Python v3.7, Windows x64-bit).
-
-Finally, install Shapely for Windows with:
+Using the Shapely module as an example, the file should be named Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl depending on Python version and windows type (e.g. Shapely-1.6.4.post2-cp37-cp37m-win_amd64.whl for Python v3.7, Windows x64-bit). After downloading the correct file, install following the syntax below:
 
 ```
 pip install Shapely-1.6.4.post2-cp3x-cp3xm-win(32 or _amd64).whl 
 ```
 
-(again, fill in necessary info and repeat this process for both Shapely and Cartopy).
 
 
 
