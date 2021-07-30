@@ -63,9 +63,11 @@ def initUI(self):
     cursize = QDesktopWidget().availableGeometry(self).size()
     titleBarHeight = self.style().pixelMetric(QStyle.PM_TitleBarHeight, QStyleOptionTitleBar(), self)
     self.resize(cursize.width(), cursize.height()-titleBarHeight)
+    
+    vstr = open('version.txt').read().strip()
 
     # setting title/icon, background color
-    self.setWindowTitle('AXBT Realtime Editing System')
+    self.setWindowTitle('AXBT Realtime Editing System v'+vstr)
     self.setWindowIcon(QIcon('qclib/dropicon.png'))
     p = self.palette()
     p.setColor(self.backgroundRole(), QColor(255,255,255))
@@ -107,7 +109,7 @@ def initUI(self):
         
     
     if cursys() == 'Windows':
-        myappid = 'ARES_v1.0'  # arbitrary string
+        myappid = 'ARES_v' + vstr  # arbitrary string
         windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
         

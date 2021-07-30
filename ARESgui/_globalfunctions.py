@@ -44,6 +44,7 @@ from PyQt5.QtGui import QColor, QPalette, QBrush, QLinearGradient
 
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
+import re
 import time as timemodule
 import datetime as dt
 import numpy as np
@@ -86,14 +87,49 @@ def whatTab(self):
 def renametab(self):
     try:
         curtab = self.tabWidget.currentIndex()
+        curtabstr = "Tab " + str(self.whatTab())
+        badcharlist = "[@!#$%^&*()<>?/\|}{~:]"
+        strcheck = re.compile(badcharlist)
         name, ok = QInputDialog.getText(self, 'Rename Current Tab', 'Enter new tab name:',QLineEdit.Normal,str(self.tabWidget.tabText(curtab)))
         if ok:
-            self.tabWidget.setTabText(curtab,name)
+            if strcheck.search("name") == None:
+                self.tabWidget.setTabText(curtab,name)
+                if not self.alltabdata[curtabstr]["profileSaved"]: #add an asterisk if profile is unsaved
+                    self.add_asterisk()
+            else:
+                self.postwarning("Tab names cannot include the following: " + badcharlist)
     except Exception:
         trace_error()
         self.posterror("Failed to rename the current tab")
         
         
+        
+
+#adds asterisk to tab name when data is unsaved or profile is adjusted
+def add_asterisk(self):
+    try:
+        curtab = self.tabWidget.currentIndex()
+        curtabstr = "Tab " + str(self.whatTab())
+        name = self.tabWidget.tabText(curtab)
+        if not self.alltabdata[curtabstr]["profileSaved"] and name[-1] != '*':
+            self.tabWidget.setTabText(curtab,name+'*')
+    except Exception:
+        trace_error()
+        self.posterror("Failed to add unsave asterisk to tab name")
+    
+
+#removes asterisk from tab name when data is saved successfully
+def remove_asterisk(self):
+    try:
+        curtab = self.tabWidget.currentIndex()
+        curtabstr = "Tab " + str(self.whatTab())
+        name = self.tabWidget.tabText(curtab)
+        if self.alltabdata[curtabstr]["profileSaved"] and name[-1] == '*':
+            self.tabWidget.setTabText(curtab,name[:-1])
+    except Exception:
+        trace_error()
+        self.posterror("Failed to remove unsave asterisk from tab name")
+
 
 #sets default color scheme for tabs
 @staticmethod
@@ -204,7 +240,7 @@ def savedataincurtab(self):
                 
                 dtg = str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4)
                 curtab = self.tabWidget.currentIndex()
-                filename = self.tabWidget.tabText(curtab)
+                filename = self.check_filename(dtg)
                 
                 if self.settingsdict["overlayclimo"]:
                     matchclimo = self.alltabdata[curtabstr]["profdata"]["matchclimo"]
@@ -313,7 +349,7 @@ def savedataincurtab(self):
                     initdatestr = str(year) + '/' + str(month).zfill(2) + '/' + str(day).zfill(2)
                     inittimestr = str(hour).zfill(2) + ':' + str(minute).zfill(2) + ':00'
                     
-                    filename = str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4)
+                    filename = self.check_filename(str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4))
 
                 except Exception:
                     trace_error()
@@ -329,8 +365,12 @@ def savedataincurtab(self):
                         self.posterror("Failed to save LOG file")
                 if self.settingsdict["saveedf"]:
                     try:
-                        # noinspection PyUnboundLocalVariable
-                        tfio.writeedffile(outdir + slash + filename + '.edf',rawtemperature,rawdepth,year,month,day,hour,minute,0,lat,lon, self.settingsdict["tcoeff"], self.settingsdict["zcoeff"]) #lat/lon only parsed if self.settingsdict["saveedf"] is True
+                        #creating comment for data source:
+                        cdatasource = self.alltabdata[curtabstr]["tabwidgets"]["datasource"].currentText()
+                        comments = "//Data source: " + cdatasource
+                        if cdatasource.lower() not in ["audio","test"]:
+                            comments += f", VHF Ch. {self.alltabdata[curtabstr]['tabwidgets']['vhfchannel'].value()} ({self.alltabdata[curtabstr]['tabwidgets']['vhffreq'].value()} MHz)"
+                        tfio.writeedffile(outdir + slash + filename + '.edf',rawtemperature,rawdepth,year,month,day,hour,minute,0,lat,lon, self.settingsdict["tcoeff"], self.settingsdict["zcoeff"],comments) #lat/lon only parsed if self.settingsdict["saveedf"] is True
                     except Exception:
                         trace_error()
                         self.posterror("Failed to save EDF file")
@@ -375,10 +415,25 @@ def savedataincurtab(self):
     finally:
         QApplication.restoreOverrideCursor() #restore cursor here
         self.alltabdata[curtabstr]["profileSaved"] = True #note that profile has been saved
+    
+    if successval:
+        self.alltabdata[curtabstr]["profileSaved"] = True
+        self.remove_asterisk()
         
     return successval
     
-        
+
+    
+#check filename for existing file (avoid overwriting)
+def check_filename(self,originalfilename):
+    new_file_num = 0
+    filename = originalfilename
+    while path.exists(filename):
+        new_file_num += 1
+        filename = f"{originalfilename}_{new_file_num}"
+    
+    return filename
+
         
 #warning message
 @staticmethod

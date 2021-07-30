@@ -69,7 +69,7 @@ def makenewproftab(self):
         #tab indexing update
         newtabnum,curtabstr = self.addnewtab()
 
-        self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"tabtype":"ProfileEditorInput", "isprocessing":False, "datasource":None, "profileSaved":False} #isprocessing and datasource are only relevant for processor tabs
+        self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"tabtype":"ProfileEditorInput", "saved":True, "isprocessing":False, "datasource":None, "profileSaved":True} #isprocessing and datasource are only relevant for processor tabs
         self.alltabdata[curtabstr]["tablayout"].setSpacing(10)
         
         self.setnewtabcolor(self.alltabdata[curtabstr]["tab"])
@@ -297,7 +297,8 @@ def continuetoqc(self,curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,t
             climotemps = climodepths = np.array([np.NaN,np.NaN])
             climotempfill = climodepthfill = np.array([np.NaN,np.NaN,np.NaN,np.NaN])
             self.posterror("Unable to find/load climatology data for profile location!")
-            
+        
+        
         self.alltabdata[curtabstr]["profileSaved"] = False #profile hasn't been saved yet
         self.alltabdata[curtabstr]["profdata"] = {"temp_raw": rawtemperature, "depth_raw": rawdepth,
                                              "lat": lat, "lon": lon, "year": year, "month": month, "day": day,
@@ -341,9 +342,13 @@ def continuetoqc(self,curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,t
         self.alltabdata[curtabstr]["LocFig"].patch.set_facecolor('None')
         self.alltabdata[curtabstr]["LocAx"] = plt.axes()
 
-        #adding toolbar
-        self.alltabdata[curtabstr]["ProfToolbar"] = CustomToolbar(self.alltabdata[curtabstr]["ProfCanvas"], self) #changed from NavigationToolbar to customize w/ class @ end of file
+        #adding toolbar for profile editor
+        self.alltabdata[curtabstr]["ProfToolbar"] = CustomToolbar(self.alltabdata[curtabstr]["ProfCanvas"], self) 
         self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["ProfToolbar"],2,2,1,2)
+        
+        #adding toolbar for location
+        self.alltabdata[curtabstr]["LocToolbar"] = CustomToolbar(self.alltabdata[curtabstr]["LocCanvas"], self) 
+        self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["LocToolbar"],12,3,1,3)
 
         #Create widgets for UI populated with test example
         self.alltabdata[curtabstr]["tabwidgets"] = {}
@@ -436,7 +441,7 @@ def continuetoqc(self,curtabstr,rawtemperature,rawdepth,lat,lon,day,month,year,t
         colstretch = [13,1,1,1,1,1,1,1,1]
         for col,cstr in zip(range(0,len(colstretch)),colstretch):
             self.alltabdata[curtabstr]["tablayout"].setColumnStretch(col,cstr)
-        rowstretch = [0,1,1,1,1,1,1,1,0,1,1,5]
+        rowstretch = [0,1,1,1,1,1,1,1,0,1,1,9,1]
         for row,rstr in zip(range(0,len(rowstretch)),rowstretch):
             self.alltabdata[curtabstr]["tablayout"].setRowStretch(row,rstr)
 
@@ -624,6 +629,9 @@ def updateprofeditplots(self):
             del self.alltabdata[curtabstr]["ProfAx"].lines[-1]
             self.alltabdata[curtabstr]["ProfAx"].plot(tempplot, depthplot, 'r', linewidth=2, label='QC')
             self.alltabdata[curtabstr]["ProfCanvas"].draw()
+            
+        self.alltabdata[curtabstr]["profileSaved"] = False
+        self.add_asterisk()
 
     except Exception:
         trace_error()

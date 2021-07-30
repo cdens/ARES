@@ -73,7 +73,7 @@ def makenewMissiontab(self):
         radius = 120 #km   
             
         #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal Mission to profile editor
-        self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"MissionFig":plt.figure(),
+        self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"MissionFig":plt.figure(), "profileSaved":True,
                   "tabtype":"MissionPlotter","isprocessing":False, "datasource":None, "gpshandle":False, "lineactive":False, "linex":[], "liney":[], "interactivetype":0, "overlayhandles":[], "plotEvent":False}
                   
         self.alltabdata[curtabstr]["colornames"] = ['Black', 'White', 'Blue', 'Green', 'Red', 'Cyan', 'Magenta', 'Yellow']

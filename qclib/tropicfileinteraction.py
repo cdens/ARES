@@ -327,7 +327,7 @@ def readedffile(edffile):
     
     
     
-def writeedffile(edffile,temperature,depth,year,month,day,hour,minute,second,lat,lon,tcoeff,zcoeff):
+def writeedffile(edffile,temperature,depth,year,month,day,hour,minute,second,lat,lon,tcoeff,zcoeff,comments):
     with open(edffile,'w') as f_out:
     
         #writing header, date and time, drop # (bad value)
@@ -371,6 +371,7 @@ Field0           :  Temperature (C)
 Field1           :  Depth (m)
 //
 // This profile has not been quality-controlled.
+""" + comments + """
 //
 Depth (m)  - Temperature (°C)\n""")
 

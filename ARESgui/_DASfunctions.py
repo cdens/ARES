@@ -71,7 +71,7 @@ def makenewprocessortab(self):
         newtabnum,curtabstr = self.addnewtab()
 
         #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal processor to profile editor
-        self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"ProcessorFig":plt.figure(),
+        self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"ProcessorFig":plt.figure(),"profileSaved":True,
                   "tabtype":"SignalProcessor_incomplete","isprocessing":False, "source":"none", "profileSaved":False}
 
         self.setnewtabcolor(self.alltabdata[curtabstr]["tab"])
@@ -386,6 +386,8 @@ def startprocessor(self):
             status, datasource, newsource = self.prepprocessor(curtabstr)
             if status:
                 self.runprocessor(curtabstr, datasource, newsource)
+                self.alltabdata[curtabstr]["profileSaved"] = False
+                self.add_asterisk()
                 
     except Exception:
         trace_error()
