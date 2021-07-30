@@ -24,12 +24,6 @@
 
 from platform import system as cursys
 
-global slash
-if cursys() == 'Windows':
-    slash = '\\'
-else:
-    slash = '/'
-
 from struct import calcsize
 from os import remove, path, listdir
 from traceback import print_exc as trace_error
@@ -74,17 +68,17 @@ def initUI(self):
     self.setPalette(p)
 
     #setting slash dependent on OS
-    global slash
     if cursys() == 'Windows':
-        slash = '\\'
+        self.slash = '\\'
     else:
-        slash = '/'
+        self.slash = '/'
 
     #getting temporary directory for files
-    self.tempdir = gettempdir()
-
+    self.systempdir = gettempdir()
+    self.tempdir = self.systempdir
+    
     #settings file source- places dotfile in user's home directory
-    self.settingsfile = path.expanduser("~") + slash + ".ARESsettings"
+    self.settingsfile = path.expanduser("~") + self.slash + ".ARESsettings"
     
     #setting up file dialog options
     self.fileoptions = QFileDialog.Options()
@@ -143,13 +137,13 @@ def initUI(self):
     self.selectedChannel = -2 #-2=no box opened, -1 = box opened, 0 = box closed w/t selection, > 0 = selected channel
 
     # delete all temporary files
-    allfilesanddirs = listdir(self.tempdir)
+    allfilesanddirs = listdir(self.systempdir)
     for cfile in allfilesanddirs:
         if len(cfile) >= 5:
             cfilestart = cfile[:4]
             cfileext = cfile[-3:]
             if (cfilestart.lower() == 'temp' and cfileext.lower() == 'wav') or (cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt'):
-                remove(self.tempdir + slash + cfile)
+                remove(self.systempdir + self.slash + cfile)
                 
     #initializing GPS thread
     self.goodPosition = False
@@ -327,7 +321,7 @@ def configureGuiFont(self):
     peinputwidgets = ["title", "lattitle", "latedit", "lontitle", "lonedit", "datetitle", "dateedit", "timetitle", "timeedit", "idtitle", "idedit", "logtitle", "logedit", "logbutton", "submitbutton"]
     pewidgets = ["toggleclimooverlay", "addpoint", "removepoint", "removerange", "sfccorrectiontitle", "sfccorrection", "maxdepthtitle", "maxdepth", "depthdelaytitle", "depthdelay", "runqc", "proftxt", "isbottomstrike", "rcodetitle", "rcode"]
     mpwidgets = ["boundaries", "updateplot", "wboundtitle", "wbound", "eboundtitle", "ebound", "sboundtitle", "sbound", "nboundtitle", "nbound", "updateposition", "overlays", "colortitle", "colors", "linewidthtitle", "linewidth", "radiustitle", "radius", "radiusunits", "addline", "addbox", "addcircle"]
-    
+    mtwidgets = ["missionnametitle", "missionname", "tailnumtitle", "tailnum", "missionfoldertitle", "missionfolderbutton", "missionfolder", "maketempdir", "export", "genKML", "genprofplot", "genposplot", "orgfiles", "catjjvv"]
     self.tabWidget.setFont(self.labelfont)
     
     #applying updates to all tabs- method dependent on which type each tab is
@@ -342,6 +336,8 @@ def configureGuiFont(self):
             curwidgets = pewidgets
         elif ctabtype == "MissionPlotter": #Mission planner
             curwidgets = mpwidgets
+        elif ctabtype == "MissionTracker": #mission tracker
+            curwidgets = mtwidgets
         else:
             self.posterror(f"Unable to identify tab type when updating font: {ctabtype}")
             curwidgets = []

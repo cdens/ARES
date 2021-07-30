@@ -88,7 +88,7 @@ def renametab(self):
     try:
         curtab = self.tabWidget.currentIndex()
         curtabstr = "Tab " + str(self.whatTab())
-        badcharlist = "[@!#$%^&*()<>?/\|}{~:]"
+        badcharlist = "[@!#$%^&*()<>?/\|}{:]"
         strcheck = re.compile(badcharlist)
         name, ok = QInputDialog.getText(self, 'Rename Current Tab', 'Enter new tab name:',QLineEdit.Normal,str(self.tabWidget.tabText(curtab)))
         if ok:
@@ -148,6 +148,13 @@ def setnewtabcolor(tab):
 #closes a tab
 def closecurrenttab(self):
     try:
+        
+        curtab = int(self.whatTab())
+        curtabstr = "Tab " + str(curtab)
+        if self.alltabdata[curtabstr]["tabtype"] == "MissionTracker":
+            self.postwarning("You cannot close the mission tracker tab!")
+            return
+        
         reply = QMessageBox.question(self, 'Message',
             "Are you sure to close the current tab?", QMessageBox.Yes | 
             QMessageBox.No, QMessageBox.No)
@@ -155,8 +162,6 @@ def closecurrenttab(self):
         if reply == QMessageBox.Yes:
 
             #getting tab to close
-            curtab = int(self.whatTab())
-            curtabstr = "Tab " + str(curtab)
             indextoclose = self.tabWidget.currentIndex()
             
             #check to make sure there isn't a corresponding processor thread, close if there is
@@ -263,7 +268,7 @@ def savedataincurtab(self):
             if self.settingsdict["savejjvv"]:
                 isbtmstrike = self.alltabdata[curtabstr]["tabwidgets"]["isbottomstrike"].isChecked()
                 try:
-                    tfio.writejjvvfile(outdir + slash + filename + '.jjvv',temperature,depth,day,month,year,time,lat,lon,identifier,isbtmstrike)
+                    tfio.writejjvvfile(outdir + slash + filename + '.jjvv', temperature, depth, day, month, year, time, lat, lon, identifier, isbtmstrike)
                 except Exception:
                     trace_error()
                     self.posterror("Failed to save JJVV file")
@@ -502,13 +507,13 @@ def closeEvent(self, event):
 
         event.accept()
         # delete all temporary files
-        allfilesanddirs = listdir(self.tempdir)
+        allfilesanddirs = listdir(self.systempdir)
         for cfile in allfilesanddirs:
             if len(cfile) >= 5:
                 cfilestart = cfile[:4]
                 cfileext = cfile[-3:]
                 if (cfilestart.lower() == 'temp' and cfileext.lower() == 'wav') or (cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt'):
-                    remove(self.tempdir + slash + cfile)
+                    remove(self.systempdir + slash + cfile)
     else:
         event.ignore() 
 

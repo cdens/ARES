@@ -61,13 +61,19 @@
 #					section 2 in the BUFR message
 #			NOTE: BUFR format version is adjusted within the function, but either BUFR 
 #				versions 3 or 4 may be used.
-#		
+#       o writekmlfile(kmlfile, lon, lat, year, month, day, time)
+#            writes kml file that creates placemarks on google earth
+#       o readkmlfile(kmlfile)
+#            reads a kml file and returns the kml object
 # =============================================================================
 
 import numpy as np
 from datetime import date, datetime
 import chardet
 
+from pykml import parser
+from pykml.factory import KML_ElementMaker as kml
+import lxml
 
 
 #read raw temperature/depth profile from LOGXX.DTA file
@@ -770,3 +776,33 @@ def writebufrfile(bufrfile, temperature, depth, year, month, day, time, lon, lat
         # Section 5 (End)
         bufr.write(b'7777')
 
+        
+        
+def writekmlfile(kmlfile, lon, lat, year, month, day, time):
+    #create the name and coordinate strings of the placemark that will be used
+    pointname = f'{year}{month}{day}{time}.kml'
+    coordstring = f'{lon} {lat}'
+
+    #create a placemark
+    plm = kml.Placemark(kml.Name(pointname), kml.Point(kml.coordinates(coordstring)))
+
+    #get the string of the placemark
+    plm_string = lxml.etree.tostring(plm, pretty_print = True)
+
+    #write the file
+    with open(kmlfile, 'wb') as file:
+        file.write(plm_string)
+
+        
+        
+def readkmlfile(kmlfile):
+    with open(kmlfile, 'rb') as file:
+        data = parser.parse(file)
+
+    #return the kml file object
+    return data
+    
+    
+    
+    
+    

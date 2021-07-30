@@ -96,12 +96,23 @@ def makeprofileplot(ax,rawtemperature,rawdepth,temperature,depth,climotempfill,c
 
 def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord):
     
-    #get basin and region
-    region = gplt.getoceanregion(lon,lat)
+    
+    multipoints = False
+    if len(lon) == len(lat) and len(lon) > 1:
+        multipoints = True
+    elif len(lon) != len(lat):
+        raise Exception("Latitude and longitude lists must be equal in length!")
     
     #set inital axis limits
-    lonrange = [int(round(lon)-dcoord),int(round(lon)+dcoord)]
-    latrange = [int(round(lat)-dcoord),int(round(lat)+dcoord)]
+    if multipoints:
+        lonrange = [int(round(np.min(lon))-dcoord),int(round(np.max(lon))+dcoord)]
+        latrange = [int(round(np.min(lat))-dcoord),int(round(np.max(lat))+dcoord)]
+        region = gplt.getoceanregion(lon[0],lat[0]) #get basin and region for first point
+        
+    else:
+        lonrange = [int(round(lon)-dcoord),int(round(lon)+dcoord)]
+        latrange = [int(round(lat)-dcoord),int(round(lat)+dcoord)]
+        region = gplt.getoceanregion(lon,lat) #get basin and region
 
     #read/generate topography colormap
     topo = np.genfromtxt('qclib/topocolors.txt',delimiter=',')
@@ -116,10 +127,14 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     cbar.set_label('Elevation (m)')
     
     #scatter AXBT location
-    ax.scatter(lon,lat,color='r',marker='x',linewidth=2) 
-    #overlay dtg in text
-    halflim = dcoord*0.309
-    ax.text(lon-halflim,lat+0.75,dtg,fontweight='bold',bbox=dict(facecolor='white', alpha=0.3))
+    if multipoints:
+        for clat,clon in zip(lat,lon):
+            ax.scatter(clon,clat,color='r',marker='x',linewidth=2) 
+    else:
+        ax.scatter(lon,lat,color='r',marker='x',linewidth=2) 
+        #overlay dtg in text
+        halflim = dcoord*0.309
+        ax.text(lon-halflim,lat+0.75,dtg,fontweight='bold',bbox=dict(facecolor='white', alpha=0.3))
     
     #plot formatting
     gplt.setgeoaxes(fig,ax,lonrange,latrange,'x')
@@ -128,3 +143,6 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     gplt.setgeotick(ax)
     ax.grid()
     ax.set_title(f"Region: {region}",fontweight="bold")
+    
+    
+    

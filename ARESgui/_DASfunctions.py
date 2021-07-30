@@ -34,12 +34,6 @@
 
 from platform import system as cursys
 
-global slash
-if cursys() == 'Windows':
-    slash = '\\'
-else:
-    slash = '/'
-
 from os import path
 from traceback import print_exc as trace_error
 
@@ -72,7 +66,7 @@ def makenewprocessortab(self):
 
         #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal processor to profile editor
         self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"ProcessorFig":plt.figure(),"profileSaved":True,
-                  "tabtype":"SignalProcessor_incomplete","isprocessing":False, "source":"none", "profileSaved":False}
+                  "tabtype":"SignalProcessor_incomplete","isprocessing":False, "source":"none"}
 
         self.setnewtabcolor(self.alltabdata[curtabstr]["tab"])
         
@@ -86,7 +80,7 @@ def makenewprocessortab(self):
         #creating new tab, assigning basic info
         self.tabWidget.addTab(self.alltabdata[curtabstr]["tab"],'New Tab') 
         self.tabWidget.setCurrentIndex(newtabnum)
-        self.tabWidget.setTabText(newtabnum, "New Drop #" + str(self.totaltabs))
+        self.tabWidget.setTabText(newtabnum, "New Drop #" + str(self.totaltabs-1)) #-1 because first tab is misison tracker
         self.alltabdata[curtabstr]["tabnum"] = self.totaltabs #assigning unique, unchanging number to current tab
         self.alltabdata[curtabstr]["tablayout"].setSpacing(10)
         
@@ -517,7 +511,7 @@ def runprocessor(self, curtabstr, datasource, newsource):
     #initializing thread, connecting signals/slots
     self.alltabdata[curtabstr]["source"] = newsource #assign current source as processor if previously unassigned (no restarting in this tab beyond this point)
     vhffreq = self.alltabdata[curtabstr]["tabwidgets"]["vhffreq"].value()
-    self.alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum,  starttime, self.alltabdata[curtabstr]["rawdata"]["istriggered"], self.alltabdata[curtabstr]["rawdata"]["firstpointtime"], self.settingsdict["fftwindow"], self.settingsdict["minfftratio"],self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"],self.settingsdict["triggersiglev"], self.settingsdict["tcoeff"], self.settingsdict["zcoeff"], self.settingsdict["flims"], slash, self.tempdir)
+    self.alltabdata[curtabstr]["processor"] = vsp.ThreadProcessor(self.wrdll, datasource, vhffreq, curtabnum,  starttime, self.alltabdata[curtabstr]["rawdata"]["istriggered"], self.alltabdata[curtabstr]["rawdata"]["firstpointtime"], self.settingsdict["fftwindow"], self.settingsdict["minfftratio"],self.settingsdict["minsiglev"], self.settingsdict["triggerfftratio"],self.settingsdict["triggersiglev"], self.settingsdict["tcoeff"], self.settingsdict["zcoeff"], self.settingsdict["flims"], self.slash, self.tempdir)
     
     self.alltabdata[curtabstr]["processor"].signals.failed.connect(self.failedWRmessage) #this signal only for actual processing tabs (not example tabs)
     self.alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)

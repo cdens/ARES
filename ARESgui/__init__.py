@@ -43,6 +43,7 @@ from traceback import print_exc as trace_error
 class RunProgram(QMainWindow):
     
     #importing methods from other files
+    from ._MissionTracker import (maketrackertab, mission_folder_selection, mission_export, gen_kml_files, gen_jjvv_combined, profplotter)
     from ._DASfunctions import (makenewprocessortab, datasourcerefresh, datasourcechange, changefrequencytomatchchannel, changechanneltomatchfrequency, changechannelandfrequency, updatefftsettings, startprocessor, prepprocessor, runprocessor, stopprocessor, gettabstrfromnum, triggerUI, updateUIinfo, updateUIfinal, failedWRmessage, updateaudioprogressbar, AudioWindow, AudioWindowSignals, audioWindowClosed, processprofile)
     from ._PEfunctions import (makenewproftab, selectdatafile, checkdatainputs_editorinput, continuetoqc, runqc, applychanges, updateprofeditplots, generateprofiledescription, addpoint, removepoint, removerange, on_press_spike, on_release, toggleclimooverlay, CustomToolbar)
     from ._MissionPlotter import (makenewMissiontab, plotMapAxes, updateMissionPlot, updateMissionPosition, updateMissionPlot_line, updateMissionPlot_circle, updateMissionPlot_box, getPoint)
@@ -58,7 +59,11 @@ class RunProgram(QMainWindow):
             self.initUI() #creates GUI window
             self.buildmenu() #Creates interactive menu, options to create tabs and run ARES systems
             self.loaddata() #loads climo and bathy data into program first if using the full datasets
-            self.makenewprocessortab() #Opens first tab
+            
+            #opens mission tracker tab and data acquisition tab, sets mission tracker as active tab
+            self.maketrackertab()
+            self.makenewprocessortab() 
+            self.tabWidget.setCurrentIndex(0)
             
         except Exception:
             trace_error()
