@@ -218,9 +218,12 @@ def comparetoclimo(temperature,depth,climotemps,climodepths,climotempfill,climod
 #Data source: NOAA-NGDC: https://www.ngdc.noaa.gov/mgg/global/global.html
 def getoceandepth(lat,lon,dcoord,bathydata):
 
-    #get longitudes and latitudes to pull- the +/- 3 adds a little leeway so no white space appears on the plot after it is resized to correct for latitudinal contraction + plot aspect ratio
-    lonstopull = [d+lon for d in range(-dcoord-4,dcoord+4+1)]
-    latstopull = [d+lat for d in range(-dcoord-1,dcoord+1+1)]
+    #get longitudes and latitudes to pull- the +/- adds a little leeway so no white space appears on the plot after it is resized to correct for latitudinal contraction + plot aspect ratio
+    
+    roundlon = int(np.round(lon))
+    roundlat = int(np.round(lat))
+    lonstopull = [d+roundlon for d in range(-dcoord-4,dcoord+4+1)]
+    latstopull = [d+roundlat for d in range(-dcoord-1,dcoord+1+1)]
     
     exportlon,exportlat,exportrelief = getbathydata(latstopull,lonstopull, bathydata)
     
@@ -241,11 +244,11 @@ def getbathydata(latstopull,lonstopull, bathydata):
     
     #generate exportlon and exportlat
     exportlon = []
-    for l in lonstopull:
-        exportlon.extend(l + bathydata["vals"])
+    for clon in lonstopull:
+        exportlon.extend(clon + bathydata["vals"])
     exportlat = []
-    for l in latstopull:
-        exportlat.extend(l + bathydata["vals"])
+    for clat in latstopull:
+        exportlat.extend(clat + bathydata["vals"])
     
     #generate exportrelief
     nv = len(bathydata["vals"])
@@ -261,7 +264,6 @@ def getbathydata(latstopull,lonstopull, bathydata):
             if clat >= -90 and clat < 90:
                 curbathydata = sio.loadmat(f"qcdata/bathy/b_N{int(clat)}_E{int(clon)}.mat")
                 exportrelief[i*nv:(i+1)*nv,j*nv:(j+1)*nv] = curbathydata["z"].astype('float64') #int16 -> float64
-                
                 
     return exportlon,exportlat,exportrelief
     

@@ -126,20 +126,20 @@ def parsegpsdata(nmeaobj):
         #trying to get each additional parameter separately
         try:
             alt = float(nmeaobj.altitude)
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, TypeError):
             pass
         try:
             nsat = int(nmeaobj.num_sats)
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, TypeError):
             pass
         try:
             qual = int(nmeaobj.gps_qual)
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, TypeError):
             pass
             
         return True, (lat,lon,dt,nsat,qual,alt)
             
-    except (AttributeError, KeyError):
+    except (AttributeError, KeyError, TypeError):
         return False, (lat,lon,dt,nsat,qual,alt)
 
         
@@ -323,64 +323,67 @@ class GPSthread(QRunnable):
         
     def run(self):
         
-        while True: #outer loop- always running
-            
-            self.goodConnection = False
-                    
-            if self.comport.lower() == "n":
-                self.keepGoing = True
-                self.goodConnection = True
-                while self.keepGoing: #loop indefinitely, do nothing, wait for signal to attempt connection with valid GPS receiver
-                    sleep(0.5)
-            
-            else: #different port listed- attempt to connect
-                isGood, data = getcurrentposition(self.comport, self.baudrate, 15) #data -> (lat,lon,dt,nsat,qual,alt)
+        try:
+            while True: #outer loop- always running
                 
-                self.keepGoing = True
-                
-                if isGood == 0: #got a valid position/time
-                    self.goodConnection = True
-                    self.lat = data[0]
-                    self.lon = data[1]
-                    self.datetime = data[2] #only write to self.datetime if cdt is a valid datetime otherwise causes error w/ slot
-                    self.nsat = data[3]
-                    self.qual = data[4]
-                    self.alt = data[5]
-                    
-                self.signals.update.emit(isGood, self.lat, self.lon, self.datetime, self.nsat, self.qual, self.alt) #bad connection
-                    
-                c = 0
-                if isGood <= 1: #good connection or request timeout
-                    with Serial(self.comport, self.baudrate, timeout=1) as ser:
-                        while self.keepGoing: #until interrupted
+                self.goodConnection = False
                         
-                            try:
-                                nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
-                                success, data = parsegpsdata(nmeaobj)
-                                
-                                if success and (self.lat != 0 or self.lon != 0):
-                                    self.lat = data[0]
-                                    self.lon = data[1]
-                                    self.datetime = data[2]
-                                    if data[3] >= 0:
-                                        self.nsat = data[3]
-                                    if data[4] >= 0:
-                                        self.qual = data[4]
-                                    if data[5] >= -1E3:
-                                        self.alt = data[5]
-                                
-                                if c%10 == 0: #every 5 seconds b/c should be reading 2 sentences per second
-                                    self.signals.update.emit(0, self.lat, self.lon, self.datetime, self.nsat, self.qual, self.alt)
-                                c += 1
-                                
-                            except (AttributeError, KeyError, nmea.ParseError):
-                                pass
-                                
-                            except OSError:
-                                pass
-                                
-                else:
-                    self.comport = 'n'
+                if self.comport.lower() == "n":
+                    self.keepGoing = True
+                    self.goodConnection = True
+                    while self.keepGoing: #loop indefinitely, do nothing, wait for signal to attempt connection with valid GPS receiver
+                        sleep(0.5)
+                
+                else: #different port listed- attempt to connect
+                    isGood, data = getcurrentposition(self.comport, self.baudrate, 15) #data -> (lat,lon,dt,nsat,qual,alt)
+                    
+                    self.keepGoing = True
+                    
+                    if isGood == 0: #got a valid position/time
+                        self.goodConnection = True
+                        self.lat = data[0]
+                        self.lon = data[1]
+                        self.datetime = data[2] #only write to self.datetime if cdt is a valid datetime otherwise causes error w/ slot
+                        self.nsat = data[3]
+                        self.qual = data[4]
+                        self.alt = data[5]
+                        
+                    self.signals.update.emit(isGood, self.lat, self.lon, self.datetime, self.nsat, self.qual, self.alt) #bad connection
+                        
+                    c = 0
+                    if isGood <= 1: #good connection or request timeout
+                        with Serial(self.comport, self.baudrate, timeout=1) as ser:
+                            while self.keepGoing: #until interrupted
+                            
+                                try:
+                                    nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
+                                    success, data = parsegpsdata(nmeaobj)
+                                    
+                                    if success and (self.lat != 0 or self.lon != 0):
+                                        self.lat = data[0]
+                                        self.lon = data[1]
+                                        self.datetime = data[2]
+                                        if data[3] >= 0:
+                                            self.nsat = data[3]
+                                        if data[4] >= 0:
+                                            self.qual = data[4]
+                                        if data[5] >= -1E3:
+                                            self.alt = data[5]
+                                    
+                                    if c%10 == 0: #every 5 seconds b/c should be reading 2 sentences per second
+                                        self.signals.update.emit(0, self.lat, self.lon, self.datetime, self.nsat, self.qual, self.alt)
+                                    c += 1
+                                    
+                                except (AttributeError, KeyError, nmea.ParseError, OSError):
+                                    pass
+                                    
+                    else:
+                        self.comport = 'n'
+                        
+        except Exception: #fails to connect to serial port
+            trace_error()
+            self.signals.update.emit(2, 0, 0, datetime(1,1,1), 0, 0, 0)
+            
                             
     @pyqtSlot(str,int)
     def changeConfig(self,comport,baudrate):

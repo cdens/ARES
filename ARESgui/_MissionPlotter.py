@@ -99,7 +99,9 @@ def makenewMissiontab(self):
         self.alltabdata[curtabstr]["MissionCanvas"] = FigureCanvas(self.alltabdata[curtabstr]["MissionFig"]) 
         self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["MissionCanvas"],0,0,20,3)
         self.alltabdata[curtabstr]["MissionCanvas"].setStyleSheet("background-color:transparent;")
-        self.alltabdata[curtabstr]["MissionFig"].patch.set_facecolor('None')     
+        self.alltabdata[curtabstr]["MissionFig"].patch.set_facecolor('None')  
+        self.alltabdata[curtabstr]["MissionToolbar"] = CustomToolbar(self.alltabdata[curtabstr]["MissionCanvas"], self) 
+        self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["MissionToolbar"],21,1,1,1)   
         
         #and add new buttons and other widgets
         self.alltabdata[curtabstr]["tabwidgets"] = {}
@@ -230,7 +232,17 @@ def plotMapAxes(self, fig, ax, extent):
         gl.yformatter = LATITUDE_FORMATTER
         
         
-        #checking that positions are within -180 to 180, -90 to 90, setting plot extent
+        #checking that positions are whole numbers, within -180 to 180, -90 to 90, setting plot extent
+        roundextent = []
+        for i in extent:
+            roundextent.append(int(np.round(i)))
+        extent = roundextent    
+        if extent[0] >= extent[1]:
+            extent[0] -= 1
+            extent[1] += 1
+        if extent[2] >= extent[3]:
+            extent[2] -= 1
+            extent[3] += 1        
         for i,maxval in enumerate([180,180,90,90]):
             if extent[i] > maxval:
                 extent[i] = maxval
