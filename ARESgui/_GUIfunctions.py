@@ -401,6 +401,11 @@ def updatesettings(self,settingsdict):
     #update fft settings for actively processing tabs
     self.updatefftsettings()
     
+    #update tail number for mission planner tab
+    for ctab in self.alltabdata:
+        if self.alltabdata[ctab]["tabtype"] == "MissionTracker":
+            self.alltabdata[ctab]["tabwidgets"]["tailnum"].setText(self.settingsdict['platformid'])
+    
 
 #slot to update main GUI loop if the preferences window has been closed
 @pyqtSlot(bool)

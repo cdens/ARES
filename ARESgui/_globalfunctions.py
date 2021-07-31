@@ -88,7 +88,7 @@ def renametab(self):
     try:
         curtab = self.tabWidget.currentIndex()
         curtabstr = "Tab " + str(self.whatTab())
-        badcharlist = "[@!#$%^&*()<>?/\|}{:]"
+        badcharlist = "[@!#$%^&*()<>?/\|}{~:]"
         strcheck = re.compile(badcharlist)
         name, ok = QInputDialog.getText(self, 'Rename Current Tab', 'Enter new tab name:',QLineEdit.Normal,str(self.tabWidget.tabText(curtab)))
         if ok:

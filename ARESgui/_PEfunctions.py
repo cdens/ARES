@@ -94,6 +94,7 @@ def makenewproftab(self):
         self.alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit('AFNNN')
         self.alltabdata[curtabstr]["tabwidgets"]["logtitle"] = QLabel('Select Source File: ')
         self.alltabdata[curtabstr]["tabwidgets"]["logbutton"] = QPushButton('Browse')
+        self.alltabdata[curtabstr]["tabwidgets"]["logedit"] = QTextEdit('filepath/LOGXXXXX.DTA')
         self.alltabdata[curtabstr]["tabwidgets"]["logedit"].setMaximumHeight(100)
         self.alltabdata[curtabstr]["tabwidgets"]["logbutton"].clicked.connect(self.selectdatafile)
         self.alltabdata[curtabstr]["tabwidgets"]["submitbutton"] = QPushButton('PROCESS PROFILE')

@@ -98,11 +98,14 @@ def makelocationplot(fig,ax,lat,lon,dtg,exportlon,exportlat,exportrelief,dcoord)
     
     
     multipoints = False
-    if len(lon) == len(lat) and len(lon) > 1:
-        multipoints = True
-    elif len(lon) != len(lat):
-        raise Exception("Latitude and longitude lists must be equal in length!")
-    
+    try:
+        if len(lon) == len(lat) and len(lon) > 1:
+            multipoints = True
+        elif len(lon) != len(lat):
+            raise Exception("Latitude and longitude lists must be equal in length!")
+    except TypeError: #if lon/lat are floats (single point) this check raises a TypeError
+        pass
+        
     #set inital axis limits
     if multipoints:
         lonrange = [int(round(np.min(lon))-dcoord),int(round(np.max(lon))+dcoord)]

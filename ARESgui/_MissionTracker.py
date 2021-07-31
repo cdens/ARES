@@ -135,7 +135,7 @@ def mission_folder_selection(self):
         
         outdir = str(QFileDialog.getExistingDirectory(self, "Select directory in which the mission folder will be made",self.defaultfilewritedir,QFileDialog.DontUseNativeDialog))
         
-        badcharlist = "[@!#$%^&*()<>?/\|}{:]"
+        badcharlist = "[@!#$%^&*()<>?/\|}{~:]"
         strcheck = re.compile(badcharlist)
         #checking directory validity
         if strcheck.search("name") != None: #verify its a valid file name
@@ -244,7 +244,7 @@ def mission_export(self):
         
 def gen_kml_files(self,missiondir,kmldir):
     try:
-        finfiles = all_files = [f for f in listdir(missiondir) if path.isfile(missiondir + self.slash + f) and f[-3:].lower() == "fin"]
+        finfiles = [f for f in listdir(missiondir) if path.isfile(missiondir + self.slash + f) and f[-3:].lower() == "fin"]
         for file in finfiles:
             [_,_,day,month,year,time,lat,lon,_] = tfio.readfinfile(missiondir + self.slash + file)
             tfio.writekmlfile(kmldir + self.slash + file[:-3] + '.kml', lon, lat, year, month, day, time)    
@@ -260,7 +260,7 @@ def profplotter(self,missiondir,genprofplot,genposplot):
     
     try:
         header = self.missiondir + self.slash + "mission_"
-        finfiles = all_files = [f for f in listdir(missiondir) if path.isfile(missiondir + self.slash + f) and f[-3:].lower() == "fin"]
+        finfiles = [f for f in listdir(missiondir) if path.isfile(missiondir + self.slash + f) and f[-3:].lower() == "fin"]
         
         alltemps = []
         alldepths = []
@@ -278,7 +278,7 @@ def profplotter(self,missiondir,genprofplot,genposplot):
         
         
         #multi-profile plot
-        if genprofplot:
+        if genprofplot and len(alltemps) > 0:
             figprof, axprof = plt.subplots()
             
             if len(alltemps) >= 17: #only show ddhhmm in legend, make 2 columns
@@ -312,7 +312,7 @@ def profplotter(self,missiondir,genprofplot,genposplot):
         
         
         #location plot
-        if genposplot:
+        if genposplot and len(alltemps) > 0:
             figpos = plt.figure()
             figpos.clear()
             axpos = figpos.add_axes([0.1,0.1,0.85,0.85])
@@ -332,7 +332,7 @@ def profplotter(self,missiondir,genprofplot,genposplot):
 def gen_jjvv_combined(self,missiondir):
     try:
         outfilename = "mission_axbt_drops.jjvv"
-        jjvvfiles = all_files = [f for f in listdir(missiondir) if path.isfile(missiondir + self.slash + f) and f[-4:].lower() == "jjvv"]
+        jjvvfiles = [f for f in listdir(missiondir) if path.isfile(missiondir + self.slash + f) and f[-4:].lower() == "jjvv"]
         
         with open(missiondir + self.slash + outfilename,"w") as f_out:
             f_out.write("UNCLASSIFIED\n\nDATA distribution STATEMENT A: PUBLIC DOMAIN\\\n\n")
