@@ -7,14 +7,14 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{EBBBC69F-B2EE-477C-840F-97022F4AC1C1}
 AppName=ARES
-AppVersion=1.0
-;AppVerName=ARES 1.0
+AppVersion={{ARESVERSION}}
+AppVerName=ARESv{{ARESVERSION}} 
 AppPublisher=Casey Densmore
 DefaultDirName={pf}\ARES
 DefaultGroupName=ARES
-OutputBaseFilename=ARES_win64_installer
-SetupIconFile=C:\Users\cdens\Documents\autoQC\EXEgen_25APR\qclib\dropicon.ico
-Password=5309
+OutputBaseFilename={{ARESINSTALLERFILENAME}}
+SetupIconFile={{ARESPATH}}\qclib\dropicon.ico
+;Password=5309
 Compression=lzma
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64 
@@ -25,11 +25,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 0,6.1
 
 [Files]
-Source: "C:\Users\cdens\Documents\autoQC\EXEgen_25APR\ARES.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\cdens\Documents\autoQC\EXEgen_25APR\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{{ARESPATH}}\ARES.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{{ARESPATH}}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Specify pathway to Win10 x64bit driver .inf and .sys files
-Source: "C:\Users\cdens\Documents\autoQC\EXEgen_25APR\qcdata\Driver\Win10\WRG39WSB.inf"; DestDir: {app}\driver;
-Source: "C:\Users\cdens\Documents\autoQC\EXEgen_25APR\qcdata\Driver\Win10\WRG39WSB_XP64.sys"; DestDir: {app}\driver;
+Source: "{{ARESPATH}}\qcdata\Driver\Win10\WRG39WSB.inf"; DestDir: {app}\driver;
+Source: "{{ARESPATH}}\qcdata\Driver\Win10\WRG39WSB_XP64.sys"; DestDir: {app}\driver;
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
