@@ -5,11 +5,13 @@ import os, shutil
 from platform import system as cursys
 
 
-def copystuff(sourcepath, destpath):
+def copystuff(sourcepath, destpath, slash):
     try:
         shutil.copy(sourcepath, destpath)
     except IsADirectoryError:
-        shutil.copy(sourcepath, destpath)
+        shutil.copytree(sourcepath, destpath)
+    except PermissionError:
+        shutil.copytree(sourcepath+slash, destpath)
         
 def movestuff(sourcepath, destpath):
     shutil.move(sourcepath, destpath)    
@@ -30,7 +32,7 @@ def copy_code(repodir,ares_path,things_to_copy,copy_if_nonexistent,slash):
         sourcepath = repodir + slash + item
         destpath = ares_path + slash + item
         if os.path.exists(destpath): #delete item if it exists
-            deletestuff(itempath)
+            deletestuff(destpath)
         copystuff(sourcepath, destpath)
             
     #only copy over qcdata and testdata if the directories don't exist already
@@ -39,7 +41,7 @@ def copy_code(repodir,ares_path,things_to_copy,copy_if_nonexistent,slash):
         destpath = ares_path + slash + item
         if not os.path.exists(destpath): #delete item if it exists
             copystuff(sourcepath, destpath)
-
+    
 
             
             
@@ -62,11 +64,11 @@ def run_pyinstaller(specfile,slash):
     
     
 #creates configuration file and runs Inno Script Setup
-def run_inno(innofile, installerfile, slash):
-    os.system(f'issc "{innofile}"') #executing inno command
+def run_iss(issfile, installerfile, slash):
+    os.system(f'iscc /Q[p] "{issfile}"') #executing inno command
     
     #moving output file to same directory level, deleting config file
-    deletestuff(innofile)
+    deletestuff(issfile)
     movestuff("Output"+slash+installerfile,installerfile)
     deletestuff("Output")
 
@@ -94,7 +96,7 @@ if __name__ == "__main__":
     #read/ID necessary variables (general path, build path, ARES version + version for filenames)
     bundledir = "ARES_Bundled" #establishing name for bundle directory
     ares_version = open("version.txt","r").read().strip() #app version
-    ares_installer_filename = "ARES_win64_installer_v" + ares_version + ".exe"
+    ares_installer_filename = "ARES_win64_installer_v" + ares_version
     
     os.chdir("..") #backing out one more directory
     ares_path = os.getcwd() + slash + bundledir #full path to bundled version of ares
@@ -109,9 +111,14 @@ if __name__ == "__main__":
     copy_code(repodir,ares_path,things_to_copy,copy_if_nonexistent,slash)
     
     print("Running PyInstaller and reorganizing files")
-    with open(specfile,"w") as f: #writing pyinstaller config file
-        f.write(specfilecontents.replace("{{ARESPATH}}",ares_path))
     os.chdir(bundledir)
+    
+    if cursys() == 'Windows':
+        ares_path_specfile = ares_path.replace("\\","\\\\")
+    else:
+        ares_path_specfile = ares_path
+    with open(specfile,"w") as f: #writing pyinstaller config file
+        f.write(specfilecontents.replace("{{ARESPATH}}",ares_path_specfile))
     run_pyinstaller(specfile,slash)
     os.chdir("..")
     
@@ -123,7 +130,7 @@ if __name__ == "__main__":
         issfilecontents = issfilecontents.replace(var,item)
     with open(issfile,"w") as f:
         f.write(issfile)
-    run_iss()
+    run_iss(issfile, ares_installer_file, slash)
     
     #deleting build folder
     deletestuff(bundledir)
