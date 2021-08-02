@@ -129,7 +129,7 @@ if __name__ == "__main__":
     for var,item in zip(replacevars, replacewith):
         issfilecontents = issfilecontents.replace(var,item)
     with open(issfile,"w") as f:
-        f.write(issfile)
+        f.write(issfilecontents)
     run_iss(issfile, ares_installer_file, slash)
     
     #deleting build folder
