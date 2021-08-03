@@ -45,7 +45,7 @@ def maketrackertab(self):
 
         #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal processor to profile editor
         self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"profileSaved":True,
-                  "tabtype":"MissionTracker","isprocessing":False, "source":"none"}
+                  "tabtype":"MissionTracker","isprocessing":False, "datasource":None}
 
         self.setnewtabcolor(self.alltabdata[curtabstr]["tab"])
                 
