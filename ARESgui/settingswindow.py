@@ -691,11 +691,22 @@ class RunSettings(QMainWindow):
 
     #refreshing the list of available COM ports
     def updategpslist(self):
+        cport = self.settingsdict["comport"]
+        self.gpstabwidgets["comport"].currentIndexChanged.disconnect()
         self.gpstabwidgets["comport"].clear()
         self.gpstabwidgets["comport"].addItem('No COM Port Selected')
         self.settingsdict["comports"],self.settingsdict["comportdetails"] = gps.listcomports()
         for curport in self.settingsdict["comportdetails"]:
             self.gpstabwidgets["comport"].addItem(curport)
+            
+        self.gpstabwidgets["comport"].currentIndexChanged.connect(self.updateportandbaud) #reconnecting update function
+            
+        #sets current datasource as active item in list if it can, otherwise resets back to no data
+        try:
+            self.gpstabwidgets["comport"].setCurrentIndex(self.settingsdict["comports"].index(cport)+1)
+        except ValueError: #ValueError raised if set comport isn't in list of available ports
+            self.gpstabwidgets["comport"].setCurrentIndex(0)
+            self.updateportandbaud()            
             
             
 
@@ -710,12 +721,15 @@ class RunSettings(QMainWindow):
                 lonsign = 'E'
             else:
                 lonsign = 'W'
-            self.gpstabwidgets["gpsdate"].setText("Date/Time: {} UTC".format(curdate))
+            self.gpstabwidgets["gpsdate"].setText("Date/Time: {} UTC".format(curdate.strftime("%Y-%m-%d %H:%M:%S")))
             self.gpstabwidgets["gpslat"].setText("Latitude: {}{}".format(abs(round(lat,3)),latsign))
             self.gpstabwidgets["gpslon"].setText("Longitude: {}{}".format(abs(round(lon,3)),lonsign))
-            self.gpstabwidgets["gpsnsat"].setText(f"Connected Satellites: {nsat}")
-            self.gpstabwidgets["gpsqual"].setText(f"Fix Type: {self.fixtypes[qual]}")
-            self.gpstabwidgets["gpsalt"].setText(f"GPS Altitude: {alt} m")
+            if nsat >= 0:
+                self.gpstabwidgets["gpsnsat"].setText(f"Connected Satellites: {nsat}")
+            if qual >= 0:
+                self.gpstabwidgets["gpsqual"].setText(f"Fix Type: {self.fixtypes[qual]}")
+            if alt > -1E7:
+                self.gpstabwidgets["gpsalt"].setText(f"GPS Altitude: {alt} m")
             
         else:
             self.gpstabwidgets["gpsdate"].setText("Date/Time:")
@@ -730,8 +744,11 @@ class RunSettings(QMainWindow):
     def postGPSissue(self,flag):
         if flag == 1:
             self.posterror("GPS request timed out!")
-        elif flag == 2:
+        elif flag == 2: #passes error message, refreshes list of ports and sets list to 'no port selected'
+            self.updategpslist()
+            self.gpstabwidgets["comport"].setCurrentIndex(0) #leave both setCurrentIndex commands (with one after posterror)- necessary for the function to work properly for some reason
             self.posterror("Unable to communicate with specified COM port!")
+            self.gpstabwidgets["comport"].setCurrentIndex(0)
     
 
 

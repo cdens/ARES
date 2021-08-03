@@ -65,7 +65,7 @@ def maketrackertab(self):
         self.alltabdata[curtabstr]["tabwidgets"]["missionnametitle"] = QLabel('Mission Name:') #1
         self.alltabdata[curtabstr]["tabwidgets"]["missionname"] = QLineEdit('Current_Mission_Name') #2
         
-        self.alltabdata[curtabstr]["tabwidgets"]["tailnumtitle"] = QLabel('Tail NNumber:') #3
+        self.alltabdata[curtabstr]["tabwidgets"]["tailnumtitle"] = QLabel('Tail Number:') #3
         self.alltabdata[curtabstr]["tabwidgets"]["tailnum"] = QLineEdit('AFNNN') #4
         
         self.alltabdata[curtabstr]["tabwidgets"]["missionfoldertitle"] = QLabel('Mission Folder:') #5

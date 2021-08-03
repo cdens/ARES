@@ -171,9 +171,8 @@ class GPSthread(QRunnable):
         
     def run(self):
         
-        try:
-            while True: #outer loop- always running
-                            
+        while True: #outer loop- always running
+            try:
                 if self.comport.lower() == "n":
                     self.keepGoing = True
                     while self.keepGoing: #loop indefinitely, do nothing, wait for signal to attempt connection with GPS receiver
@@ -186,48 +185,50 @@ class GPSthread(QRunnable):
                     
                     with Serial(self.comport, self.baudrate, timeout=1) as ser:
                         while self.keepGoing: #until interrupted
+                            print("new attempt")
                             
                             try:
                                 nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
                                 success, data = self.parsegpsdata(nmeaobj)
+                            except (nmea.ParseError, OSError):
+                                success = False
+                                data = (self.default_lat, self.default_lon, self.default_datetime, self.default_nsat, self.default_qual, self.default_alt)
                                 
-                                if success and (data[0] != 0 or data[1] != 0):
-                                    self.statusflag = 0 #0 = good
-                                    self.nbadsig = 0
-                                    
-                                    #retrieving data
-                                    self.lat = data[0]
-                                    self.lon = data[1]
-                                    self.datetime = data[2]
-                                    if data[3] > self.default_nsat:
-                                        self.nsat = data[3]
-                                    if data[4] > self.default_qual:
-                                        self.qual = data[4]
-                                    if data[5] > self.default_alt:
-                                        self.alt = data[5]
-                                    
-                                else:
-                                    self.statusflag = 1 #no signal
-                                    self.nbadsig += 1 #counting number of bad NMEA sentences
+                            if success and (data[0] != 0 or data[1] != 0):
+                                self.statusflag = 0 #0 = good
+                                self.nbadsig = 0
                                 
-                                cdt = datetime.utcnow()
-                                if (cdt - last_time).total_seconds() >= self.updatenseconds and (self.statusflag == 0 or self.nbadsig > self.badLimit): 
-                                    self.signals.update.emit(self.statusflag, self.lat, self.lon, self.datetime, self.nsat, self.qual, self.alt)
-                                    last_time = cdt
+                                #retrieving data
+                                self.lat = data[0]
+                                self.lon = data[1]
+                                self.datetime = data[2]
+                                if data[3] > self.default_nsat:
+                                    self.nsat = data[3]
+                                if data[4] > self.default_qual:
+                                    self.qual = data[4]
+                                if data[5] > self.default_alt:
+                                    self.alt = data[5]
                                 
-                                #stop attempting to get signal if too many bad attempts
-                                if self.nbadsig > self.killGPSlimit:
-                                    self.keepGoing = False
-                                    self.comport = "n"
-                                    
-                            except nmea.ParseError:
-                                pass
+                            else:
+                                self.statusflag = 1 #no signal
+                                self.nbadsig += 1 #counting number of bad NMEA sentences
+                                                                    
+                            cdt = datetime.utcnow()
+                            if (cdt - last_time).total_seconds() >= self.updatenseconds and (self.statusflag == 0 or self.nbadsig > self.badLimit): 
+                                self.signals.update.emit(self.statusflag, self.lat, self.lon, self.datetime, self.nsat, self.qual, self.alt)
+                                last_time = cdt
+                            
+                            #stop attempting to get signal if too many bad attempts
+                            if self.nbadsig > self.killGPSlimit:
+                                self.keepGoing = False
+                                self.comport = "n"
                                     
                         
                         
-        except Exception: #fails to connect to serial port
-            trace_error()
-            self.signals.update.emit(2, 0, 0, datetime(1,1,1), 0, 0, 0)
+            except Exception: #fails to connect to serial port
+                trace_error()
+                self.comport = "n"
+                self.signals.update.emit(2, 0, 0, datetime(1,1,1), 0, 0, 0)
             
                             
     @pyqtSlot(str,int)
