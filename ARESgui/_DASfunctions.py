@@ -540,6 +540,8 @@ def runprocessor(self, curtabstr, datasource, newsource):
             if abs((self.datetime - starttime).total_seconds()) <= 30: #GPS ob within 30 seconds
                 self.alltabdata[curtabstr]["tabwidgets"]["latedit"].setText(str(round(self.lat,3)))
                 self.alltabdata[curtabstr]["tabwidgets"]["lonedit"].setText(str(round(self.lon,3)))
+            else:
+                self.postwarning("Last GPS fix expired (> 30 seconds old)!")
         if self.settingsdict["autoid"]:
             self.alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.settingsdict["platformid"])
             
