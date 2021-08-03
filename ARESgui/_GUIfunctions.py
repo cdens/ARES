@@ -422,7 +422,7 @@ def updateGPSsettings(self,comport,baudrate):
     self.settingsdict['comport'] = comport
     self.settingsdict['gpsbaud'] = baudrate
     self.sendGPS2settings = True
-        
+    
         
 #slot to receive (and immediately update) GPS port and baud rate
 @pyqtSlot(int,float,float,datetime,int,int,float)
@@ -439,6 +439,8 @@ def updateGPSdata(self,isGood,lat,lon,gpsdatetime,nsat,qual,alt):
         self.alt = alt
         self.goodPosition = True
         
+        self.sendGPS2settings = True #start sending GPS to settings again if its good
+        
         if dlat != 0. or dlon != 0.: #only update bearing if position changed
             self.bearing = 90 - np.arctan2(dlat,dlon)*180/np.pi #oversimplified- doesn't account for cosine contraction
             if self.bearing < 0:
@@ -449,12 +451,11 @@ def updateGPSdata(self,isGood,lat,lon,gpsdatetime,nsat,qual,alt):
             
     else:
         self.goodPosition = False
-        if self.preferencesopened:
+        if self.preferencesopened and self.sendGPS2settings:
             self.settingsthread.refreshgpsdata(False, 0., 0., datetime(1,1,1), 0, 0, 0.)
-            if self.sendGPS2settings:
-                self.settingsthread.postGPSissue(isGood)
-                self.sendGPS2settings = False
-                
+            self.sendGPS2settings = False
+            self.settingsthread.postGPSissue(isGood)
+            
             
 
 
