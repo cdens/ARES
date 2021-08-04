@@ -6,6 +6,8 @@ from platform import system as cursys
 
 
 def copystuff(sourcepath, destpath, slash):
+    if os.path.exists(destpath):
+        deletestuff(destpath)
     try:
         shutil.copy(sourcepath, destpath)
     except IsADirectoryError:
@@ -14,6 +16,8 @@ def copystuff(sourcepath, destpath, slash):
         shutil.copytree(sourcepath+slash, destpath)
         
 def movestuff(sourcepath, destpath):
+    if os.path.exists(destpath):
+        deletestuff(destpath)
     shutil.move(sourcepath, destpath)    
 
 def deletestuff(itempath):
@@ -33,14 +37,14 @@ def copy_code(repodir,ares_path,things_to_copy,copy_if_nonexistent,slash):
         destpath = ares_path + slash + item
         if os.path.exists(destpath): #delete item if it exists
             deletestuff(destpath)
-        copystuff(sourcepath, destpath)
+        copystuff(sourcepath, destpath, slash)
             
     #only copy over qcdata and testdata if the directories don't exist already
     for item in things_to_copy:
         sourcepath = repodir + slash + item
         destpath = ares_path + slash + item
         if not os.path.exists(destpath): #delete item if it exists
-            copystuff(sourcepath, destpath)
+            copystuff(sourcepath, destpath, slash)
     
 
             
@@ -69,6 +73,8 @@ def run_iss(issfile, installerfile, slash):
     
     #moving output file to same directory level, deleting config file
     deletestuff(issfile)
+    
+    installerfile += ".exe"
     movestuff("Output"+slash+installerfile,installerfile)
     deletestuff("Output")
 
@@ -96,7 +102,7 @@ if __name__ == "__main__":
     #read/ID necessary variables (general path, build path, ARES version + version for filenames)
     bundledir = "ARES_Bundled" #establishing name for bundle directory
     ares_version = open("version.txt","r").read().strip() #app version
-    ares_installer_filename = "ARES_win64_installer_v" + ares_version
+    ares_installer_filename = "ARES_win64_installer_v" + ares_version.replace(".","_")
     
     os.chdir("..") #backing out one more directory
     ares_path = os.getcwd() + slash + bundledir #full path to bundled version of ares
@@ -130,7 +136,7 @@ if __name__ == "__main__":
         issfilecontents = issfilecontents.replace(var,item)
     with open(issfile,"w") as f:
         f.write(issfilecontents)
-    run_iss(issfile, ares_installer_file, slash)
+    run_iss(issfile, ares_installer_filename, slash)
     
     #deleting build folder
     deletestuff(bundledir)
