@@ -185,8 +185,7 @@ class GPSthread(QRunnable):
                     
                     with Serial(self.comport, self.baudrate, timeout=1) as ser:
                         while self.keepGoing: #until interrupted
-                            print("new attempt")
-                            
+                        
                             try:
                                 nmeaobj = parse(ser.readline(96).decode('ascii', errors='replace').strip())
                                 success, data = self.parsegpsdata(nmeaobj)
