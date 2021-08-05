@@ -35,6 +35,8 @@ import qclib.tropicfileinteraction as tfio
 import qclib.ocean_climatology_interaction as oci
 import qclib.makeAXBTplots as tplot
 
+import os
+import ARESgui.exportwindow as ex
 
 #generates new mission tracker tab
 def maketrackertab(self):
@@ -42,6 +44,8 @@ def maketrackertab(self):
         newtabnum,curtabstr = self.addnewtab()
         
         self.missiondir_selected = False
+        
+        self.exportopened = False
 
         #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal processor to profile editor
         self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"profileSaved":True,
@@ -78,7 +82,7 @@ def maketrackertab(self):
         
                 
         self.alltabdata[curtabstr]["tabwidgets"]["export"] = QPushButton('Organize/Export Files')  #9
-        self.alltabdata[curtabstr]["tabwidgets"]["export"].clicked.connect(self.mission_export)
+        self.alltabdata[curtabstr]["tabwidgets"]["export"].clicked.connect(self.export_mission)
         self.alltabdata[curtabstr]["tabwidgets"]["genKML"] = QCheckBox('Generate KML files') #10
         self.alltabdata[curtabstr]["tabwidgets"]["genKML"].setChecked(True)
         self.alltabdata[curtabstr]["tabwidgets"]["genprofplot"] = QCheckBox('Generate summary profile plot') #11
@@ -125,6 +129,52 @@ def maketrackertab(self):
         self.posterror("Failed to build new mission tracker tab")
         
         
+    
+def export_mission(self):
+    try:
+        curtabstr = "Tab " + str(self.whatTab())
+        
+        #create flags to know which should be true
+        self.exportinfo = {'genkml':False, 'genprofplot':False, 'genposplot':False, 'catjjvv':False, 'organizefiles':False}
+        if self.alltabdata[curtabstr]['tabwidgets']['genKML'].isChecked() == True:
+            self.exportinfo['genkml'] = True
+            print('genkml == true')
+        if self.alltabdata[curtabstr]['tabwidgets']['genprofplot'].isChecked() == True:
+            self.exportinfo['genprofplot'] = True
+        if self.alltabdata[curtabstr]['tabwidgets']['genposplot'].isChecked() == True:
+            self.exportinfo['genposplot'] = True
+        if self.alltabdata[curtabstr]['tabwidgets']['catjjvv'].isChecked() == True:
+            self.exportinfo['catjjvv'] = True
+        if self.alltabdata[curtabstr]['tabwidgets']['orgfiles'].isChecked() == True:
+            self.exportinfo['organizefiles'] = True
+        
+        files_list = os.listdir(self.missiondir)
+        unique_files_list = []
+        for i in range(len(files_list)):
+            if files_list[i].endswith('.jjvv'): #there should be only 1 jjvv per file
+                unique_files_list.append(files_list[i])
+        for i in range(len(unique_files_list)):
+            unique_files_list[i] = unique_files_list[i].split('.')[0]
+        self.exportinfo['unique files'] = unique_files_list
+        
+        self.openexportthread()
+    
+    except Exception:
+        trace_error()
+        self.posterror('Failed to export mission. Ensure the mission folder is selcted')
+    
+    
+def openexportthread(self):
+    if not self.exportopened: #if the window isn't opened in background- create a new window
+        self.exportopened = True
+        
+        self.exportthread = ex.RunExport(self.exportinfo, self.missiondir, self.slash, self.bathymetrydata)
+        self.exportthread.signals.exportclosed.connect(self.exportwindowclosed)
+        
+    else: #window is opened in background- bring to front
+        self.exportthread.show()
+        self.exportthread.raise_()
+        self.exportthread.activateWindow()
     
 
 #function to select location for mission folder
@@ -346,6 +396,6 @@ def gen_jjvv_combined(self,missiondir):
     
     
     
-    
+
     
     
