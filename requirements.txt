@@ -12,3 +12,4 @@ pykml==0.2.0
 #Shapely #may need to comment and install separately
 #Cartopy #interactive map plots
 #PyInstaller #executable generation only
+#Inno Setup 6 (must add path to ISCC.exe to environmental PATH variable for automatic ARES installer exe generation)
