@@ -25,6 +25,8 @@ import qclib.tropicfileinteraction as tfio
 import qclib.makeAXBTplots as tplot
 import shutil
 from os import path, mkdir, listdir
+from ._globalfunctions import (addnewtab, whatTab, renametab, setnewtabcolor, closecurrenttab, savedataincurtab, postwarning, posterror, postwarning_option, closeEvent, parsestringinputs)
+
 
 
 #   DEFINE CLASS FOR SETTINGS (TO BE CALLED IN THREAD)
@@ -82,9 +84,8 @@ class RunExport(QMainWindow):
         self.kml_checkbuttons = []
         #create the kml column
         if self.exportinfo['genkml'] == True:
-            print('exportinfo genkml == true')
             #create the kml column label
-            widget = QLabel('Include KML?')
+            widget = QLabel('Include\nKML?')
             self.mainLayout.addWidget(widget, 0, 1, 1, 1)
             for i in range(len(self.exportinfo['unique files'])):
                 widget = QCheckBox(' ', self.mainWidget)
@@ -96,7 +97,7 @@ class RunExport(QMainWindow):
         #create the kml column
         if self.exportinfo['genprofplot'] == True:
             #create the kml column label
-            widget = QLabel('Include in Profile Plot?')
+            widget = QLabel('Include in\nProfile Plot?')
             self.mainLayout.addWidget(widget, 0, 2, 1, 1)
             for i in range(len(self.exportinfo['unique files'])):
                 widget = QCheckBox(' ', self.mainWidget)
@@ -109,7 +110,7 @@ class RunExport(QMainWindow):
         #create the kml column
         if self.exportinfo['genposplot'] == True:
             #create the kml column label
-            widget = QLabel('Include in Position Plot?')
+            widget = QLabel('Include in\nPosition Plot?')
             self.mainLayout.addWidget(widget, 0, 3, 1, 1)
             for i in range(len(self.exportinfo['unique files'])):
                 widget = QCheckBox(' ', self.mainWidget)
@@ -121,7 +122,7 @@ class RunExport(QMainWindow):
         #create the kml column
         if self.exportinfo['catjjvv'] == True:
             #create the kml column label
-            widget = QLabel('Include Concatenated JJVV?')
+            widget = QLabel('Include\n in JJVV?')
             self.mainLayout.addWidget(widget, 0, 4, 1, 1)
             for i in range(len(self.exportinfo['unique files'])):
                 widget = QCheckBox(' ', self.mainWidget)
@@ -138,16 +139,20 @@ class RunExport(QMainWindow):
         return 
 
     def exportfiles(self):
-        if self.exportinfo['genkml'] == True:
-            self.exportkml()
-        if self.exportinfo['catjjvv'] == True:
-            self.concatjvv()
-        if self.exportinfo['genprofplot'] == True:
-            self.genprofplot()
-        if self.exportinfo['genposplot'] == True:
-            self.genposplot()
-        if self.exportinfo['organizefiles'] == True:
-            self.organize_files()
+        try:
+            if self.exportinfo['genkml'] == True:
+                self.exportkml()
+            if self.exportinfo['catjjvv'] == True:
+                self.concatjvv()
+            if self.exportinfo['genprofplot'] == True:
+                self.genprofplot()
+            if self.exportinfo['genposplot'] == True:
+                self.genposplot()
+            if self.exportinfo['organizefiles'] == True:
+                self.organize_files()
+        except Exception:
+            trace_error()
+            self.posterror('File mismatch. Ensure that all files are named based off the same time')
         return
     
     def exportkml(self):
@@ -172,7 +177,7 @@ class RunExport(QMainWindow):
             coordstring = f'{lon} {lat}'
             name = str(files[i])
             
-            plm = kml.Placemark(kml.Name(name), kml.Point(kml.coordinates(coordstring)))
+            plm = kml.Placemark(kml.name(name), kml.Point(kml.coordinates(coordstring)))
             kml_points.append(plm)
         
         folder = kml.Folder(*kml_points)

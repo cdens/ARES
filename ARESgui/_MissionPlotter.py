@@ -29,7 +29,7 @@ else:
 from os import path
 from traceback import print_exc as trace_error
 
-from PyQt5.QtWidgets import (QLineEdit, QLabel, QSpinBox, QPushButton, QWidget, QFileDialog, QComboBox, QGridLayout, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QApplication, QMessageBox)
+from PyQt5.QtWidgets import (QLineEdit, QLabel, QSpinBox, QPushButton, QWidget, QFileDialog, QComboBox, QGridLayout, QDoubleSpinBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar, QApplication, QMessageBox, QTextEdit)
 from PyQt5.QtCore import QObjectCleanupHandler, Qt, pyqtSlot
 from PyQt5.QtGui import QColor
 
@@ -75,7 +75,7 @@ def makenewMissiontab(self):
         #also creates proffig and locfig so they will both be ready to go when the tab transitions from signal Mission to profile editor
         self.alltabdata[curtabstr] = {"tab":QWidget(),"tablayout":QGridLayout(),"MissionFig":plt.figure(), "profileSaved":True,
                   "tabtype":"MissionPlotter","isprocessing":False, "datasource":None, "gpshandle":False, "lineactive":False, "linex":[], "liney":[], "interactivetype":0, "overlayhandles":[], "plotEvent":False}
-                  
+        
         self.alltabdata[curtabstr]["colornames"] = ['Black', 'White', 'Blue', 'Green', 'Red', 'Cyan', 'Magenta', 'Yellow']
         self.alltabdata[curtabstr]["colors"] = ['k', 'w', 'b', 'g', 'r', 'c', 'm', 'y']
         self.alltabdata[curtabstr]["units"] = ["km","mi","nm"] 
@@ -167,14 +167,24 @@ def makenewMissiontab(self):
         self.alltabdata[curtabstr]["tabwidgets"]["linewidthtitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.alltabdata[curtabstr]["tabwidgets"]["radiustitle"].setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         
+        #mouse lat and lon
+        #connect the figure to the mouse move event so the x and y coordinate can be tracked
+        self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('motion_notify_event', lambda event: self.mouse_move(event, curtabstr))
+        self.alltabdata[curtabstr]['tabwidgets']['mouselatlabel'] = QLabel('Mouse Lat')
+        self.alltabdata[curtabstr]['tabwidgets']['mouselonlabel'] = QLabel('Mouse Lon')
+        self.alltabdata[curtabstr]['tabwidgets']['mouselat'] = QTextEdit()
+        self.alltabdata[curtabstr]['tabwidgets']['mouselon'] = QTextEdit()
+        self.alltabdata[curtabstr]['tabwidgets']['mouselat'].setReadOnly(True)
+        self.alltabdata[curtabstr]['tabwidgets']['mouselat'].setReadOnly(True)
+        
         
         #should be XX entries 
-        widgetorder = ["boundaries", "updateplot", "wboundtitle", "wbound", "eboundtitle", "ebound", "sboundtitle", "sbound", "nboundtitle", "nbound", "updateposition", "overlays", "colortitle", "colors", "linewidthtitle", "linewidth", "radiustitle", "radius", "radiusunits", "addline", "addbox", "addcircle"]
+        widgetorder = ['mouselatlabel', 'mouselonlabel', 'mouselat', 'mouselon', "boundaries", "updateplot", "wboundtitle", "wbound", "eboundtitle", "ebound", "sboundtitle", "sbound", "nboundtitle", "nbound", "updateposition", "overlays", "colortitle", "colors", "linewidthtitle", "linewidth", "radiustitle", "radius", "radiusunits", "addline", "addbox", "addcircle"]
         
-        wrows     = [2,3,4,4,4,4,5,5,5,5,6,8,9,9,10,10,11,11,11,13,14,15]
-        wcols     = [5,5,5,6,8,9,5,6,8,9,5,5,5,8,5,8,5,8,9,5,5,5] 
-        wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-        wcolext   = [5,5,1,1,1,1,1,1,1,1,5,5,3,2,3,2,3,1,1,5,5,5]
+        wrows     = [0,0,1,1,2,3,4,4,4,4,5,5,5,5,6,8,9,9,10,10,11,11,11,13,14,15]
+        wcols     = [5,7,5,7,5,5,5,6,8,9,5,6,8,9,5,5,5,8,5,8,5,8,9,5,5,5] 
+        wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        wcolext   = [2,2,2,2,5,5,1,1,1,1,1,1,1,1,5,5,3,2,3,2,3,1,1,5,5,5]
         
 
         #adding user inputs
@@ -205,6 +215,8 @@ def makenewMissiontab(self):
         # self.alltabdata[curtabstr]["MissionToolbar"] = CustomToolbar(self.alltabdata[curtabstr]["MissionCanvas"], self) 
         # self.alltabdata[curtabstr]["tablayout"].addWidget(self.alltabdata[curtabstr]["MissionToolbar"],19,1,1,1)
         
+
+        
         
     except Exception: #if something breaks
         trace_error()
@@ -220,6 +232,19 @@ def makenewMissiontab(self):
 #        MISSION PROCESSOR PLOT UPDATER
 # =============================================================================
 
+def mouse_move(self, event, curtabstr):
+    mouse_x = event.xdata
+    mouse_y = event.ydata
+    if mouse_x == None or mouse_y == None:
+        text_x = 'N/A'
+        text_y = 'N/A'
+    else :
+        text_x = str(round(mouse_x, 3))
+        text_y = str(round(mouse_y, 3))
+    
+    self.alltabdata[curtabstr]['tabwidgets']['mouselat'].setText(text_y)
+    self.alltabdata[curtabstr]['tabwidgets']['mouselon'].setText(text_x)
+    return
 
 #populating map axes
 def plotMapAxes(self, fig, ax, extent):

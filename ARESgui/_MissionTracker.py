@@ -138,7 +138,6 @@ def export_mission(self):
         self.exportinfo = {'genkml':False, 'genprofplot':False, 'genposplot':False, 'catjjvv':False, 'organizefiles':False}
         if self.alltabdata[curtabstr]['tabwidgets']['genKML'].isChecked() == True:
             self.exportinfo['genkml'] = True
-            print('genkml == true')
         if self.alltabdata[curtabstr]['tabwidgets']['genprofplot'].isChecked() == True:
             self.exportinfo['genprofplot'] = True
         if self.alltabdata[curtabstr]['tabwidgets']['genposplot'].isChecked() == True:
