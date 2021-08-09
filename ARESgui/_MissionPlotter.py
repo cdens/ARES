@@ -171,20 +171,23 @@ def makenewMissiontab(self):
         #connect the figure to the mouse move event so the x and y coordinate can be tracked
         self.alltabdata[curtabstr]["MissionCanvas"].mpl_connect('motion_notify_event', lambda event: self.mouse_move(event, curtabstr))
         self.alltabdata[curtabstr]['tabwidgets']['mouselatlabel'] = QLabel('Mouse Lat')
+        self.alltabdata[curtabstr]['tabwidgets']['mouselat'] = QLabel()
         self.alltabdata[curtabstr]['tabwidgets']['mouselonlabel'] = QLabel('Mouse Lon')
-        self.alltabdata[curtabstr]['tabwidgets']['mouselat'] = QTextEdit()
-        self.alltabdata[curtabstr]['tabwidgets']['mouselon'] = QTextEdit()
-        self.alltabdata[curtabstr]['tabwidgets']['mouselat'].setReadOnly(True)
-        self.alltabdata[curtabstr]['tabwidgets']['mouselat'].setReadOnly(True)
-        
+        self.alltabdata[curtabstr]['tabwidgets']['mouselon'] = QLabel()
+        self.alltabdata[curtabstr]['tabwidgets']['latlabel'] = QLabel('Lat')
+        self.alltabdata[curtabstr]['tabwidgets']['lat'] = QLabel()
+        self.alltabdata[curtabstr]['tabwidgets']['lonlabel'] = QLabel('Lon')
+        self.alltabdata[curtabstr]['tabwidgets']['lon'] = QLabel()
+        self.alltabdata[curtabstr]['tabwidgets']['altlabel'] = QLabel('Alt')
+        self.alltabdata[curtabstr]['tabwidgets']['alt'] = QLabel()
         
         #should be XX entries 
-        widgetorder = ['mouselatlabel', 'mouselonlabel', 'mouselat', 'mouselon', "boundaries", "updateplot", "wboundtitle", "wbound", "eboundtitle", "ebound", "sboundtitle", "sbound", "nboundtitle", "nbound", "updateposition", "overlays", "colortitle", "colors", "linewidthtitle", "linewidth", "radiustitle", "radius", "radiusunits", "addline", "addbox", "addcircle"]
+        widgetorder = ['mouselatlabel', 'mouselat', 'mouselonlabel', 'mouselon', 'latlabel', 'lat', 'lonlabel', 'lon', 'altlabel', 'alt', "boundaries", "updateplot", "wboundtitle", "wbound", "eboundtitle", "ebound", "sboundtitle", "sbound", "nboundtitle", "nbound", "updateposition", "overlays", "colortitle", "colors", "linewidthtitle", "linewidth", "radiustitle", "radius", "radiusunits", "addline", "addbox", "addcircle"]
         
-        wrows     = [0,0,1,1,2,3,4,4,4,4,5,5,5,5,6,8,9,9,10,10,11,11,11,13,14,15]
-        wcols     = [5,7,5,7,5,5,5,6,8,9,5,6,8,9,5,5,5,8,5,8,5,8,9,5,5,5] 
-        wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-        wcolext   = [2,2,2,2,5,5,1,1,1,1,1,1,1,1,5,5,3,2,3,2,3,1,1,5,5,5]
+        wrows     = [1,1,2,2,3,3,4,4,5,5,6,7,8,8,8,8,9,9,9,9,10,12,13,13,14,14,15,15,15,16,18,19]
+        wcols     = [5,7,5,7,5,7,5,7,5,7,5,5,5,6,8,9,5,6,8,9,5,5,5,8,5,8,5,8,9,5,5,5] 
+        wrext     = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        wcolext   = [2,2,2,2,2,2,2,2,2,2,5,5,1,1,1,1,1,1,1,1,5,5,3,2,3,2,3,1,1,5,5,5]
         
 
         #adding user inputs
@@ -356,6 +359,7 @@ def updateMissionPosition(self):
             #pulling position
             clat = self.lat
             clon = self.lon
+            calt = self.alt
             cb = self.bearing*np.pi/180 #convert to trig-style
             
             #determining arrow size
@@ -387,6 +391,10 @@ def updateMissionPosition(self):
             
             self.alltabdata[curtabstr]["MissionAx"].set_title(f"Current Position: {abs(clat):6.3f}\xB0{ns}, {abs(clon):7.3f}\xB0{ew}",fontweight="bold")
             self.alltabdata[curtabstr]["MissionCanvas"].draw()
+            
+            self.alltabdata[curtabstr]['tabwidgets']['lat'].setText(str(round(clat, 3)))
+            self.alltabdata[curtabstr]['tabwidgets']['lon'].setText(str(round(clon, 3)))
+            self.alltabdata[curtabstr]['tabwidgets']['alt'].setText(str(round(calt, 0)))
             
             
         else:

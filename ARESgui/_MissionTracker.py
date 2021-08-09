@@ -102,7 +102,7 @@ def maketrackertab(self):
         
         #should be 19 entries 
         widgetorder = ["missionnametitle", "missionname", "tailnumtitle", "tailnum", "missionfoldertitle", "missionfolderbutton", "missionfolder", "maketempdir", "export", "genKML", "genprofplot", "genposplot", "orgfiles", "catjjvv"]
-        wrows     = [1,1,2,2,3,3,4,6,8,9,10,11,12,13]
+        wrows     = [1,1,2,2,3,3,4,6,8,9,10,11,13,12]
         wcols     = [1,2,1,2,1,2,1,1,1,1,1,1,1,1]
         wrext     = [1,1,1,1,1,1,2,1,1,1,1,1,1,1]
         wcolext   = [1,2,1,2,1,1,3,2,1,2,2,2,2,2]
