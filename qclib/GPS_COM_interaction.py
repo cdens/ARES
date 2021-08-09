@@ -113,8 +113,7 @@ class GPSthread(QRunnable):
         self.alt = self.default_alt
         self.qual = self.default_qual
         
-        self.badLimit = 15 #15 bad sentences (a couple seconds of data) in a row
-        self.killGPSlimit = 100 #stop even trying to get the GPS signal after 
+        self.badsiglimit = 10
         
         self.signals = GPSthreadsignals()
         
@@ -170,7 +169,8 @@ class GPSthread(QRunnable):
         
         
     def run(self):
-        
+        #initialize lastgooddata. This is overwritten if a good fix is achieved and is reinitialized every time the signal is emitted
+        lastgooddata = (1, self.default_lat, self.default_lon, self.default_datetime, self.default_nsat, self.default_qual, self.default_alt)
         while True: #outer loop- always running
             try:
                 if self.comport.lower() == "n":
@@ -192,36 +192,39 @@ class GPSthread(QRunnable):
                             except (nmea.ParseError, OSError):
                                 success = False
                                 data = (self.default_lat, self.default_lon, self.default_datetime, self.default_nsat, self.default_qual, self.default_alt)
+                            
+                            #if all of the data is acceptable overwrite the lastgooddata with the most recent fix info
+                            if success and (data[0] != 0 and data[1] != 0 and data[3] > -1 and data[4] > -1 and data[5] > -1):
+                                lastgooddata = (0, data[0], data[1], data[2], data[3], data[4], data[5])
                                 
-                            if success and (data[0] != 0 or data[1] != 0):
-                                self.statusflag = 0 #0 = good
-                                self.nbadsig = 0
-                                
-                                #retrieving data
-                                self.lat = data[0]
-                                self.lon = data[1]
-                                self.datetime = data[2]
-                                if data[3] > self.default_nsat:
-                                    self.nsat = data[3]
-                                if data[4] > self.default_qual:
-                                    self.qual = data[4]
-                                if data[5] > self.default_alt:
-                                    self.alt = data[5]
-                                
-                            else:
-                                self.statusflag = 1 #no signal
-                                self.nbadsig += 1 #counting number of bad NMEA sentences
+
                                                                     
                             cdt = datetime.utcnow()
-                            if (cdt - last_time).total_seconds() >= self.updatenseconds and (self.statusflag == 0 or self.nbadsig > self.badLimit): 
-                                self.signals.update.emit(self.statusflag, self.lat, self.lon, self.datetime, self.nsat, self.qual, self.alt)
+                            #only transmit an update if a certain amount of time has passed and it was a good signal
+                            if (cdt - last_time).total_seconds() >= self.updatenseconds:
                                 last_time = cdt
-                            
-                            #stop attempting to get signal if too many bad attempts
-                            if self.nbadsig > self.killGPSlimit:
-                                self.keepGoing = False
-                                self.comport = "n"
+                                #if the lastgooddata has contains a good fix
+                                if lastgooddata[0] == 0:
+                                    #emit the data
+                                    print('updating gps position')
+                                    self.signals.update.emit(lastgooddata[0], lastgooddata[1], lastgooddata[2], lastgooddata[3], lastgooddata[4], lastgooddata[5], lastgooddata[6])
+                                    #reset lastgooddata after the signal is emitted
+                                    lastgooddata = (1, self.default_lat, self.default_lon, self.default_datetime, self.default_nsat, self.default_qual, self.default_alt)
+                                    #reset the number of bad signals (counted based off the number of failed updates)
+                                    self.nbadsig = 0 
+
+                                else:
+                                    #change the 
+                                    print('bad signal')
+                                    self.nbadsig += 1 #add one to the number of bad signals if the update 
                                     
+                            #if there have been too many consecutive failed signals, return to the default
+                            if self.nbadsig > self.badsiglimit:
+                                print('signal timeout')
+                                self.signals.update.emit(lastgooddata[0], lastgooddata[1], lastgooddata[2], lastgooddata[3], lastgooddata[4], lastgooddata[5], lastgooddata[6])
+                                #reset lastgooddata after the info is emitted
+                                lastgooddata = (1, self.default_lat, self.default_lon, self.default_datetime, self.default_nsat, self.default_qual, self.default_alt)
+                                self.nbadsig = 0
                         
                         
             except Exception: #fails to connect to serial port

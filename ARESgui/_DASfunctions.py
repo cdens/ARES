@@ -491,6 +491,11 @@ def runprocessor(self, curtabstr, datasource, newsource):
         #autopopulating selected fields
         if datasource[:5] != 'Audio': #but not if reprocessing from audio file
             autopopulate = True
+    
+    #add gps coordinates if a good gps fix is available
+    if self.goodPosition == True:
+        self.alltabdata[curtabstr]['tabwidgets']['latedit'].setText(str(round(self.lat, 3)))
+        self.alltabdata[curtabstr]['tabwidgets']['lonedit'].setText(str(round(self.lon, 3)))
                 
     else:
         starttime = self.alltabdata[curtabstr]["rawdata"]["starttime"]
@@ -541,7 +546,7 @@ def runprocessor(self, curtabstr, datasource, newsource):
                 self.alltabdata[curtabstr]["tabwidgets"]["latedit"].setText(str(round(self.lat,3)))
                 self.alltabdata[curtabstr]["tabwidgets"]["lonedit"].setText(str(round(self.lon,3)))
             else:
-                self.postwarning("Last GPS fix expired (> 30 seconds old)!")
+                self.postwarning("Last GPS fix expired (> 30 seconds old) \n No Lat/Lon provided")
         if self.settingsdict["autoid"]:
             self.alltabdata[curtabstr]["tabwidgets"]["idedit"].setText(self.settingsdict["platformid"])
             
