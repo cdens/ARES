@@ -801,8 +801,3 @@ def readkmlfile(kmlfile):
 
     #return the kml file object
     return data
-    
-    
-    
-    
-    

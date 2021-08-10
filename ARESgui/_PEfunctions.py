@@ -91,7 +91,7 @@ def makenewproftab(self):
         self.alltabdata[curtabstr]["tabwidgets"]["timetitle"] = QLabel('Time (UTC): ')
         self.alltabdata[curtabstr]["tabwidgets"]["timeedit"] = QLineEdit('HHMM')
         self.alltabdata[curtabstr]["tabwidgets"]["idtitle"] = QLabel('Platform ID/Tail#: ')
-        self.alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit('AFNNN')
+        self.alltabdata[curtabstr]["tabwidgets"]["idedit"] = QLineEdit(self.settingsdict['platformid'])
         self.alltabdata[curtabstr]["tabwidgets"]["logtitle"] = QLabel('Select Source File: ')
         self.alltabdata[curtabstr]["tabwidgets"]["logbutton"] = QPushButton('Browse')
         self.alltabdata[curtabstr]["tabwidgets"]["logedit"] = QTextEdit('filepath/LOGXXXXX.DTA')
@@ -146,6 +146,22 @@ def selectdatafile(self):
         if ok:
             curtabstr = "Tab " + str(self.whatTab())
             self.alltabdata[curtabstr]["tabwidgets"]["logedit"].setText(fname)
+            
+            #populate the menu with the information from the file
+            if fname.lower().endswith('.edf'):
+                print('autopopulating info')
+                _,_,year,month,day,hour,minute,second,lat,lon = tfio.readedffile(fname)
+                lat = str(lat)
+                lon = str(lon)
+                datestr = f'{year}{month}{day}'
+                timestr = f'{hour}{minute}'
+                
+                self.alltabdata[curtabstr]['tabwidgets']['latedit'].setText(lat)
+                self.alltabdata[curtabstr]['tabwidgets']['lonedit'].setText(lon)
+                self.alltabdata[curtabstr]['tabwidgets']['dateedit'].setText(datestr)
+                self.alltabdata[curtabstr]['tabwidgets']['timeedit'].setText(timestr)
+
+                
             
             #getting file directory
             if fname != "":
