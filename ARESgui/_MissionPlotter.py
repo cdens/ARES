@@ -353,8 +353,12 @@ def updateMissionPlot(self):
 def updateMissionPosition(self):
     
     try:
+        curtabstr = "Tab " + str(self.whatTab())
+        
+        #plot all of the previous fix positions
+        self.alltabdata[curtabstr]['trackpoints'] = self.alltabdata[curtabstr]['MissionAx'].scatter(self.lonlog, self.latlog, s = 10, c = 'black', zorder = 101)
+
         if self.goodPosition:
-            curtabstr = "Tab " + str(self.whatTab())
             
             #pulling position
             clat = self.lat
@@ -394,7 +398,7 @@ def updateMissionPosition(self):
             
             self.alltabdata[curtabstr]['tabwidgets']['lat'].setText(str(round(clat, 3)))
             self.alltabdata[curtabstr]['tabwidgets']['lon'].setText(str(round(clon, 3)))
-            self.alltabdata[curtabstr]['tabwidgets']['alt'].setText(str(round(calt, 0)))
+            self.alltabdata[curtabstr]['tabwidgets']['alt'].setText(str(round(calt, 1)))
             
             
         else:

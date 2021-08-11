@@ -144,7 +144,12 @@ def initUI(self):
             cfileext = cfile[-3:]
             if (cfilestart.lower() == 'temp' and cfileext.lower() == 'wav') or (cfilestart.lower() == 'sigd' and cfileext.lower() == 'txt'):
                 remove(self.systempdir + self.slash + cfile)
-                
+    
+    #initialize the gps log that is used in the mission plotter
+    self.latlog = []
+    self.lonlog = []
+    self.altlog = []
+    
     #initializing GPS thread
     self.goodPosition = False
     self.lat = 0.
@@ -158,6 +163,8 @@ def initUI(self):
     self.GPSthread = gps.GPSthread(self.settingsdict["comport"],self.settingsdict['gpsbaud'])
     self.GPSthread.signals.update.connect(self.updateGPSdata) #function located in this file after settingswindow update
     self.threadpool.start(self.GPSthread)
+    
+
 
     # loading WiNRADIO DLL API
     if cursys() == 'Windows':
@@ -438,6 +445,11 @@ def updateGPSdata(self,isGood,lat,lon,gpsdatetime,nsat,qual,alt):
         self.qual = qual
         self.alt = alt
         self.goodPosition = True
+        
+        #add to the lat log
+        self.latlog.append(lat)
+        self.lonlog.append(lon)
+        self.altlog.append(alt)
         
         self.sendGPS2settings = True #start sending GPS to settings again if its good
         
