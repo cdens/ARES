@@ -29,7 +29,7 @@ def deletestuff(itempath):
 
         
 #copies code from github directory to separate directory, only copying necessary files
-def copy_code(repodir,ares_path,things_to_copy,copy_if_nonexistent,slash):
+def copy_code(repodir,ares_path,data_path,things_to_copy,copy_if_nonexistent,slash):
     
     #copy over relevant code to new directory
     for item in things_to_copy:
@@ -106,6 +106,7 @@ if __name__ == "__main__":
     
     os.chdir("..") #backing out one more directory
     ares_path = os.getcwd() + slash + bundledir #full path to bundled version of ares
+    data_path = os.getcwd() + slash + "ARES_Data"
     
     #creating bundling directory if it doesn't exist
     if not os.path.exists(ares_path):
@@ -114,7 +115,7 @@ if __name__ == "__main__":
     print(f"Copying ARES code (and data?) to bundling directory {bundledir}")
     things_to_copy = ["ARESgui","License_GNU_GPL_v3.txt","main.py","qclib","README.md","version.txt"]
     copy_if_nonexistent = ["qcdata","testdata"]
-    copy_code(repodir,ares_path,things_to_copy,copy_if_nonexistent,slash)
+    copy_code(repodir,ares_path,data_path,things_to_copy,copy_if_nonexistent,slash)
     
     print("Running PyInstaller and reorganizing files")
     os.chdir(bundledir)
