@@ -998,7 +998,7 @@ def setdefaultsettings():
     settingsdict["autodtg"] = True  # auto determine profile date/time as system date/time on clicking "START"
     settingsdict["autolocation"] = True #auto determine location with GPS
     settingsdict["autoid"] = True #autopopulate platform ID
-    settingsdict["platformid"] = 'AFNNN'
+    settingsdict["platformid"] = 'NNNNN'
     settingsdict["savelog"] = True
     settingsdict["saveedf"] = False
     settingsdict["savewav"] = True

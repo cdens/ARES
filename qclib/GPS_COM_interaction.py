@@ -206,7 +206,6 @@ class GPSthread(QRunnable):
                                 #if the lastgooddata has contains a good fix
                                 if lastgooddata[0] == 0:
                                     #emit the data
-                                    print('updating gps position')
                                     self.signals.update.emit(lastgooddata[0], lastgooddata[1], lastgooddata[2], lastgooddata[3], lastgooddata[4], lastgooddata[5], lastgooddata[6])
                                     #reset lastgooddata after the signal is emitted
                                     lastgooddata = (1, self.default_lat, self.default_lon, self.default_datetime, self.default_nsat, self.default_qual, self.default_alt)
@@ -215,12 +214,10 @@ class GPSthread(QRunnable):
 
                                 else:
                                     #change the 
-                                    print('bad signal')
                                     self.nbadsig += 1 #add one to the number of bad signals if the update 
                                     
                             #if there have been too many consecutive failed signals, return to the default
                             if self.nbadsig > self.badsiglimit:
-                                print('signal timeout')
                                 self.signals.update.emit(lastgooddata[0], lastgooddata[1], lastgooddata[2], lastgooddata[3], lastgooddata[4], lastgooddata[5], lastgooddata[6])
                                 #reset lastgooddata after the info is emitted
                                 lastgooddata = (1, self.default_lat, self.default_lon, self.default_datetime, self.default_nsat, self.default_qual, self.default_alt)

@@ -204,10 +204,10 @@ def savedataincurtab(self):
     try:
         #getting directory to save files from QFileDialog
         try:
-            outdir = self.missiondir
+            outdir = str(QFileDialog.getExistingDirectory(self, "Select Directory to Save File(s)",self.defaultfilewritedir,QFileDialog.DontUseNativeDialog))
         except Exception:
             trace_error()
-            self.posterror('Cannot save. Ensure that the mission folder has been created in the Mission Tracker tab.')
+            return False
                             
         #checking directory validity
         if outdir == '':

@@ -80,7 +80,7 @@ def makenewprocessortab(self):
         #creating new tab, assigning basic info
         self.tabWidget.addTab(self.alltabdata[curtabstr]["tab"],'New Tab') 
         self.tabWidget.setCurrentIndex(newtabnum)
-        self.tabWidget.setTabText(newtabnum, "New Drop #" + str(self.totaltabs-1)) #-1 because first tab is misison tracker
+        self.tabWidget.setTabText(newtabnum, "New Drop #" + str(self.totaltabs)) 
         self.alltabdata[curtabstr]["tabnum"] = self.totaltabs #assigning unique, unchanging number to current tab
         self.alltabdata[curtabstr]["tablayout"].setSpacing(10)
         

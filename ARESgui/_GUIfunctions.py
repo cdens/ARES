@@ -468,12 +468,5 @@ def updateGPSdata(self,isGood,lat,lon,gpsdatetime,nsat,qual,alt):
             self.sendGPS2settings = False
             self.settingsthread.postGPSissue(isGood)
             
-            
-#slot to update main GUI loop if the preferences window has been closed
-@pyqtSlot(bool)
-def exportwindowclosed(self,isclosed):
-    if isclosed:
-        self.exportopened = False
-
 
         
