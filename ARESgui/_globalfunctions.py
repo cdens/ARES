@@ -338,37 +338,52 @@ def savedataincurtab(self):
                         lonstr = self.alltabdata[curtabstr]["tabwidgets"]["lonedit"].text()
                         profdatestr = self.alltabdata[curtabstr]["tabwidgets"]["dateedit"].text()
                         timestr = self.alltabdata[curtabstr]["tabwidgets"]["timeedit"].text()
-
-                        #only checks validity of necessary data
+    
+                        
+                        #flags for capability of saving data
+                        edfcapable = True
+                        logcapable = True
+                        wavcapable = True
+                        sigcapable = True
+                        
+                        #check validity of data
+                        #try edf data
                         try:
-                            if self.settingsdict["saveedf"]:
-                                lat, lon, year, month, day, time, hour, minute, _ = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, 'omit', True, True, False)
-                            else:
-                                _, _, year, month, day, time, hour, minute, _ = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, 'omit', False, True, False)
+                            lat, lon, year, month, day, time, hour, minute, _ = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, 'omit', True, True, False)
                         except:
+                            edfcapable = False
+                            self.postwarning('Cannot save edf file!')
+                        #try other data
+                        try:
+                            _, _, year, month, day, time, hour, minute, _ = self.parsestringinputs(latstr, lonstr,profdatestr,timestr, 'omit', False, True, False)
+                        except:
+                            logcapable = False, 
+                            wavcapable = False
+                            sigcapable = False
                             self.postwarning("Failed to save raw data files!")
                             QApplication.restoreOverrideCursor()
-                            return False
-
-                    #date and time strings for LOG file
-                    initdatestr = str(year) + '/' + str(month).zfill(2) + '/' + str(day).zfill(2)
-                    inittimestr = str(hour).zfill(2) + ':' + str(minute).zfill(2) + ':00'
                     
-                    filename = self.check_filename(str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4))
-
                 except Exception:
                     trace_error()
                     self.posterror("Failed to pull raw profile data")
                     QApplication.restoreOverrideCursor()
                     return False
+
+                #date and time strings for LOG file
+                initdatestr = str(year) + '/' + str(month).zfill(2) + '/' + str(day).zfill(2)
+                inittimestr = str(hour).zfill(2) + ':' + str(minute).zfill(2) + ':00'
                 
-                if self.settingsdict["savelog"]:
+                filename = self.check_filename(str(year) + str(month).zfill(2) + str(day).zfill(2) + str(time).zfill(4))
+
+
+                
+                if self.settingsdict["savelog"] and logcapable:
                     try:
                         tfio.writelogfile(outdir + slash + filename + '.DTA',initdatestr,inittimestr,timefromstart,rawdepth,frequency,rawtemperature)
                     except Exception:
                         trace_error()
                         self.posterror("Failed to save LOG file")
-                if self.settingsdict["saveedf"]:
+                if self.settingsdict["saveedf"] and edfcapable:
                     try:
                         #creating comment for data source:
                         cdatasource = self.alltabdata[curtabstr]["tabwidgets"]["datasource"].currentText()
@@ -380,7 +395,7 @@ def savedataincurtab(self):
                         trace_error()
                         self.posterror("Failed to save EDF file")
 
-                if self.settingsdict["savewav"]:
+                if self.settingsdict["savewav"] and wavcapable:
                     try:
                         oldfile = self.tempdir + slash + 'tempwav_' + str(self.alltabdata[curtabstr]["tabnum"]) + '.WAV'
                         newfile = outdir + slash + filename + '.WAV'
@@ -393,7 +408,7 @@ def savedataincurtab(self):
                         trace_error()
                         self.posterror("Failed to save WAV file")
 
-                if self.settingsdict["savesig"]:
+                if self.settingsdict["savesig"] and sigcapable:
                     try:
                         oldfile = self.tempdir + slash + 'sigdata_' + str(self.alltabdata[curtabstr]["tabnum"]) + '.txt'
                         newfile = outdir + slash + filename + '.sigdata'
@@ -415,7 +430,7 @@ def savedataincurtab(self):
     except Exception:
         QApplication.restoreOverrideCursor() #restore cursor here as extra measure
         trace_error() #if something else in the file save code broke
-        self.posterror("Filed to save files")
+        self.posterror("Failed to save files")
         successval = False #notes that process failed
     finally:
         QApplication.restoreOverrideCursor() #restore cursor here
