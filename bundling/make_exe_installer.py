@@ -40,7 +40,7 @@ def copy_code(repodir,ares_path,things_to_copy,copy_if_nonexistent,slash):
         copystuff(sourcepath, destpath, slash)
             
     #only copy over qcdata and testdata if the directories don't exist already
-    for item in things_to_copy:
+    for item in copy_if_nonexistent:
         sourcepath = repodir + slash + item
         destpath = ares_path + slash + item
         if not os.path.exists(destpath): #delete item if it exists
