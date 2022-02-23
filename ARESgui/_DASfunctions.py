@@ -522,6 +522,9 @@ def runprocessor(self, curtabstr, datasource, newsource):
     self.alltabdata[curtabstr]["processor"].signals.iterated.connect(self.updateUIinfo)
     self.alltabdata[curtabstr]["processor"].signals.triggered.connect(self.triggerUI)
     self.alltabdata[curtabstr]["processor"].signals.terminated.connect(self.updateUIfinal)
+    
+    #disable ability to change datasource
+    self.alltabdata[curtabstr]["tabwidgets"]["datasource"].setEnabled(False)
 
     #connecting audio file-specific signal (to update progress bar on GUI)
     if datasource[:5] == 'Audio':

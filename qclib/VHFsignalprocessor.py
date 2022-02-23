@@ -307,7 +307,7 @@ class ThreadProcessor(QRunnable):
             ndims = len(sndshape) #number of dimensions
             if ndims == 1: #if one channel, use that
                 self.audiostream = snd
-            elif ndims == 2: #if two channels, pick selected channel, otherwise sum
+            elif ndims == 2: #if multiple channels, pick selected channel, otherwise sum
                 if self.chselect >= 1:
                     self.audiostream = snd[:,self.chselect-1]
                 else:
