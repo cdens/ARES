@@ -5,6 +5,8 @@
 
 ![Icon](qclib/dropicon.png)
 
+<b>No further development is being completed on this repository. ARES has been superseded by the Airborne eXpendable Buoy Processing System (AXBPS), which includes the AXBT processing capabilities of this software and additional airborne-expendable probe support, along with a significant amount of code refactoring and optimization compared to this repository. This repository is located at [https://github.com/cdens/axbps](https://github.com/cdens/axbps)</b> 
+
 
 ## Overview <a id="overview"></a>
 The AXBT Realtime Editing System (ARES) is a software/hardware system capable of receiving and quality controlling Airborne eXpendable BathyThermograph (AXBT) profiles. ARES is composed of two independent subsystems: the ARES Data Acquisition System, which receives telemetered temperature-depth profiles with no external hardware other than a VHF radio receiver, and the ARES Profile Editing System, which quality controls AXBT temperature-depth profiles.
