@@ -1,7 +1,7 @@
 chardet==4.0.0 #cahracter detection for input file types
 geopy==2.2.0 #distance conversions for mission plotter
 matplotlib==3.4.2
-numpy==1.21.1
+numpy==1.22.0
 pynmea2==1.18.0 #GPS feeds
 PyQt5==5.13.2 #GUI
 pyserial==3.5 #serial connection
